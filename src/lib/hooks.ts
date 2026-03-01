@@ -173,34 +173,34 @@ export function computeCompanyResolution(
 
   const seenHostnames = new Set<string>();
 
-  const candidates: CompanyCandidate[] = webResults
-    .map((r, index) => {
-      const title = (r.title || "").trim();
-      const description = (r.description || r.snippet || "").trim();
-      const rawUrl = (r.url || "").trim();
-      const hostname = r.meta_url?.hostname || (rawUrl ? (() => {
-        try {
-          return new URL(rawUrl).hostname;
-        } catch {
-          return "";
-        }
-      })() : "");
+  const candidates: CompanyCandidate[] = [];
+  for (let index = 0; index < webResults.length; index++) {
+    const r = webResults[index];
+    const title = (r.title || "").trim();
+    const description = (r.description || r.snippet || "").trim();
+    const rawUrl = (r.url || "").trim();
+    const hostname = r.meta_url?.hostname || (rawUrl ? (() => {
+      try {
+        return new URL(rawUrl).hostname;
+      } catch {
+        return "";
+      }
+    })() : "");
 
-      if (!rawUrl || !hostname) return null;
-      if (seenHostnames.has(hostname)) return null;
-      seenHostnames.add(hostname);
+    if (!rawUrl || !hostname) continue;
+    if (seenHostnames.has(hostname)) continue;
+    seenHostnames.add(hostname);
 
-      const nameFromTitle = title || hostname;
+    const nameFromTitle = title || hostname;
 
-      return {
-        id: `${index}-${hostname}`,
-        name: nameFromTitle,
-        url: rawUrl,
-        description: description || undefined,
-        source: hostname,
-      } satisfies CompanyCandidate;
-    })
-    .filter((c): c is CompanyCandidate => c !== null);
+    candidates.push({
+      id: `${index}-${hostname}`,
+      name: nameFromTitle,
+      url: rawUrl,
+      description: description || undefined,
+      source: hostname,
+    });
+  }
 
   if (candidates.length === 0) {
     return {
