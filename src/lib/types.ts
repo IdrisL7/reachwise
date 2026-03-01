@@ -7,8 +7,22 @@ export type StructuredHook = {
   confidence: "high" | "med" | "low";
 };
 
+export type CompanyResolutionStatus = "ok" | "needs_disambiguation" | "no_match";
+
+export type CompanyCandidate = {
+  id: string;
+  name: string;
+  url: string;
+  description?: string;
+  source?: string;
+};
+
 export type HookResponse = {
   hooks: string[];
   structured_hooks?: StructuredHook[];
   error?: string;
+  status?: CompanyResolutionStatus;
+  companyName?: string;
+  resolvedCompany?: CompanyCandidate | null;
+  candidates?: CompanyCandidate[];
 };

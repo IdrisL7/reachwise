@@ -76,6 +76,8 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
 
 export function DemoSection() {
   const [companyUrl, setCompanyUrl] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [resolvedCompanyLabel, setResolvedCompanyLabel] = useState<string | null>(null);
   const [pitchContext, setPitchContext] = useState("");
   const [mode, setMode] = useState<"single" | "batch">("single");
 
@@ -88,6 +90,11 @@ export function DemoSection() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [companyCandidates, setCompanyCandidates] = useState<
+    HookResponse["candidates"]
+  >();
+  const [companyStatus, setCompanyStatus] = useState<HookResponse["status"]>();
+
   const [batchInput, setBatchInput] = useState("");
   const [batchResults, setBatchResults] = useState<BatchItemResult[] | null>(
     null,
@@ -95,37 +102,73 @@ export function DemoSection() {
   const [isBatchLoading, setIsBatchLoading] = useState(false);
   const [batchError, setBatchError] = useState<string | null>(null);
 
-  async function fetchHooks(url: string, context?: string) {
+  async function fetchHooks(params: {
+    url?: string;
+    companyName?: string;
+    context?: string;
+  }) {
     setIsLoading(true);
     setError(null);
     setHooks([]);
     setStructuredHooks(null);
     setEmailByIndex({});
+    setCompanyCandidates(undefined);
+    setCompanyStatus(undefined);
+    setResolvedCompanyLabel(null);
 
     try {
       const response = await fetch("/api/generate-hooks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url,
-          context: context?.trim() || undefined,
+          url: params.url,
+          companyName: params.companyName,
+          context: params.context?.trim() || undefined,
         }),
       });
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | HookResponse
-          | null;
+      const data = (await response.json().catch(() => null)) as
+        | HookResponse
+        | null;
+
+      if (!response.ok || !data) {
         const message = data?.error || "Failed to generate hooks.";
         throw new Error(message);
       }
 
-      const data = (await response.json()) as HookResponse;
+      // Handle company name resolution states
+      if (data.status === "no_match") {
+        setCompanyStatus(data.status);
+        setCompanyCandidates(data.candidates);
+        setError(
+          data.error ||
+            (params.companyName
+              ? `Could not find a clear match for "${params.companyName}". Try pasting the URL instead.`
+              : "Could not resolve this company. Try pasting the URL instead."),
+        );
+        return;
+      }
+
+      if (data.status === "needs_disambiguation") {
+        setCompanyStatus(data.status);
+        setCompanyCandidates(data.candidates);
+        setError(null);
+        return;
+      }
+
       setHooks(data.hooks || []);
       setStructuredHooks(data.structured_hooks ?? null);
 
+      if (data.resolvedCompany) {
+        const label = `${data.resolvedCompany.name} (${data.resolvedCompany.url})`;
+        setResolvedCompanyLabel(label);
+        // Persist the resolved URL so follow-up actions (like email generation)
+        // can rely on a concrete company URL.
+        setCompanyUrl(data.resolvedCompany.url);
+      }
+
       if (!data.hooks || data.hooks.length === 0) {
-        setError("No hooks were generated. Try again with a different URL.");
+        setError("No hooks were generated. Try again with a different company.");
       }
     } catch (err) {
       const message =
@@ -140,12 +183,18 @@ export function DemoSection() {
     event.preventDefault();
 
     const trimmedUrl = companyUrl.trim();
-    if (!trimmedUrl) {
-      setError("Please enter a company URL.");
+    const trimmedName = companyName.trim();
+
+    if (!trimmedUrl && !trimmedName) {
+      setError("Enter a company URL or company name to get started.");
       return;
     }
 
-    await fetchHooks(trimmedUrl, pitchContext);
+    await fetchHooks({
+      url: trimmedUrl || undefined,
+      companyName: !trimmedUrl ? trimmedName || undefined : undefined,
+      context: pitchContext,
+    });
   }
 
   async function handleGenerateEmail(index: number) {
@@ -299,7 +348,7 @@ export function DemoSection() {
             Try it on any company
           </h2>
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Paste a real company URL below. Nothing you enter is stored.
+            Paste a company URL or type the company name. Nothing you enter is stored.
           </p>
         </div>
 
@@ -332,18 +381,32 @@ export function DemoSection() {
 
             {mode === "single" && (
               <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                <div>
-                  <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
-                    Company URL
-                  </label>
-                  <input
-                    type="url"
-                    inputMode="url"
-                    placeholder="https://acme.com"
-                    value={companyUrl}
-                    onChange={(event) => setCompanyUrl(event.target.value)}
-                    className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
-                  />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
+                      Company URL
+                    </label>
+                    <input
+                      type="url"
+                      inputMode="url"
+                      placeholder="https://acme.com"
+                      value={companyUrl}
+                      onChange={(event) => setCompanyUrl(event.target.value)}
+                      className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
+                      Company name <span className="text-zinc-600">(if you do not have the URL)</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Acme Inc."
+                      value={companyName}
+                      onChange={(event) => setCompanyName(event.target.value)}
+                      className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
+                    />
+                  </div>
                 </div>
 
                 <div>
@@ -430,6 +493,56 @@ export function DemoSection() {
 
                 {error && (
                   <p className="text-[0.875rem] text-red-400">{error}</p>
+                )}
+
+                {companyStatus === "needs_disambiguation" && companyCandidates && (
+                  <div className="mt-4 rounded-lg border border-violet-500/30 bg-[#0b0b13] p-4 text-[0.875rem] text-zinc-200">
+                    <p className="mb-2 font-medium text-violet-200">
+                      Did you mean one of these companies?
+                    </p>
+                    <ul className="space-y-2">
+                      {companyCandidates.map((candidate) => (
+                        <li
+                          key={candidate.id}
+                          className="rounded-md border border-zinc-700/60 bg-[#111119] p-3"
+                       >
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                              <p className="text-[0.875rem] font-semibold text-zinc-100">
+                                {candidate.name}
+                              </p>
+                              <p className="text-[0.8125rem] text-zinc-500">
+                                {candidate.url}
+                              </p>
+                              {candidate.description && (
+                                <p className="mt-1 text-[0.75rem] text-zinc-500">
+                                  {candidate.description}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                fetchHooks({
+                                  url: candidate.url,
+                                  context: pitchContext,
+                                })
+                              }
+                              className="mt-2 inline-flex items-center justify-center rounded-md bg-violet-600 px-3 py-1.5 text-[0.75rem] font-semibold text-white shadow-sm transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_14px_rgba(139,92,246,0.35)] sm:mt-0"
+                            >
+                              Use this company
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {resolvedCompanyLabel && (
+                  <p className="mt-3 text-[0.8125rem] text-zinc-400">
+                    Using <span className="font-medium text-zinc-100">{resolvedCompanyLabel}</span> based on your input.
+                  </p>
                 )}
               </form>
             )}

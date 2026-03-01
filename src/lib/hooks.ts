@@ -22,6 +22,22 @@ export type Source = {
   facts: string[];
 };
 
+export type CompanyCandidate = {
+  id: string;
+  name: string;
+  url: string;
+  description?: string;
+  source?: string;
+};
+
+export type CompanyResolutionStatus = "ok" | "needs_disambiguation" | "no_match";
+
+export type CompanyResolutionResult = {
+  status: CompanyResolutionStatus;
+  companyName: string;
+  candidates: CompanyCandidate[];
+};
+
 export type ClaudeHookPayload = {
   news_item: number;
   angle: string;
@@ -91,14 +107,7 @@ export async function fetchSources(
 
   const data = (await response.json()) as {
     web?: {
-      results?: {
-        title?: string;
-        url?: string;
-        description?: string;
-        snippet?: string;
-        page_age?: string;
-        meta_url?: { hostname?: string };
-      }[];
+      results?: BraveWebResult[];
     };
   };
 
@@ -113,9 +122,17 @@ export async function fetchSources(
       }
       if (facts.length === 0) return null;
 
+      const fallbackUrl = r.url || url;
+      let publisher = "";
+      try {
+        publisher = r.meta_url?.hostname || new URL(fallbackUrl).hostname;
+      } catch {
+        publisher = r.meta_url?.hostname || fallbackUrl;
+      }
+
       return {
         title: (r.title || "Untitled").trim(),
-        publisher: r.meta_url?.hostname || new URL(r.url || url).hostname,
+        publisher,
         date: r.page_age || "",
         url: r.url || "",
         facts,
@@ -125,6 +142,125 @@ export async function fetchSources(
     .slice(0, 6);
 
   return sources;
+}
+
+// ---------------------------------------------------------------------------
+// Brave search → company name resolution
+// ---------------------------------------------------------------------------
+
+type BraveWebResult = {
+  title?: string;
+  url?: string;
+  description?: string;
+  snippet?: string;
+  page_age?: string;
+  meta_url?: { hostname?: string };
+};
+
+export function computeCompanyResolution(
+  companyName: string,
+  webResults: BraveWebResult[],
+): CompanyResolutionResult {
+  const normalizedName = companyName.trim();
+
+  if (!normalizedName) {
+    return {
+      status: "no_match",
+      companyName: "",
+      candidates: [],
+    };
+  }
+
+  const seenHostnames = new Set<string>();
+
+  const candidates: CompanyCandidate[] = webResults
+    .map((r, index) => {
+      const title = (r.title || "").trim();
+      const description = (r.description || r.snippet || "").trim();
+      const rawUrl = (r.url || "").trim();
+      const hostname = r.meta_url?.hostname || (rawUrl ? (() => {
+        try {
+          return new URL(rawUrl).hostname;
+        } catch {
+          return "";
+        }
+      })() : "");
+
+      if (!rawUrl || !hostname) return null;
+      if (seenHostnames.has(hostname)) return null;
+      seenHostnames.add(hostname);
+
+      const nameFromTitle = title || hostname;
+
+      return {
+        id: `${index}-${hostname}`,
+        name: nameFromTitle,
+        url: rawUrl,
+        description: description || undefined,
+        source: hostname,
+      } satisfies CompanyCandidate;
+    })
+    .filter((c): c is CompanyCandidate => c !== null);
+
+  if (candidates.length === 0) {
+    return {
+      status: "no_match",
+      companyName: normalizedName,
+      candidates: [],
+    };
+  }
+
+  if (candidates.length === 1) {
+    return {
+      status: "ok",
+      companyName: normalizedName,
+      candidates,
+    };
+  }
+
+  return {
+    status: "needs_disambiguation",
+    companyName: normalizedName,
+    candidates,
+  };
+}
+
+export async function resolveCompanyByName(
+  companyName: string,
+  apiKey: string,
+): Promise<CompanyResolutionResult> {
+  const query = companyName.trim();
+
+  if (!query) {
+    return {
+      status: "no_match",
+      companyName: "",
+      candidates: [],
+    };
+  }
+
+  const response = await fetch(
+    `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=8`,
+    {
+      method: "GET",
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": apiKey,
+      },
+      next: { revalidate: 0 },
+    } as RequestInit & { next?: { revalidate: number } },
+  );
+
+  if (!response.ok) {
+    throw new Error(`Brave API error: ${response.status}`);
+  }
+
+  const data = (await response.json()) as {
+    web?: { results?: BraveWebResult[] };
+  };
+
+  const webResults = data?.web?.results ?? [];
+  return computeCompanyResolution(companyName, webResults);
 }
 
 // ---------------------------------------------------------------------------

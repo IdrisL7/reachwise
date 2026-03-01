@@ -6,8 +6,11 @@ import {
   callClaude,
   validateHook,
   applyUrlToMockHooks,
+  resolveCompanyByName,
   type Hook,
+  type CompanyResolutionResult,
 } from "@/lib/hooks";
+import type { CompanyResolutionStatus } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Route handler
@@ -17,34 +20,87 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json().catch(() => null)) as {
       url?: string;
+      companyName?: string;
       context?: string;
     } | null;
 
-    const url = body?.url?.trim();
+    const rawUrl = body?.url?.trim();
+    const companyName = body?.companyName?.trim();
     const context = body?.context?.trim();
 
-    if (!url) {
+    const braveApiKey = process.env.BRAVE_API_KEY;
+    const claudeApiKey = process.env.CLAUDE_API_KEY;
+
+    // If a URL is provided, we behave as before and skip name resolution.
+    // If only a company name is provided, we try to resolve it to a URL
+    // using Brave Search and return disambiguation metadata when needed.
+
+    if (!rawUrl && !companyName) {
       return NextResponse.json(
-        { error: "Missing 'url' in request body." },
+        { error: "Provide either 'url' or 'companyName' in request body." },
         { status: 400 },
       );
     }
 
-    const braveApiKey = process.env.BRAVE_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
-    const fallbackHooks = applyUrlToMockHooks(url);
-
     if (!braveApiKey || !claudeApiKey) {
-      console.warn(
-        "generate-hooks: Missing BRAVE_API_KEY or CLAUDE_API_KEY, returning mock hooks.",
+      if (rawUrl) {
+        const fallbackHooks = applyUrlToMockHooks(rawUrl);
+        console.warn(
+          "generate-hooks: Missing BRAVE_API_KEY or CLAUDE_API_KEY, returning mock hooks.",
+        );
+        await new Promise((r) => setTimeout(r, 800));
+        return NextResponse.json({ hooks: fallbackHooks });
+      }
+
+      return NextResponse.json(
+        {
+          error:
+            "Server misconfiguration: cannot resolve companyName without BRAVE_API_KEY and CLAUDE_API_KEY.",
+        },
+        { status: 500 },
       );
-      await new Promise((r) => setTimeout(r, 800));
-      return NextResponse.json({ hooks: fallbackHooks });
     }
+
+    let url = rawUrl;
+    let resolution: CompanyResolutionResult | null = null;
+
+    if (!url && companyName) {
+      resolution = await resolveCompanyByName(companyName, braveApiKey);
+
+      if (resolution.status === "no_match") {
+        return NextResponse.json({
+          hooks: [],
+          status: resolution.status as CompanyResolutionStatus,
+          companyName: resolution.companyName,
+          candidates: resolution.candidates,
+        });
+      }
+
+      if (resolution.status === "needs_disambiguation") {
+        return NextResponse.json({
+          hooks: [],
+          status: resolution.status as CompanyResolutionStatus,
+          companyName: resolution.companyName,
+          candidates: resolution.candidates,
+        });
+      }
+
+      const firstCandidate = resolution.candidates[0];
+      url = firstCandidate?.url;
+    }
+
+    if (!url) {
+      return NextResponse.json(
+        { error: "Unable to determine company URL from request." },
+        { status: 400 },
+      );
+    }
+
+    const fallbackHooks = applyUrlToMockHooks(url);
 
     try {
       // 1. Gather sources from Brave
-      const sources = await fetchSources(url, braveApiKey);
+      const sources = await fetchSources(url, braveApiKey!);
 
       // 2. Build prompts and call Claude
       const systemPrompt = buildSystemPrompt();
@@ -75,10 +131,23 @@ export async function POST(request: Request) {
         url: s.url,
       }));
 
+      const resolvedCompany = resolution && resolution.candidates[0]
+        ? {
+            id: resolution.candidates[0].id,
+            name: resolution.candidates[0].name,
+            url: resolution.candidates[0].url,
+            description: resolution.candidates[0].description,
+            source: resolution.candidates[0].source,
+          }
+        : null;
+
       return NextResponse.json({
         hooks: flatHooks,
         structured_hooks: validHooks,
         citations,
+        status: "ok" as CompanyResolutionStatus,
+        companyName: companyName ?? undefined,
+        resolvedCompany,
       });
     } catch (error) {
       console.error("generate-hooks: Error during external calls", error);
