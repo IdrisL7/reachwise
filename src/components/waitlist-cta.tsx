@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export function WaitlistCTA() {
   return (
     <section
@@ -15,11 +17,11 @@ export function WaitlistCTA() {
           on them.
         </p>
 
-        <a
-          href="mailto:hello@getsignalhooks.com?subject=Waitlist%20Request"
+        <Link
+          href="/contact"
           className="group mt-12 inline-flex h-[3.5rem] items-center gap-2 rounded-lg bg-violet-600 px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_24px_rgba(139,92,246,0.25)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_36px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
         >
-          Join the waitlist
+          Request early access
           <svg
             className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
             fill="none"
@@ -33,7 +35,7 @@ export function WaitlistCTA() {
               d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
             />
           </svg>
-        </a>
+        </Link>
       </div>
     </section>
   );
