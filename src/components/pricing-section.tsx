@@ -1,4 +1,29 @@
-import { TIERS } from "@/lib/tiers";
+import Link from "next/link";
+import { TIERS, type TierFeature } from "@/lib/tiers";
+
+function FeatureItem({ feature }: { feature: TierFeature }) {
+  const content = (
+    <>
+      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+      {feature.text}
+    </>
+  );
+
+  if (feature.link) {
+    return (
+      <li>
+        <Link
+          href={feature.link}
+          className="flex items-start gap-2.5 text-violet-300/90 underline decoration-violet-500/30 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-500/60"
+        >
+          {content}
+        </Link>
+      </li>
+    );
+  }
+
+  return <li className="flex items-start gap-2.5">{content}</li>;
+}
 
 export function PricingSection() {
   return (
@@ -49,10 +74,7 @@ export function PricingSection() {
               </p>
               <ul className="mt-6 space-y-3 text-[0.875rem] leading-[1.5] text-zinc-400">
                 {tier.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2.5">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-                    {feature}
-                  </li>
+                  <FeatureItem key={feature.text} feature={feature} />
                 ))}
               </ul>
               <p className="mt-6 text-[0.8125rem] leading-[1.5] text-zinc-500">

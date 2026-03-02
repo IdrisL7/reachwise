@@ -2,6 +2,7 @@ import { Navbar } from "@/components/navbar";
 import { HeroSection } from "@/components/hero-section";
 import { HowItWorksSection } from "@/components/how-it-works-section";
 import { DemoSection } from "@/components/demo-section";
+import { FollowUpEngineSection } from "@/components/followup-engine-section";
 import { PricingSection } from "@/components/pricing-section";
 import { WhoItsForSection } from "@/components/who-its-for-section";
 import { WaitlistCTA } from "@/components/waitlist-cta";
@@ -14,6 +15,7 @@ export default function Home() {
       <HeroSection />
       <HowItWorksSection />
       <DemoSection />
+      <FollowUpEngineSection />
       <PricingSection />
       <WhoItsForSection />
       <WaitlistCTA />
