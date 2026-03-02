@@ -1,5 +1,38 @@
 "use client";
 
+const exampleHooks = [
+  {
+    angle: "pain" as const,
+    confidence: "high" as const,
+    tier: "A" as const,
+    text: 'Shopify Editions Summer \'25 added over 150 product updates in one release. If your integration layer wasn\'t built for that pace, are you already behind on compatibility?',
+    evidence: '"Shopify announced over 150 updates across its platform in its Summer \'25 Editions release..."',
+    source: "Shopify Editions — Summer '25 Announcement",
+    date: "June 2025",
+    sourceUrl: "https://www.shopify.com/editions",
+  },
+  {
+    angle: "gain" as const,
+    confidence: "high" as const,
+    tier: "A" as const,
+    text: "Shopify's B2B wholesale channel now supports custom pricing per company. Has your team explored building on top of that for mid-market accounts?",
+    evidence: '"Shopify launched a dedicated B2B sales channel with company-specific pricing, net payment terms, and custom catalogs..."',
+    source: "Shopify B2B Wholesale Channel — Product Blog",
+    date: "2025",
+    sourceUrl: "https://www.shopify.com/plus/b2b",
+  },
+  {
+    angle: "contrast" as const,
+    confidence: "med" as const,
+    tier: "B" as const,
+    text: "Shopify is pushing heavily into enterprise with Shopify Plus while competitors focus on SMB checkout. Is that a segment gap your roadmap could fill?",
+    evidence: '"Shopify Plus powers enterprise commerce for high-volume brands with dedicated APIs and customizable checkout..."',
+    source: "Shopify Plus — Platform Overview",
+    date: "",
+    sourceUrl: "https://www.shopify.com/plus",
+  },
+];
+
 export function HeroHookPreview() {
   return (
     <div className="relative mx-auto w-full max-w-lg lg:mx-0 lg:ml-auto">
@@ -25,7 +58,7 @@ export function HeroHookPreview() {
               Company URL
             </div>
             <div className="flex h-10 items-center rounded-lg border border-zinc-700/50 bg-[#111119] px-3.5 text-[0.875rem] text-zinc-300 shadow-inner">
-              https://stripe.com
+              https://shopify.com
             </div>
           </div>
 
@@ -40,25 +73,9 @@ export function HeroHookPreview() {
             </div>
           </div>
 
-          {/* Static hook cards */}
+          {/* Hook cards */}
           <div className="space-y-2.5">
-            {[
-              {
-                angle: "pain",
-                confidence: "high",
-                text: "Stripe just disclosed a 15% jump in enterprise disputes. If your resolution workflow still runs on spreadsheets, how are you planning to keep pace before renewal season?",
-              },
-              {
-                angle: "gain",
-                confidence: "high",
-                text: "Stripe\u2019s new Revenue Recognition rollout suggests a push into mid-market finance ops. Has your team explored bundling automated reconciliation to capture that segment?",
-              },
-              {
-                angle: "contrast",
-                confidence: "med",
-                text: "Stripe is investing heavily in embedded finance APIs while most competitors focus on checkout. Is that a gap your product roadmap could fill?",
-              },
-            ].map((hook, i) => (
+            {exampleHooks.map((hook, i) => (
               <div
                 key={i}
                 className="rounded-lg border border-zinc-700/40 bg-[#111119]/80 p-3.5 transition-all duration-200 hover:border-violet-500/20 hover:shadow-[0_2px_12px_rgba(139,92,246,0.06)]"
@@ -83,6 +100,13 @@ export function HeroHookPreview() {
                   }`}>
                     {hook.confidence}
                   </span>
+                  <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[0.5rem] font-bold ${
+                    hook.tier === "A"
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                      : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                  }`}>
+                    Tier {hook.tier}
+                  </span>
                 </div>
                 <p className="text-[0.75rem] leading-[1.5] text-zinc-400">
                   {hook.text}
@@ -90,20 +114,25 @@ export function HeroHookPreview() {
               </div>
             ))}
 
-            {/* Static evidence preview */}
+            {/* Evidence preview for first hook */}
             <div className="rounded-lg border border-violet-500/15 bg-[#12101e] p-3">
-              <div className="mb-1 flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-violet-400/60">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[0.625rem] font-semibold uppercase tracking-[0.12em] text-violet-400/60">
                 <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
                 Evidence
               </div>
-              <p className="text-[0.6875rem] leading-relaxed text-zinc-500">
-                &quot;Stripe reported a 15% increase in enterprise dispute volume in Q4...&quot;
+              <p className="text-[0.6875rem] leading-relaxed text-zinc-400">
+                {exampleHooks[0].evidence}
               </p>
-              <p className="mt-0.5 text-[0.625rem] text-zinc-600">
-                Source: Stripe Q4 Earnings Report
-              </p>
+              <div className="mt-1.5 flex flex-col gap-0.5">
+                <p className="text-[0.625rem] text-zinc-500">
+                  Source: {exampleHooks[0].source}
+                </p>
+                <p className="text-[0.625rem] text-zinc-600">
+                  {exampleHooks[0].date}
+                </p>
+              </div>
             </div>
           </div>
         </div>

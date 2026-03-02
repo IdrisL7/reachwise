@@ -2,6 +2,8 @@
 // Shared types and helpers for hook generation
 // ---------------------------------------------------------------------------
 
+import type { EvidenceTier } from "./types";
+
 export type Angle = "pain" | "gain" | "contrast";
 export type Confidence = "high" | "med" | "low";
 
@@ -11,6 +13,9 @@ export type Hook = {
   hook: string;
   evidence_snippet: string;
   source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: EvidenceTier;
   confidence: Confidence;
 };
 
@@ -20,6 +25,10 @@ export type Source = {
   date: string;
   url: string;
   facts: string[];
+};
+
+export type ClassifiedSource = Source & {
+  tier: EvidenceTier;
 };
 
 export type CompanyCandidate = {
@@ -44,6 +53,9 @@ export type ClaudeHookPayload = {
   hook: string;
   evidence_snippet: string;
   source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: string;
   confidence: string;
 };
 
@@ -55,18 +67,23 @@ export const BANNED_WORDS = [
   "curious",
   "worth a quick",
   "just checking in",
+  "just checking",
   "hope you're well",
   "hope you are well",
   "touching base",
   "i'd love to",
   "i would love to",
   "quick question",
+  "quick chat",
   "i came across",
   "i noticed your company",
   "game-changing",
   "innovative solution",
   "disrupting the space",
   "cutting-edge",
+  "interested in",
+  "teams like you",
+  "on your radar",
 ];
 
 export const VALID_ANGLES: Angle[] = ["pain", "gain", "contrast"];
@@ -80,13 +97,111 @@ const MOCK_HOOKS: string[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Evidence tier classification
+// ---------------------------------------------------------------------------
+
+const TIER_A_URL_PATTERNS = [
+  /\/press/i,
+  /\/newsroom/i,
+  /\/blog\//i,
+  /\/changelog/i,
+  /\/release-notes/i,
+  /\/releases/i,
+  /\/investor/i,
+  /\/earnings/i,
+  /\/case-stud/i,
+  /\/careers/i,
+  /\/jobs\//i,
+  /\/announcements/i,
+  /\/whats-new/i,
+];
+
+const TIER_A_TITLE_PATTERNS = [
+  /press release/i,
+  /\bannounces?\b/i,
+  /\blaunches?\b/i,
+  /\bQ[1-4]\b/,
+  /\bearnings\b/i,
+  /\bchangelog\b/i,
+  /\brelease notes?\b/i,
+  /\bcase study\b/i,
+  /\bpartnership\b/i,
+  /\bhiring\b/i,
+  /\braises?\b.*\$\d/i,
+  /\bacquires?\b/i,
+  /\bacquisition\b/i,
+  /\bIPO\b/,
+  /\bnew feature\b/i,
+  /\bproduct update\b/i,
+];
+
+const TIER_C_URL_PATTERNS = [
+  /crunchbase\.com/i,
+  /zoominfo\.com/i,
+  /similarweb\.com/i,
+  /owler\.com/i,
+  /pitchbook\.com/i,
+  /dnb\.com/i,
+  /glassdoor\.com/i,
+  /wikipedia\.org/i,
+];
+
+/** Returns true if the facts contain concrete specifics (numbers, dates, dollar amounts). */
+function factsHaveSpecifics(facts: string[]): boolean {
+  const joined = facts.join(" ");
+  // Numbers like 15%, $2M, 300+, Q4, 2024, etc.
+  if (/\d/.test(joined)) return true;
+  // Named quarters
+  if (/Q[1-4]/i.test(joined)) return true;
+  return false;
+}
+
+export function classifySource(source: Source): EvidenceTier {
+  const url = source.url.toLowerCase();
+  const title = source.title.toLowerCase();
+
+  // Tier C: aggregator/scraper sites
+  for (const pattern of TIER_C_URL_PATTERNS) {
+    if (pattern.test(source.url)) return "C";
+  }
+
+  // Tier C: no facts or all facts trivially short
+  if (source.facts.length === 0) return "C";
+  if (source.facts.every((f) => f.trim().length < 20)) return "C";
+
+  // Tier A: URL pattern match
+  for (const pattern of TIER_A_URL_PATTERNS) {
+    if (pattern.test(source.url)) return "A";
+  }
+
+  // Tier A: title pattern match
+  for (const pattern of TIER_A_TITLE_PATTERNS) {
+    if (pattern.test(source.title)) return "A";
+  }
+
+  // Tier A: has date + concrete specifics in facts
+  if (source.date && factsHaveSpecifics(source.facts)) return "A";
+
+  // Tier B: homepage or generic marketing pages
+  const isHomepage = /^https?:\/\/[^/]+\/?$/.test(url);
+  const isGenericPage = /\/(about|solutions|platform|products|features|pricing|why-|overview)\b/i.test(url);
+  if (isHomepage || isGenericPage) return "B";
+
+  // Tier C: no date and no specifics
+  if (!source.date && !factsHaveSpecifics(source.facts)) return "C";
+
+  // Default: B (has some content but not strong enough for A)
+  return "B";
+}
+
+// ---------------------------------------------------------------------------
 // Brave search → structured sources
 // ---------------------------------------------------------------------------
 
 export async function fetchSources(
   url: string,
   apiKey: string,
-): Promise<Source[]> {
+): Promise<ClassifiedSource[]> {
   const query = `"${url}" OR site:${url}`;
 
   const response = await fetch(
@@ -113,7 +228,7 @@ export async function fetchSources(
 
   const webResults = data?.web?.results ?? [];
 
-  const sources: Source[] = webResults
+  const sources: ClassifiedSource[] = webResults
     .map((r) => {
       const facts: string[] = [];
       if (r.description?.trim()) facts.push(r.description.trim());
@@ -130,15 +245,20 @@ export async function fetchSources(
         publisher = r.meta_url?.hostname || fallbackUrl;
       }
 
-      return {
+      const source: Source = {
         title: (r.title || "Untitled").trim(),
         publisher,
         date: r.page_age || "",
         url: r.url || "",
         facts,
       };
+
+      return {
+        ...source,
+        tier: classifySource(source),
+      };
     })
-    .filter((s): s is Source => s !== null)
+    .filter((s): s is ClassifiedSource => s !== null)
     .slice(0, 6);
 
   return sources;
@@ -273,25 +393,56 @@ export function buildSystemPrompt(): string {
     "",
     "## Hook structure",
     "Every hook MUST follow the Signal → Implication → Question pattern:",
-    "1. Signal: a concrete, factual observation drawn from the provided sources.",
+    "1. Signal: a concrete, factual observation drawn ONLY from the provided source facts.",
     "2. Implication: what that signal means for the prospect (pain if ignored, gain if acted on, or a contrast between current and possible state).",
-    "3. Question: end with a binary (yes/no) or specific question.",
+    "3. Question: end with a binary (yes/no) or highly specific question (answerable in under 5 seconds).",
     "",
-    "## Three angles per news item",
-    "For EACH news item / source you are given, produce exactly 3 hooks:",
+    "## Evidence tier rules",
+    "Each source is classified into a tier. Follow these rules strictly:",
+    "",
+    "### Tier A sources (strong evidence)",
+    "Generate exactly 3 hooks per source:",
     "- pain: Signal → negative implication if ignored → binary question.",
     "- gain: Signal → upside if acted on → specific question.",
     "- contrast: Signal → gap between current and possible state → binary question.",
     "",
+    "### Tier B sources (weak/generic evidence)",
+    "Generate exactly 1 verification hook per source. Verification hooks are soft and non-assertive:",
+    '- Format: "It sounds like [observation from source]. Did I get that right?" or similar.',
+    "- Do NOT assert pain or problems. Only verify what the source says.",
+    "- Still must include a specificity token (see below).",
+    "",
+    "### Tier C sources",
+    "Do NOT generate any hooks. Skip entirely.",
+    "",
     "## Quality rules (HARD constraints — violating any one means the hook is rejected)",
     "- Max 240 characters per hook. 1–2 sentences.",
-    "- Must include at least one concrete detail: a number, named initiative, product term, partner name, location, or timeline from the source facts.",
     "- Must end with a question mark.",
+    "- No raw URLs in hook text.",
+    "- No invented or implied internal problems unless the source directly supports it.",
     "- BANNED phrases (never use any of these, even paraphrased):",
-    "  curious, worth a quick, just checking in, hope you're well, touching base,",
-    "  I'd love to, quick question, I came across, I noticed your company,",
-    "  game-changing, innovative solution, disrupting the space, cutting-edge.",
-    "- Do not invent facts. Only reference details present in the provided source facts.",
+    "  curious, worth a quick, just checking in, just checking, hope you're well, touching base,",
+    "  I'd love to, quick question, quick chat, I came across, I noticed your company,",
+    "  game-changing, innovative solution, disrupting the space, cutting-edge,",
+    "  interested in, teams like you, on your radar.",
+    "- No generic benchmarking like 'X% better than peers' without explicit proof from the source.",
+    "",
+    "## Specificity token rule (MANDATORY)",
+    "Each hook MUST include at least ONE of the following from the source evidence:",
+    "- A number (e.g. '3 new SKUs', 'Q4', '2024')",
+    "- A date or timeframe",
+    "- A named product or module",
+    "- A named initiative (e.g. 'Customer 360')",
+    "- A named partner or customer",
+    '- A quoted phrase from the source in double quotes',
+    "- A concrete workflow term (e.g. lead routing, identity resolution, case deflection)",
+    "",
+    "If you cannot include any specificity token from the evidence, do NOT generate a hook for that source.",
+    "",
+    "## Default behavior with weak evidence",
+    "If the evidence is generic marketing/positioning (Tier B), generate verification hooks, not asserted pain.",
+    '- Example: "It sounds like you\'re scaling your enterprise sales motion around Customer 360. Did I get that right?"',
+    '- NOT: "You\'re struggling with enterprise adoption."',
     "",
     "## Confidence scoring",
     "- high: the source fact is specific and recent (named event, metric, date within last 6 months).",
@@ -304,8 +455,11 @@ export function buildSystemPrompt(): string {
     '{  "news_item": <1-indexed source number>,',
     '   "angle": "pain" | "gain" | "contrast",',
     '   "hook": "<the hook text>",',
-    '   "evidence_snippet": "<the source fact you drew from>",',
+    '   "evidence_snippet": "<the exact source fact you drew from>",',
     '   "source_title": "<title of the source>",',
+    '   "source_date": "<date of the source, or empty string if unknown>",',
+    '   "source_url": "<URL of the source>",',
+    '   "evidence_tier": "A" | "B",',
     '   "confidence": "high" | "med"',
     "}",
   ].join("\n");
@@ -313,16 +467,19 @@ export function buildSystemPrompt(): string {
 
 export function buildUserPrompt(
   url: string,
-  sources: Source[],
+  sources: ClassifiedSource[],
   context?: string,
 ): string {
-  const sourcesBlock = sources
+  // Filter out Tier C sources before sending to Claude
+  const usableSources = sources.filter((s) => s.tier !== "C");
+
+  const sourcesBlock = usableSources
     .map(
       (s, i) =>
         [
-          `### Source ${i + 1}: ${s.title}`,
+          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}]`,
           `Publisher: ${s.publisher}`,
-          s.date ? `Date: ${s.date}` : null,
+          s.date ? `Date: ${s.date}` : "Date: unknown",
           `URL: ${s.url}`,
           "Facts:",
           ...s.facts.map((f) => `- ${f}`),
@@ -336,14 +493,27 @@ export function buildUserPrompt(
     ? `\n\n### Salesperson context\n${context}`
     : "";
 
+  const allTierC = usableSources.length === 0;
+
+  if (allTierC) {
+    return [
+      `Prospect URL: ${url}`,
+      "",
+      "### Sources",
+      "No usable sources found. All sources were classified as Tier C (insufficient evidence).",
+      "Return an empty JSON array: []",
+      contextBlock,
+    ].join("\n");
+  }
+
   return [
     `Prospect URL: ${url}`,
     "",
     "### Sources",
-    sourcesBlock || "(No sources found — generate hooks only if you can rely on well-known public facts about this company. Otherwise return an empty array.)",
+    sourcesBlock,
     contextBlock,
     "",
-    `Generate hooks now. Return a JSON array and nothing else.`,
+    "Generate hooks now following the tier rules. Return a JSON array and nothing else.",
   ].join("\n");
 }
 
@@ -452,7 +622,46 @@ export function containsBannedPhrase(text: string): string | null {
   return null;
 }
 
-export function validateHook(raw: ClaudeHookPayload): Hook | null {
+/** Check that a hook contains at least one specificity token from evidence. */
+export function hasSpecificityToken(hook: string): boolean {
+  // Any number (digits)
+  if (/\d+/.test(hook)) return true;
+
+  // Quarter references (Q1-Q4)
+  if (/\bQ[1-4]\b/i.test(hook)) return true;
+
+  // Month names
+  if (/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(hook)) return true;
+
+  // Quoted phrase from source
+  if (/"[^"]{3,}"/.test(hook)) return true;
+
+  // Concrete workflow terms
+  const workflowTerms = [
+    "lead routing", "identity resolution", "case deflection",
+    "revenue recognition", "pipeline", "onboarding",
+    "churn", "retention", "upsell", "cross-sell",
+    "reconciliation", "compliance", "migration",
+    "integration", "SSO", "API", "SDK", "webhook",
+    "self-serve", "checkout", "billing",
+  ];
+  const lower = hook.toLowerCase();
+  for (const term of workflowTerms) {
+    if (lower.includes(term)) return true;
+  }
+
+  // Named proper nouns (capitalized multi-word or single capitalized word not at sentence start)
+  // This catches product names, initiative names, partner names, etc.
+  // Look for capitalized words that aren't at the very start of the hook
+  if (/(?:^.+?\s)[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/.test(hook)) return true;
+
+  return false;
+}
+
+export function validateHook(
+  raw: ClaudeHookPayload,
+  sourceLookup?: Map<number, ClassifiedSource>,
+): Hook | null {
   // Angle check
   const angle = raw.angle?.toLowerCase() as Angle;
   if (!VALID_ANGLES.includes(angle)) return null;
@@ -472,12 +681,24 @@ export function validateHook(raw: ClaudeHookPayload): Hook | null {
   // Banned phrase check
   if (containsBannedPhrase(hook) !== null) return null;
 
+  // Specificity token check
+  if (!hasSpecificityToken(hook)) return null;
+
+  // Evidence tier
+  const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
+  const validTier = tier === "A" || tier === "B" ? tier : (
+    sourceLookup?.get(raw.news_item)?.tier ?? "B"
+  );
+
   return {
     news_item: typeof raw.news_item === "number" ? raw.news_item : 1,
     angle,
     hook,
     evidence_snippet: (raw.evidence_snippet || "").trim(),
     source_title: (raw.source_title || "").trim(),
+    source_date: (raw.source_date || "").trim(),
+    source_url: (raw.source_url || "").trim(),
+    evidence_tier: validTier,
     confidence,
   };
 }
@@ -498,7 +719,7 @@ export async function generateHooksForUrl(opts: {
   url: string;
   pitchContext?: string;
   count?: number;
-}): Promise<Hook[]> {
+}): Promise<{ hooks: Hook[]; suggestion?: string }> {
   const braveApiKey = process.env.BRAVE_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
@@ -507,16 +728,30 @@ export async function generateHooksForUrl(opts: {
   }
 
   const sources = await fetchSources(opts.url, braveApiKey);
+
+  // Check if all sources are Tier C
+  const usableSources = sources.filter((s) => s.tier !== "C");
+  if (usableSources.length === 0) {
+    return {
+      hooks: [],
+      suggestion: "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
+    };
+  }
+
+  // Build source lookup for validation
+  const sourceLookup = new Map<number, ClassifiedSource>();
+  usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
+
   const systemPrompt = buildSystemPrompt();
   const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
   const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
   const validHooks: Hook[] = [];
   for (const raw of rawHooks) {
-    const validated = validateHook(raw);
+    const validated = validateHook(raw, sourceLookup);
     if (validated) validHooks.push(validated);
   }
 
   const limit = opts.count ?? validHooks.length;
-  return validHooks.slice(0, limit);
+  return { hooks: validHooks.slice(0, limit) };
 }

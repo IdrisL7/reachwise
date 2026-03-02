@@ -20,6 +20,9 @@ type BatchHook = {
   hook: string;
   evidence_snippet: string;
   source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: "A" | "B" | "C";
   confidence: "high" | "med" | "low";
 };
 
@@ -56,6 +59,19 @@ function ConfidencePill({ confidence }: { confidence: string }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[confidence] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>
       {confidence}
+    </span>
+  );
+}
+
+function TierBadge({ tier }: { tier: string }) {
+  const styles: Record<string, string> = {
+    A: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    B: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    C: "bg-zinc-500/10 text-zinc-500 border-zinc-700/20",
+  };
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-bold ${styles[tier] || styles["C"]}`}>
+      Tier {tier}
     </span>
   );
 }
@@ -581,6 +597,9 @@ export function DemoSection() {
                               <div className="flex items-center gap-1.5">
                                 <AnglePill angle={structured.angle} />
                                 <ConfidencePill confidence={structured.confidence} />
+                                {structured.evidence_tier && (
+                                  <TierBadge tier={structured.evidence_tier} />
+                                )}
                               </div>
                             )}
                           </div>
@@ -623,9 +642,28 @@ export function DemoSection() {
                                 {structured.evidence_snippet}
                               </p>
                               {structured.source_title && (
-                                <p className="mt-1.5 text-[0.75rem] text-zinc-500">
-                                  Source: {structured.source_title}
-                                </p>
+                                <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.75rem] text-zinc-500">
+                                  <span>
+                                    Source:{" "}
+                                    {structured.source_url ? (
+                                      <a
+                                        href={structured.source_url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-violet-400/70 underline decoration-violet-500/20 transition-colors hover:text-violet-300"
+                                      >
+                                        {structured.source_title}
+                                      </a>
+                                    ) : (
+                                      structured.source_title
+                                    )}
+                                  </span>
+                                  {structured.source_date && (
+                                    <span className="text-zinc-600">
+                                      {structured.source_date}
+                                    </span>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}
@@ -773,7 +811,12 @@ export function DemoSection() {
                                       </span>
                                       <AnglePill angle={hook.angle} />
                                     </div>
-                                    <ConfidencePill confidence={hook.confidence} />
+                                    <div className="flex items-center gap-1.5">
+                                      <ConfidencePill confidence={hook.confidence} />
+                                      {hook.evidence_tier && (
+                                        <TierBadge tier={hook.evidence_tier} />
+                                      )}
+                                    </div>
                                   </div>
                                   <p className="text-[0.875rem] leading-relaxed text-zinc-200">
                                     {hook.hook}
@@ -790,9 +833,28 @@ export function DemoSection() {
                                         {hook.evidence_snippet}
                                       </p>
                                       {hook.source_title && (
-                                        <p className="mt-1 text-[0.6875rem] text-zinc-500">
-                                          Source: {hook.source_title}
-                                        </p>
+                                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[0.6875rem] text-zinc-500">
+                                          <span>
+                                            Source:{" "}
+                                            {hook.source_url ? (
+                                              <a
+                                                href={hook.source_url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="text-violet-400/60 underline decoration-violet-500/20 transition-colors hover:text-violet-300"
+                                              >
+                                                {hook.source_title}
+                                              </a>
+                                            ) : (
+                                              hook.source_title
+                                            )}
+                                          </span>
+                                          {hook.source_date && (
+                                            <span className="text-zinc-600">
+                                              {hook.source_date}
+                                            </span>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
                                   )}

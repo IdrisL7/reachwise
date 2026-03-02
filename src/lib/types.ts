@@ -1,9 +1,14 @@
+export type EvidenceTier = "A" | "B" | "C";
+
 export type StructuredHook = {
   news_item: number;
   angle: "pain" | "gain" | "contrast";
   hook: string;
   evidence_snippet: string;
   source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: EvidenceTier;
   confidence: "high" | "med" | "low";
 };
 
@@ -25,4 +30,5 @@ export type HookResponse = {
   companyName?: string;
   resolvedCompany?: CompanyCandidate | null;
   candidates?: CompanyCandidate[];
+  suggestion?: string;
 };

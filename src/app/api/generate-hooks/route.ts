@@ -9,6 +9,7 @@ import {
   resolveCompanyByName,
   type Hook,
   type CompanyResolutionResult,
+  type ClassifiedSource,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 
@@ -30,10 +31,6 @@ export async function POST(request: Request) {
 
     const braveApiKey = process.env.BRAVE_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
-
-    // If a URL is provided, we behave as before and skip name resolution.
-    // If only a company name is provided, we try to resolve it to a URL
-    // using Brave Search and return disambiguation metadata when needed.
 
     if (!rawUrl && !companyName) {
       return NextResponse.json(
@@ -99,29 +96,51 @@ export async function POST(request: Request) {
     const fallbackHooks = applyUrlToMockHooks(url);
 
     try {
-      // 1. Gather sources from Brave
+      // 1. Gather and classify sources from Brave
       const sources = await fetchSources(url, braveApiKey!);
 
-      // 2. Build prompts and call Claude
+      // 2. Check if all sources are Tier C (insufficient evidence)
+      const usableSources = sources.filter((s) => s.tier !== "C");
+      if (usableSources.length === 0) {
+        return NextResponse.json({
+          hooks: [],
+          structured_hooks: [],
+          citations: sources.map((s) => ({
+            source_title: s.title,
+            publisher: s.publisher,
+            date: s.date,
+            url: s.url,
+            tier: s.tier,
+          })),
+          status: "ok" as CompanyResolutionStatus,
+          suggestion:
+            "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
+        });
+      }
+
+      // 3. Build source lookup for validation
+      const sourceLookup = new Map<number, ClassifiedSource>();
+      usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
+
+      // 4. Build prompts and call Claude
       const systemPrompt = buildSystemPrompt();
       const userPrompt = buildUserPrompt(url, sources, context);
       const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-      // 3. Quality gate
+      // 5. Quality gate
       const validHooks: Hook[] = [];
       for (const raw of rawHooks) {
-        const validated = validateHook(raw);
+        const validated = validateHook(raw, sourceLookup);
         if (validated) validHooks.push(validated);
       }
 
-      // 4. If nothing survived validation, fall back
+      // 6. If nothing survived validation, fall back
       if (validHooks.length === 0) {
         console.warn("generate-hooks: No hooks passed quality gate, returning mock hooks.");
         return NextResponse.json({ hooks: fallbackHooks });
       }
 
-      // 5. Build response — flattened hooks: string[] for frontend compat,
-      //    plus structured_hooks and citations for future use
+      // 7. Build response
       const flatHooks = validHooks.map((h) => h.hook);
 
       const citations = sources.map((s) => ({
@@ -129,6 +148,7 @@ export async function POST(request: Request) {
         publisher: s.publisher,
         date: s.date,
         url: s.url,
+        tier: s.tier,
       }));
 
       const resolvedCompany = resolution && resolution.candidates[0]

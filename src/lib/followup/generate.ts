@@ -248,7 +248,8 @@ export async function generateFollowUp(opts: {
     if (!companyUrl) {
       throw new Error("Lead must have company_website or company_name to generate hooks");
     }
-    hooks = await generateHooksForUrl({ url: companyUrl, count: 6 });
+    const result = await generateHooksForUrl({ url: companyUrl, count: 6 });
+    hooks = result.hooks;
   }
 
   if (hooks.length === 0) {

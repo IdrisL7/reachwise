@@ -51,12 +51,12 @@ export async function POST(request: Request) {
         }
 
         try {
-          const hooks = await generateHooksForUrl({
+          const result = await generateHooksForUrl({
             url,
             pitchContext: item.pitchContext,
             count: maxHooksPerUrl,
           });
-          return { url, hooks, error: null };
+          return { url, hooks: result.hooks, error: null };
         } catch (err) {
           console.error(`generate-hooks-batch: failed for ${url}`, err);
           return { url, hooks: [], error: "Failed to generate hooks" };
