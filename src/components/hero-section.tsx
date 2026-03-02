@@ -45,7 +45,7 @@ export function HeroSection() {
               href="#demo"
               className="group inline-flex h-[3.5rem] items-center gap-2 rounded-lg bg-violet-600 px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_24px_rgba(139,92,246,0.25)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_36px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
             >
-              Try GetSignalHooks
+              Generate hooks
               <svg
                 className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
                 fill="none"
@@ -62,10 +62,10 @@ export function HeroSection() {
             </a>
 
             <a
-              href="#demo"
+              href="#how-it-works"
               className="group inline-flex h-[3.5rem] items-center gap-1.5 px-3 text-[1.0625rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
             >
-              See example hooks
+              See how it works
               <svg
                 className="h-4 w-4 transition-transform duration-200 group-hover:translate-y-0.5"
                 fill="none"

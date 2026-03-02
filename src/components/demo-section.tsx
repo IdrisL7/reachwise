@@ -16,7 +16,7 @@ type EmailUIState = {
 
 type BatchHook = {
   news_item: number;
-  angle: "pain" | "gain" | "contrast";
+  angle: "trigger" | "risk" | "tradeoff";
   hook: string;
   evidence_snippet: string;
   source_title: string;
@@ -39,9 +39,9 @@ function copyToClipboard(text: string) {
 
 function AnglePill({ angle }: { angle: string }) {
   const styles: Record<string, string> = {
-    pain: "bg-rose-500/10 text-rose-400 border-rose-500/20",
-    gain: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    contrast: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    trigger: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    risk: "bg-rose-500/10 text-rose-400 border-rose-500/20",
+    tradeoff: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   };
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[angle] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>

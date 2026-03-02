@@ -208,7 +208,7 @@ function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[]): Hook 
   // We don't have the exact angle used before, so just diversify by picking
   // high-confidence hooks and rotating through angles
   const usedCount = previousMessages.length;
-  const angleOrder: Hook["angle"][] = ["pain", "gain", "contrast"];
+  const angleOrder: Hook["angle"][] = ["trigger", "risk", "tradeoff"];
   const preferredAngle = angleOrder[usedCount % angleOrder.length];
 
   const preferred = hooks.find(

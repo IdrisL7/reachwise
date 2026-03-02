@@ -58,6 +58,16 @@ const transparency = [
     description:
       "Every follow-up we generate is logged as a message record with lead ID, step, subject, and body. You can sync this back to your CRM via n8n or use our API to inspect history.",
   },
+  {
+    icon: (
+      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+      </svg>
+    ),
+    title: "Security & data handling",
+    description:
+      "We store lead email, company URL, and sequence state. No inbox access. No CRM write-back without your explicit n8n workflow. Data retained for 90 days after last activity, then auto-purged.",
+  },
 ];
 
 export function FollowUpEngineSection() {

@@ -2,7 +2,7 @@ export type EvidenceTier = "A" | "B" | "C";
 
 export type StructuredHook = {
   news_item: number;
-  angle: "pain" | "gain" | "contrast";
+  angle: "trigger" | "risk" | "tradeoff";
   hook: string;
   evidence_snippet: string;
   source_title: string;

@@ -32,10 +32,10 @@ export function Navbar() {
             Pricing
           </Link>
           <Link
-            href="/#waitlist"
+            href="/#demo"
             className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_12px_rgba(139,92,246,0.15)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
           >
-            Join waitlist
+            Try it free
             <svg
               className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
               fill="none"

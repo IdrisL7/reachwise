@@ -2,30 +2,30 @@
 
 const exampleHooks = [
   {
-    angle: "pain" as const,
+    angle: "trigger" as const,
     confidence: "high" as const,
     tier: "A" as const,
-    text: 'Shopify Editions Summer \'25 added over 150 product updates in one release. If your integration layer wasn\'t built for that pace, are you already behind on compatibility?',
+    text: 'Shopify Editions Summer \'25 shipped over 150 product updates in a single release. Is your integration layer keeping pace with that cadence?',
     evidence: '"Shopify announced over 150 updates across its platform in its Summer \'25 Editions release..."',
     source: "Shopify Editions — Summer '25 Announcement",
     date: "June 2025",
     sourceUrl: "https://www.shopify.com/editions",
   },
   {
-    angle: "gain" as const,
+    angle: "risk" as const,
     confidence: "high" as const,
     tier: "A" as const,
-    text: "Shopify's B2B wholesale channel now supports custom pricing per company. Has your team explored building on top of that for mid-market accounts?",
+    text: "Shopify's B2B channel now supports company-specific pricing and net terms. If your mid-market accounts aren't on it yet, are you losing deals to sellers who are?",
     evidence: '"Shopify launched a dedicated B2B sales channel with company-specific pricing, net payment terms, and custom catalogs..."',
     source: "Shopify B2B Wholesale Channel — Product Blog",
     date: "2025",
     sourceUrl: "https://www.shopify.com/plus/b2b",
   },
   {
-    angle: "contrast" as const,
+    angle: "tradeoff" as const,
     confidence: "med" as const,
     tier: "B" as const,
-    text: "Shopify is pushing heavily into enterprise with Shopify Plus while competitors focus on SMB checkout. Is that a segment gap your roadmap could fill?",
+    text: "It sounds like Shopify Plus is positioning around dedicated APIs and customizable checkout for enterprise. Did I get that right?",
     evidence: '"Shopify Plus powers enterprise commerce for high-volume brands with dedicated APIs and customizable checkout..."',
     source: "Shopify Plus — Platform Overview",
     date: "",
@@ -85,10 +85,10 @@ export function HeroHookPreview() {
                     Hook {i + 1}
                   </span>
                   <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[0.5625rem] font-semibold ${
-                    hook.angle === "pain"
-                      ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
-                      : hook.angle === "gain"
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    hook.angle === "trigger"
+                      ? "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                      : hook.angle === "risk"
+                        ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
                         : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                   }`}>
                     {hook.angle}

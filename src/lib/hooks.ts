@@ -4,7 +4,7 @@
 
 import type { EvidenceTier } from "./types";
 
-export type Angle = "pain" | "gain" | "contrast";
+export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
 
 export type Hook = {
@@ -86,7 +86,7 @@ export const BANNED_WORDS = [
   "on your radar",
 ];
 
-export const VALID_ANGLES: Angle[] = ["pain", "gain", "contrast"];
+export const VALID_ANGLES: Angle[] = ["trigger", "risk", "tradeoff"];
 export const VALID_CONFIDENCES: Confidence[] = ["high", "med"];
 export const MAX_HOOK_CHARS = 240;
 
@@ -394,20 +394,21 @@ export function buildSystemPrompt(): string {
     "## Hook structure",
     "Every hook MUST follow the Signal → Implication → Question pattern:",
     "1. Signal: a concrete, factual observation drawn ONLY from the provided source facts.",
-    "2. Implication: what that signal means for the prospect (pain if ignored, gain if acted on, or a contrast between current and possible state).",
+    "2. Implication: what that signal means for the prospect.",
     "3. Question: end with a binary (yes/no) or highly specific question (answerable in under 5 seconds).",
     "",
     "## Evidence tier rules",
     "Each source is classified into a tier. Follow these rules strictly:",
     "",
     "### Tier A sources (strong evidence)",
-    "Generate exactly 3 hooks per source:",
-    "- pain: Signal → negative implication if ignored → binary question.",
-    "- gain: Signal → upside if acted on → specific question.",
-    "- contrast: Signal → gap between current and possible state → binary question.",
+    "Generate exactly 3 hooks per source, one for each angle:",
+    "- trigger: what changed (launch, hire, announcement, product update, funding) → question about timing or readiness.",
+    "- risk: what breaks, leaks, or degrades if the change is ignored (cost, speed, quality, compliance, conversion) → binary question.",
+    "- tradeoff: two valid paths the company could take (platform shift vs point tools; centralize vs federate; speed vs accuracy) → specific question about which direction.",
     "",
     "### Tier B sources (weak/generic evidence)",
-    "Generate exactly 1 verification hook per source. Verification hooks are soft and non-assertive:",
+    "Generate exactly 1 verification hook per source using the 'trigger' angle only.",
+    "Verification hooks are soft and non-assertive:",
     '- Format: "It sounds like [observation from source]. Did I get that right?" or similar.',
     "- Do NOT assert pain or problems. Only verify what the source says.",
     "- Still must include a specificity token (see below).",
@@ -415,11 +416,19 @@ export function buildSystemPrompt(): string {
     "### Tier C sources",
     "Do NOT generate any hooks. Skip entirely.",
     "",
+    "## No-assumptions rule (HARD constraint)",
+    "- NEVER assert internal problems ('disconnected systems', 'fragmented touchpoints',",
+    "  'your team struggles with...', 'your prospects struggle...') unless the source EXPLICITLY describes them.",
+    "- If a claim is not directly supported by the evidence, either:",
+    "  a) Convert it into a verification question: 'Did I get it right that...?'",
+    "  b) Remove it entirely.",
+    "- Do not use discovery-call bait or generic fluff.",
+    "- Do not imply you know what's happening inside the company. Stick to what the source says.",
+    "",
     "## Quality rules (HARD constraints — violating any one means the hook is rejected)",
     "- Max 240 characters per hook. 1–2 sentences.",
     "- Must end with a question mark.",
     "- No raw URLs in hook text.",
-    "- No invented or implied internal problems unless the source directly supports it.",
     "- BANNED phrases (never use any of these, even paraphrased):",
     "  curious, worth a quick, just checking in, just checking, hope you're well, touching base,",
     "  I'd love to, quick question, quick chat, I came across, I noticed your company,",
@@ -439,11 +448,6 @@ export function buildSystemPrompt(): string {
     "",
     "If you cannot include any specificity token from the evidence, do NOT generate a hook for that source.",
     "",
-    "## Default behavior with weak evidence",
-    "If the evidence is generic marketing/positioning (Tier B), generate verification hooks, not asserted pain.",
-    '- Example: "It sounds like you\'re scaling your enterprise sales motion around Customer 360. Did I get that right?"',
-    '- NOT: "You\'re struggling with enterprise adoption."',
-    "",
     "## Confidence scoring",
     "- high: the source fact is specific and recent (named event, metric, date within last 6 months).",
     "- med: fact is real but somewhat generic or older.",
@@ -453,7 +457,7 @@ export function buildSystemPrompt(): string {
     "## Output format",
     "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
     '{  "news_item": <1-indexed source number>,',
-    '   "angle": "pain" | "gain" | "contrast",',
+    '   "angle": "trigger" | "risk" | "tradeoff",',
     '   "hook": "<the hook text>",',
     '   "evidence_snippet": "<the exact source fact you drew from>",',
     '   "source_title": "<title of the source>",',
