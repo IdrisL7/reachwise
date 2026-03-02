@@ -610,12 +610,12 @@ export function DemoSection() {
                                     type="button"
                                     onClick={() =>
                                       copyToClipboard(
-                                        `${hook}\n\nEvidence: ${structured.evidence_snippet}\nSource: ${structured.source_title}`,
+                                        `Hook:\n${hook}\n\nEvidence:\n"${structured.evidence_snippet}"\n— ${structured.source_title}`,
                                       )
                                     }
-                                    className="rounded-md border border-zinc-700/50 bg-[#0a0a12] px-2.5 py-1 text-[0.6875rem] font-medium text-zinc-300 transition-all duration-200 hover:border-violet-500/40 hover:text-white hover:scale-[1.02]"
+                                    className="rounded-md border border-violet-500/30 bg-violet-600/[0.08] px-2.5 py-1 text-[0.6875rem] font-medium text-violet-300 transition-all duration-200 hover:border-violet-400/50 hover:text-white hover:scale-[1.02]"
                                   >
-                                    Copy with evidence
+                                    Copy with receipts
                                   </button>
                                 </div>
                               </div>
@@ -796,7 +796,7 @@ export function DemoSection() {
                                       )}
                                     </div>
                                   )}
-                                  <div className="mt-2 flex justify-end">
+                                  <div className="mt-2 flex flex-wrap justify-end gap-1.5">
                                     <button
                                       type="button"
                                       onClick={() => copyToClipboard(hook.hook)}
@@ -804,6 +804,19 @@ export function DemoSection() {
                                     >
                                       Copy hook
                                     </button>
+                                    {hook.evidence_snippet && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          copyToClipboard(
+                                            `Hook:\n${hook.hook}\n\nEvidence:\n"${hook.evidence_snippet}"\n— ${hook.source_title}`,
+                                          )
+                                        }
+                                        className="rounded-md border border-violet-500/30 bg-violet-600/[0.08] px-2.5 py-1 text-[0.6875rem] font-medium text-violet-300 transition-all duration-200 hover:border-violet-400/50 hover:text-white hover:scale-[1.02]"
+                                      >
+                                        Copy with receipts
+                                      </button>
+                                    )}
                                   </div>
                                 </li>
                               ))}
