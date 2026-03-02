@@ -19,7 +19,7 @@ const steps = [
     number: "3",
     title: "AI-generated follow-up emails",
     description:
-      "The Follow-Up Engine takes the best hook and writes a complete follow-up email — subject line and body — tailored to the lead's company and role. It automatically rotates between pain, gain, and contrast angles across the sequence, and applies quality gates to block generic copy.",
+      "The Follow-Up Engine takes the best hook and writes a complete follow-up email — subject line and body — tailored to the lead's company and role. It automatically rotates between trigger, risk, and tradeoff angles across the sequence, and applies quality gates to block generic copy.",
   },
   {
     number: "4",

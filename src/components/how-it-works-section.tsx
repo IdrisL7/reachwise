@@ -79,7 +79,7 @@ export function HowItWorksSection() {
               </li>
             </ul>
             <p className="mt-4 text-[0.875rem] leading-[1.6] text-zinc-500">
-              Hooks are tagged with angle (pain / gain / contrast), confidence
+              Hooks are tagged with angle (trigger / risk / tradeoff), confidence
               level, and include the evidence snippet and source title so reps
               can see exactly what the message is based on.
             </p>

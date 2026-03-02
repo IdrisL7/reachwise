@@ -39,7 +39,7 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
       <main className="mx-auto max-w-xl px-6 py-16">
-        <h1 className="text-3xl font-bold text-white">Get early access to GetSignalHooks</h1>
+        <h1 className="text-3xl font-bold text-white">Get started with GetSignalHooks</h1>
         <p className="mt-4 text-zinc-400">
           Tell us a bit about how you&apos;re doing outbound today and we&apos;ll follow up with access
           and examples tailored to you.
@@ -50,7 +50,7 @@ export default function ContactPage() {
           <input
             type="hidden"
             name="_subject"
-            value="New GetSignalHooks early access request"
+            value="New GetSignalHooks access request"
           />
           <input type="hidden" name="source" value="getsignalhooks-landing" />
 
@@ -120,7 +120,7 @@ export default function ContactPage() {
             disabled={status === "submitting"}
             className="inline-flex h-[3rem] items-center justify-center rounded-lg bg-violet-600 px-6 text-sm font-semibold text-white shadow-[0_0_24px_rgba(139,92,246,0.25)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_36px_rgba(139,92,246,0.35)] disabled:opacity-60"
           >
-            {status === "submitting" ? "Sending..." : "Request early access"}
+            {status === "submitting" ? "Sending..." : "Get access"}
           </button>
 
           {status === "success" && (

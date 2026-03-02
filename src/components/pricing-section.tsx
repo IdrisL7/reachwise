@@ -109,7 +109,7 @@ export function PricingSection() {
             </li>
             <li className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Angle tags (pain / gain / contrast) and confidence levels
+              Angle tags (trigger / risk / tradeoff) and confidence levels
             </li>
             <li className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />

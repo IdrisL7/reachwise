@@ -17,7 +17,7 @@ const steps = [
     number: "3",
     title: "AI writes the follow-up",
     description:
-      "Each email is crafted with a unique angle — no templates, no repeats. The engine rotates between pain, gain, and contrast hooks.",
+      "Each email is crafted with a unique angle — no templates, no repeats. The engine rotates between trigger, risk, and tradeoff hooks.",
   },
   {
     number: "4",
