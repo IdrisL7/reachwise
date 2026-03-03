@@ -8,6 +8,13 @@
       "when": 1772483102569,
       "tag": "0000_faithful_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1772547275748,
+      "tag": "0001_smiling_mystique",
+      "breakpoints": true
     }
   ]
 }
