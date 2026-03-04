@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { eq, and, isNull, lte, gte, sql } from "drizzle-orm";
-import { sendEmail } from "@/lib/email/sendgrid";
+import { sendEmail, brandedHtml } from "@/lib/email/sendgrid";
 import { generateUnsubscribeToken } from "@/app/api/auth/unsubscribe/route";
 
 // Onboarding email sequence — triggered by Vercel Cron or external scheduler
@@ -100,12 +100,14 @@ export async function GET(req: NextRequest) {
       const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || "https://www.getsignalhooks.com";
       const unsubToken = generateUnsubscribeToken(user.email);
       const unsubUrl = `${appUrl}/api/auth/unsubscribe?email=${encodeURIComponent(user.email)}&token=${unsubToken}`;
-      const bodyWithUnsub = email.body(user.name || "") + `\n\n---\nDon't want these emails? Unsubscribe: ${unsubUrl}`;
+      const plainBody = email.body(user.name || "");
+      const bodyWithUnsub = plainBody + `\n\n---\nDon't want these emails? Unsubscribe: ${unsubUrl}`;
 
       const result = await sendEmail({
         to: user.email,
         subject: email.subject,
         body: bodyWithUnsub,
+        html: brandedHtml(plainBody, unsubUrl),
         userId: user.id,
       });
 

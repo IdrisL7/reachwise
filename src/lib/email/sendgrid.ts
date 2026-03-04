@@ -13,8 +13,53 @@ interface SendEmailParams {
   from?: string;
   subject: string;
   body: string;
+  html?: string; // If not provided, auto-generated from body with branding
   messageId?: string; // outbound_messages.id to update status
   userId?: string;
+}
+
+/** Wrap plain text email body in a branded HTML template */
+export function brandedHtml(body: string, unsubscribeUrl?: string): string {
+  const bodyHtml = body
+    .split("\n\n")
+    .map((p) => `<p style="margin:0 0 16px;line-height:1.6;">${p.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+
+  const unsubBlock = unsubscribeUrl
+    ? `<p style="margin:0;"><a href="${unsubscribeUrl}" style="color:#71717a;text-decoration:underline;">Unsubscribe</a></p>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#080808;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#080808;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <!-- Logo -->
+        <tr><td style="padding-bottom:32px;">
+          <span style="font-size:20px;font-weight:700;color:#34d399;letter-spacing:-0.02em;">GSH</span>
+          <span style="font-size:14px;font-weight:600;color:#a1a1aa;margin-left:8px;">GetSignalHooks</span>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="color:#e4e4e7;font-size:15px;">
+          ${bodyHtml}
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding-top:32px;border-top:1px solid #27272a;margin-top:32px;">
+          <p style="margin:0 0 8px;font-size:12px;color:#71717a;">
+            GetSignalHooks — Evidence-first hooks for outbound sales
+          </p>
+          <p style="margin:0 0 4px;font-size:12px;color:#52525b;">
+            <a href="https://www.getsignalhooks.com" style="color:#52525b;text-decoration:underline;">getsignalhooks.com</a>
+          </p>
+          ${unsubBlock}
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
 }
 
 interface SendResult {
@@ -35,9 +80,10 @@ export async function sendEmail(params: SendEmailParams): Promise<SendResult> {
   try {
     const [response] = await sgMail.send({
       to: params.to,
-      from: fromEmail,
+      from: { email: fromEmail, name: "GetSignalHooks" },
       subject: params.subject,
       text: params.body,
+      html: params.html || brandedHtml(params.body),
       trackingSettings: {
         clickTracking: { enable: true },
         openTracking: { enable: true },
