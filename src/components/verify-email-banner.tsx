@@ -1,10 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 
 export function VerifyEmailBanner() {
+  const { update } = useSession();
+  const searchParams = useSearchParams();
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  // If user just verified, trigger a session refresh and dismiss
+  useEffect(() => {
+    if (searchParams.get("verified") === "true") {
+      update(); // Force JWT refresh from DB
+      setDismissed(true);
+    }
+  }, [searchParams, update]);
+
+  if (dismissed) return null;
 
   async function resend() {
     setLoading(true);
@@ -22,17 +37,19 @@ export function VerifyEmailBanner() {
         <p className="text-sm text-amber-300">
           Please verify your email address. Check your inbox for a verification link.
         </p>
-        {sent ? (
-          <span className="text-xs text-amber-400/70 ml-4">Sent!</span>
-        ) : (
-          <button
-            onClick={resend}
-            disabled={loading}
-            className="text-xs text-amber-400 hover:text-amber-200 underline underline-offset-2 whitespace-nowrap ml-4 disabled:opacity-50"
-          >
-            {loading ? "Sending..." : "Resend email"}
-          </button>
-        )}
+        <div className="flex items-center gap-3 ml-4">
+          {sent ? (
+            <span className="text-xs text-amber-400/70">Sent!</span>
+          ) : (
+            <button
+              onClick={resend}
+              disabled={loading}
+              className="text-xs text-amber-400 hover:text-amber-200 underline underline-offset-2 whitespace-nowrap disabled:opacity-50"
+            >
+              {loading ? "Sending..." : "Resend email"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

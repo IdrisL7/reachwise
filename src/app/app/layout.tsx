@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import Link from "next/link";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
@@ -57,7 +58,11 @@ export default async function AppLayout({
         </div>
       </header>
 
-      {!(session.user as any).isEmailVerified && <VerifyEmailBanner />}
+      {!(session.user as any).isEmailVerified && (
+        <Suspense>
+          <VerifyEmailBanner />
+        </Suspense>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">{children}</main>
     </div>
