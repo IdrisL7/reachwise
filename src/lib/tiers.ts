@@ -12,7 +12,7 @@ export interface TierFeature {
 export interface Tier {
   id: TierId;
   name: string;
-  price: number; // $/month
+  price: number; // £/month
   description: string;
   bestFor: string;
   features: TierFeature[];

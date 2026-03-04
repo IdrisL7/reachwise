@@ -83,7 +83,7 @@ export function PricingSection() {
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
                 <span className="text-[2.75rem] font-bold tracking-tight text-white">
-                  ${tier.price}
+                  £{tier.price}
                 </span>
                 <span className="text-[0.875rem] text-zinc-500">/month</span>
               </div>
