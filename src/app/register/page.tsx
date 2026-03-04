@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 export default function RegisterPage() {
@@ -10,6 +11,8 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const searchParams = useSearchParams();
+  const tierParam = searchParams.get("tier");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +44,19 @@ export default function RegisterPage() {
       if (result?.error) {
         setError("Account created but sign-in failed. Try logging in.");
         setLoading(false);
+      } else if (tierParam && tierParam !== "starter") {
+        // Redirect to Stripe checkout for the selected tier
+        const checkoutRes = await fetch("/api/stripe/checkout", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tierId: tierParam }),
+        });
+        const checkoutData = await checkoutRes.json();
+        if (checkoutData.url) {
+          window.location.href = checkoutData.url;
+        } else {
+          window.location.href = "/app";
+        }
       } else {
         window.location.href = "/app";
       }
@@ -113,7 +129,9 @@ export default function RegisterPage() {
             {loading ? "Creating account..." : "Create account"}
           </button>
           <p className="text-xs text-zinc-600 text-center">
-            Starts on the free Starter tier. Upgrade anytime.
+            {tierParam && tierParam !== "starter"
+            ? `You'll be redirected to checkout for the ${tierParam.charAt(0).toUpperCase() + tierParam.slice(1)} plan.`
+            : "Starts on the free Starter tier. Upgrade anytime."}
           </p>
         </form>
       </div>
