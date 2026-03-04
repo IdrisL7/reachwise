@@ -22,12 +22,11 @@ export const stripe = new Proxy({} as Stripe, {
 });
 
 export function getTierFromPriceId(priceId: string): TierId {
-  const map: Record<string, TierId> = {
-    [process.env.STRIPE_PRICE_STARTER || ""]: "starter",
-    [process.env.STRIPE_PRICE_PRO || ""]: "pro",
-    [process.env.STRIPE_PRICE_CONCIERGE || ""]: "concierge",
-  };
-  return map[priceId] || "starter";
+  if (process.env.STRIPE_PRICE_STARTER && priceId === process.env.STRIPE_PRICE_STARTER) return "starter";
+  if (process.env.STRIPE_PRICE_PRO && priceId === process.env.STRIPE_PRICE_PRO) return "pro";
+  if (process.env.STRIPE_PRICE_CONCIERGE && priceId === process.env.STRIPE_PRICE_CONCIERGE) return "concierge";
+  console.warn(`Unknown Stripe price ID: ${priceId} — defaulting to starter`);
+  return "starter";
 }
 
 export function getPriceId(tierId: TierId): string {
@@ -78,6 +77,7 @@ export async function syncSubscriptionToUser(subscription: Stripe.Subscription) 
     .set({
       tierId,
       stripeSubscriptionId: subscription.id,
+      trialEndsAt: null, // Clear trial — user is now a paying customer
     })
     .where(eq(schema.users.id, userId));
 }

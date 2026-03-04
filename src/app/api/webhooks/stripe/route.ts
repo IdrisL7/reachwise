@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
           .set({
             tierId: "starter",
             stripeSubscriptionId: null,
+            trialEndsAt: new Date().toISOString(), // Set expired trial to block free access
           })
           .where(eq(schema.users.id, userId));
       }

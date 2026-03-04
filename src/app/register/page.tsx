@@ -11,6 +11,7 @@ function RegisterForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState("");
   const searchParams = useSearchParams();
   const tierParam = searchParams.get("tier");
 
@@ -45,7 +46,9 @@ function RegisterForm() {
         setError("Account created but sign-in failed. Try logging in.");
         setLoading(false);
       } else {
-        // Always redirect to Stripe checkout — trial for starter, direct for others
+        // Redirect to Stripe checkout — trial for starter, direct for others
+        setLoading(false);
+        setCheckoutMessage(`Account created! Check ${email} to verify your email. Redirecting to checkout...`);
         const selectedTier = tierParam || "starter";
         const isTrial = selectedTier === "starter";
         const checkoutRes = await fetch("/api/stripe/checkout", {
@@ -81,6 +84,12 @@ function RegisterForm() {
       {error && (
         <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-4 text-sm">
           {error}
+        </div>
+      )}
+
+      {checkoutMessage && (
+        <div className="bg-emerald-900/30 border border-emerald-800 text-emerald-300 px-4 py-3 rounded-lg mb-4 text-sm">
+          {checkoutMessage}
         </div>
       )}
 

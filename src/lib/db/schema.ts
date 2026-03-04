@@ -16,6 +16,7 @@ export const users = sqliteTable("users", {
   stripeSubscriptionId: text("stripe_subscription_id"),
   hooksUsedThisMonth: integer("hooks_used_this_month").notNull().default(0),
   hooksResetAt: text("hooks_reset_at").notNull().default(sql`(datetime('now'))`),
+  trialEndsAt: text("trial_ends_at"),
   passwordChangedAt: text("password_changed_at"),
   unsubscribedAt: text("unsubscribed_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),

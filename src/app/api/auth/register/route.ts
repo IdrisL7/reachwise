@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
     const [user] = await db
       .insert(schema.users)
       .values({
@@ -54,6 +56,7 @@ export async function POST(request: NextRequest) {
         name,
         passwordHash,
         tierId: "starter",
+        trialEndsAt,
       })
       .returning({
         id: schema.users.id,

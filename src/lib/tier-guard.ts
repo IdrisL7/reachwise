@@ -47,8 +47,47 @@ export function getLimits(tierId: TierId): TierLimits {
   return TIER_LIMITS[tierId] || TIER_LIMITS.starter;
 }
 
+/** Check if the user's trial has expired and they have no active subscription */
+export async function checkTrialActive(userId: string): Promise<NextResponse | null> {
+  const [user] = await db
+    .select({
+      trialEndsAt: schema.users.trialEndsAt,
+      stripeSubscriptionId: schema.users.stripeSubscriptionId,
+    })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  if (!user) return tierError("User not found.", "USER_NOT_FOUND");
+
+  // If user has an active Stripe subscription, they're good
+  if (user.stripeSubscriptionId) return null;
+
+  // If no trial end date set (legacy user), allow access
+  if (!user.trialEndsAt) return null;
+
+  // Check if trial has expired
+  if (new Date(user.trialEndsAt) < new Date()) {
+    return NextResponse.json(
+      {
+        status: "error",
+        code: "TRIAL_EXPIRED",
+        message: "Your free trial has ended. Subscribe to continue using GetSignalHooks.",
+        upgradeUrl: "/#pricing",
+      },
+      { status: 402 },
+    );
+  }
+
+  return null;
+}
+
 /** Check and increment hook usage. Returns null if OK, or error response if limit hit. */
 export async function checkHookQuota(userId: string): Promise<NextResponse | null> {
+  // First check trial status
+  const trialCheck = await checkTrialActive(userId);
+  if (trialCheck) return trialCheck;
+
   const [user] = await db
     .select({
       tierId: schema.users.tierId,
