@@ -249,6 +249,18 @@ export function computeAnchorScore(
     }
   }
 
+  // +2 if source is on company domain AND has specific claims (numbers, pricing, integrations, SLA)
+  if (sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+    const joined = source.facts.join(" ");
+    const hasSpecific =
+      /\$[\d,.]+|\d+\s*\/\s*mo/i.test(joined) ||           // pricing
+      /\d+%/.test(joined) ||                                 // percentages
+      /\d+[,.]?\d*\s*(users|customers|teams|companies)/i.test(joined) || // user counts
+      /\b(Salesforce|HubSpot|Slack|Zapier|Gong|Outreach|Marketo|Pardot|Segment|Snowflake)\b/i.test(joined) || // named integrations
+      /\b(uptime|SLA|SOC\s*2|GDPR|HIPAA|guarantee)\b/i.test(joined); // SLA/compliance
+    if (hasSpecific) score += 2;
+  }
+
   // +1 if source is within 90 days
   if (source.date && !isStale(source.date)) {
     score += 1;
@@ -343,11 +355,15 @@ export function classifySource(source: Source, isCompanySite = false): EvidenceT
   if (source.facts.length === 0) return "C";
   if (source.facts.every((f) => f.trim().length < 20)) return "C";
 
-  // Homepage or generic marketing pages → always B or C
+  // Homepage or generic marketing pages → B, unless they have highly specific claims
   const urlLower = source.url.toLowerCase();
   const isHomepage = /^https?:\/\/[^/]+\/?$/.test(urlLower);
   const isGenericPage = /\/(about|solutions|platform|products|features|pricing|why-|overview)\b/i.test(urlLower);
-  if (isHomepage || isGenericPage) return "B";
+  if (isHomepage || isGenericPage) {
+    // Exception: company-site pages with strong specificity (numbers, pricing, integrations)
+    // can reach Tier B (they'll get boosted by anchor scoring later)
+    return "B";
+  }
 
   // For company-site sources (prong C): require date + signal content for Tier A
   if (isCompanySite) {
@@ -628,6 +644,274 @@ async function fetchCompanyOwnSignals(
 }
 
 // ---------------------------------------------------------------------------
+// Prong D: Direct Company Page Fetcher
+// ---------------------------------------------------------------------------
+
+/** Strip HTML tags and decode entities to get plain text. */
+function stripHtml(html: string): string {
+  return html
+    // Remove script/style blocks entirely
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+    .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+    .replace(/<header[\s\S]*?<\/header>/gi, "")
+    // Replace block elements with newlines
+    .replace(/<\/(p|div|h[1-6]|li|tr|section|article)>/gi, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    // Strip remaining tags
+    .replace(/<[^>]+>/g, " ")
+    // Decode common HTML entities
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    // Clean up whitespace
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s*\n/g, "\n")
+    .trim();
+}
+
+/** Patterns for signal-rich subpage paths to discover from homepage links. */
+const SIGNAL_SUBPAGE_PATTERNS = [
+  /\/swipefiles?\b/i,
+  /\/case-stud/i,
+  /\/customers?\b/i,
+  /\/success-stor/i,
+  /\/results?\b/i,
+  /\/roi\b/i,
+  /\/integrations?\b/i,
+  /\/partners?\b/i,
+  /\/changelog\b/i,
+  /\/whats-new\b/i,
+  /\/release-notes?\b/i,
+  /\/press\b/i,
+  /\/newsroom\b/i,
+  /\/blog\b/i,
+  /\/announcements?\b/i,
+];
+
+/** Extract claim-rich sentences from plain text (sentences with numbers, pricing, named tools, etc.). */
+function extractClaimSentences(text: string, maxFacts = 15): string[] {
+  // Split into sentences (period, newline, or semicolon boundaries)
+  const rawSentences = text
+    .split(/(?<=[.!?])\s+|\n/)
+    .map((s) => s.trim())
+    .filter((s) => s.length >= 20 && s.length <= 300);
+
+  const claims: string[] = [];
+  const seen = new Set<string>();
+
+  for (const sentence of rawSentences) {
+    if (claims.length >= maxFacts) break;
+    const norm = sentence.toLowerCase().replace(/\s+/g, " ");
+    if (seen.has(norm)) continue;
+
+    // Prioritize sentences with quantified claims, integrations, pricing, SLA
+    const hasNumber = /\d/.test(sentence);
+    const hasPrice = /\$[\d,.]+|\d+\s*\/\s*mo/i.test(sentence);
+    const hasPercent = /\d+%/.test(sentence);
+    const hasIntegration = /\b(integrat|connect|sync|import|export|API|webhook|Salesforce|HubSpot|Slack|Zapier|CRM|Gong|Outreach|Marketo|Pardot)\b/i.test(sentence);
+    const hasSLA = /\b(uptime|SLA|guarantee|compliance|SOC|GDPR|HIPAA|security)\b/i.test(sentence);
+    const hasOperational = /\b(automat|eliminat|reduc|increas|improv|sav|acceler|streamlin|consolidat|replac)\b/i.test(sentence);
+
+    if (hasNumber || hasPrice || hasPercent || hasIntegration || hasSLA || hasOperational) {
+      seen.add(norm);
+      claims.push(sentence);
+    }
+  }
+
+  // If very few claims found, also include descriptive sentences that aren't boilerplate
+  if (claims.length < 3) {
+    const boilerplatePatterns = [
+      /cookie/i, /privacy policy/i, /terms of service/i, /sign up/i,
+      /log in/i, /subscribe/i, /newsletter/i, /copyright/i,
+      /all rights reserved/i, /contact us/i,
+    ];
+    for (const sentence of rawSentences) {
+      if (claims.length >= maxFacts) break;
+      const norm = sentence.toLowerCase().replace(/\s+/g, " ");
+      if (seen.has(norm)) continue;
+      if (boilerplatePatterns.some((p) => p.test(sentence))) continue;
+      // Must have some substance (>40 chars, not just navigation text)
+      if (sentence.length > 40) {
+        seen.add(norm);
+        claims.push(sentence);
+      }
+    }
+  }
+
+  return claims;
+}
+
+/** Discover signal-rich subpage URLs from HTML link hrefs. */
+function discoverSignalPages(html: string, baseUrl: string): string[] {
+  const linkRegex = /href=["']([^"']+)["']/gi;
+  const found = new Set<string>();
+  let match;
+
+  while ((match = linkRegex.exec(html)) !== null) {
+    const href = match[1];
+    if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("javascript:")) continue;
+
+    try {
+      const resolved = new URL(href, baseUrl).href;
+      // Only same-domain links
+      const resolvedHost = new URL(resolved).hostname.replace(/^www\./, "");
+      const baseHost = new URL(baseUrl).hostname.replace(/^www\./, "");
+      if (resolvedHost !== baseHost) continue;
+
+      // Check against signal subpage patterns
+      if (SIGNAL_SUBPAGE_PATTERNS.some((p) => p.test(resolved))) {
+        found.add(resolved);
+      }
+    } catch {
+      // Invalid URL, skip
+    }
+  }
+
+  return Array.from(found).slice(0, 5); // Max 5 subpages
+}
+
+/**
+ * Fetch a single page directly and convert to a Source.
+ * Returns null if fetch fails or page has no useful content.
+ */
+async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Source | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+
+    const response = await fetch(pageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ReachWise/1.0; +https://getsignalhooks.com)",
+        Accept: "text/html",
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+
+    const contentType = response.headers.get("content-type") || "";
+    if (!contentType.includes("text/html")) return null;
+
+    // Limit body size to 500KB
+    const text = await response.text();
+    const html = text.slice(0, 500_000);
+
+    const plainText = stripHtml(html);
+    if (plainText.length < 50) return null;
+
+    // Extract title from <title> tag
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : `${domain} page`;
+
+    // Extract claim-rich sentences as facts
+    const facts = extractClaimSentences(plainText);
+    if (facts.length === 0) return null;
+
+    return {
+      title,
+      publisher: domain,
+      date: new Date().toISOString().split("T")[0], // Today (we're reading it live)
+      url: pageUrl,
+      facts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Prong D: Directly fetch the company's homepage and signal-rich subpages.
+ * This captures actual claims, numbers, and product details that Brave Search misses.
+ */
+async function fetchDirectCompanyPages(
+  domain: string,
+): Promise<ClassifiedSource[]> {
+  const baseUrl = `https://${domain}`;
+  const sources: ClassifiedSource[] = [];
+
+  // 1. Fetch homepage
+  let homepageHtml = "";
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(baseUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ReachWise/1.0; +https://getsignalhooks.com)",
+        Accept: "text/html",
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+
+    if (response.ok) {
+      const text = await response.text();
+      homepageHtml = text.slice(0, 500_000);
+
+      const plainText = stripHtml(homepageHtml);
+      if (plainText.length >= 50) {
+        const titleMatch = homepageHtml.match(/<title[^>]*>([^<]+)<\/title>/i);
+        const title = titleMatch ? titleMatch[1].trim() : `${domain} homepage`;
+        const facts = extractClaimSentences(plainText);
+        if (facts.length > 0) {
+          const src: Source = {
+            title,
+            publisher: domain,
+            date: new Date().toISOString().split("T")[0],
+            url: baseUrl,
+            facts,
+          };
+          // Homepage with specific claims → classify with isCompanySite=true
+          sources.push(applyRecencyDowngrade({
+            ...src,
+            tier: classifySource(src, true),
+          }));
+        }
+      }
+    }
+  } catch {
+    // Homepage fetch failed, continue
+  }
+
+  // 2. Discover signal-rich subpages from homepage links + well-known paths
+  const signalPages = homepageHtml ? discoverSignalPages(homepageHtml, baseUrl) : [];
+
+  // Also try well-known signal paths that may not be linked from homepage
+  const wellKnownPaths = ["/swipefiles", "/customers", "/case-studies", "/changelog", "/press"];
+  for (const path of wellKnownPaths) {
+    const fullUrl = `${baseUrl}${path}`;
+    if (!signalPages.includes(fullUrl)) {
+      signalPages.push(fullUrl);
+    }
+  }
+
+  // 3. Fetch discovered subpages in parallel (max 5)
+  if (signalPages.length > 0) {
+    const subpageSources = await Promise.all(
+      signalPages.slice(0, 5).map((pageUrl) => fetchPageAsSource(pageUrl, domain)),
+    );
+
+    for (const src of subpageSources) {
+      if (src) {
+        sources.push(applyRecencyDowngrade({
+          ...src,
+          tier: classifySource(src, true),
+        }));
+      }
+    }
+  }
+
+  return sources;
+}
+
+// ---------------------------------------------------------------------------
 // Merge & Deduplicate
 // ---------------------------------------------------------------------------
 
@@ -670,6 +954,33 @@ function deduplicateSources(sources: ClassifiedSource[]): ClassifiedSource[] {
   return Array.from(seen.values());
 }
 
+/** Compute specificity score for a source's facts. Higher = more specific claims. */
+function computeSpecificityScore(facts: string[]): number {
+  let score = 0;
+  const joined = facts.join(" ");
+
+  // +2 for numbers (quantified claims)
+  if (/\d/.test(joined)) score += 2;
+
+  // +2 for named tools/integrations/products
+  if (/\b(Salesforce|HubSpot|Slack|Zapier|Gong|Outreach|Marketo|Pardot|Segment|Snowflake|Stripe|Shopify|Zendesk|Intercom|Drift|LinkedIn|Gmail|Outlook|API|SDK|webhook|CRM|ERP)\b/i.test(joined)) {
+    score += 2;
+  }
+
+  // +2 for pricing/monetary claims
+  if (/\$[\d,.]+|\d+\s*\/\s*mo|\bfree\s+tier\b|\bpricing\b/i.test(joined)) score += 2;
+
+  // +1 for operational/outcome claims
+  if (/\b(automat|eliminat|reduc|increas|improv|sav|acceler|streamlin|consolidat|replac|deliver|achiev|generat)\b/i.test(joined)) {
+    score += 1;
+  }
+
+  // +1 for SLA/compliance claims
+  if (/\b(uptime|SLA|SOC|GDPR|HIPAA|guarantee|compliance|security)\b/i.test(joined)) score += 1;
+
+  return score;
+}
+
 /** Score a source for ranking (higher = better). */
 function scoreSource(source: ClassifiedSource): number {
   let score = 0;
@@ -688,8 +999,15 @@ function scoreSource(source: ClassifiedSource): number {
   const signalCount = source.facts.filter((f) => classifyFact(f) === "signal").length;
   score += signalCount * 10;
 
-  // Specificity (numbers, named products)
-  if (factsHaveSpecifics(source.facts)) score += 5;
+  // Specificity score — prefer sources with quantified, named, operational claims
+  score += computeSpecificityScore(source.facts) * 3;
+
+  // Company-owned pages with specific claims get extra boost
+  const sourceHost = getDomain(source.url).toLowerCase();
+  const isOwnPage = source.url && (source.publisher === sourceHost || source.facts.length >= 3);
+  if (isOwnPage && computeSpecificityScore(source.facts) >= 3) {
+    score += 15; // Strong boost for company pages with specific content
+  }
 
   return score;
 }
@@ -720,15 +1038,16 @@ export async function fetchSourcesWithGating(
   const domain = getDomain(url);
   const companyName = extractCompanyName(url);
 
-  // Run all three prongs in parallel
-  const [newsResults, webResults, companyResults] = await Promise.all([
+  // Run all four prongs in parallel
+  const [newsResults, webResults, companyResults, directPageResults] = await Promise.all([
     fetchNewsSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchWebSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchCompanyOwnSignals(domain, apiKey).catch(() => [] as ClassifiedSource[]),
+    fetchDirectCompanyPages(domain).catch(() => [] as ClassifiedSource[]),
   ]);
 
-  // Merge all sources
-  const allSources = [...newsResults, ...webResults, ...companyResults];
+  // Merge all sources (direct pages first for dedup priority)
+  const allSources = [...directPageResults, ...newsResults, ...webResults, ...companyResults];
 
   // Deduplicate
   const deduped = deduplicateSources(allSources);
@@ -739,6 +1058,13 @@ export async function fetchSourcesWithGating(
     // If anchor score < 3, force to Tier B (market context) regardless of previous tier
     if (anchorScore < 3 && source.tier === "A") {
       return { ...source, tier: "B" as EvidenceTier, anchorScore };
+    }
+    // Promote company-owned pages with high anchor score + specificity from B to A
+    // This allows homepage/swipefile pages with quantified claims to generate full hook sets
+    const sourceHost = getDomain(source.url).toLowerCase();
+    const isOnCompanyDomain = sourceHost === domain.toLowerCase() || sourceHost.endsWith("." + domain.toLowerCase());
+    if (isOnCompanyDomain && anchorScore >= 5 && source.tier === "B" && computeSpecificityScore(source.facts) >= 3) {
+      return { ...source, tier: "A" as EvidenceTier, anchorScore };
     }
     return { ...source, anchorScore };
   });
