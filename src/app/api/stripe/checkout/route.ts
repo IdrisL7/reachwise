@@ -21,26 +21,34 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tier not configured in Stripe" }, { status: 500 });
   }
 
-  const customerId = await getOrCreateStripeCustomer(
-    session.user.id,
-    session.user.email,
-  );
+  try {
+    const customerId = await getOrCreateStripeCustomer(
+      session.user.id,
+      session.user.email,
+    );
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || "http://localhost:3000";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${appUrl}/app?upgraded=true`,
-    cancel_url: `${appUrl}/#pricing`,
-    currency: "gbp",
-    allow_promotion_codes: true,
-    subscription_data: {
-      trial_period_days: trial ? 7 : undefined,
-      metadata: { userId: session.user.id, tierId },
-    },
-  });
+    const checkoutSession = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${appUrl}/app?upgraded=true`,
+      cancel_url: `${appUrl}/#pricing`,
+      currency: "gbp",
+      allow_promotion_codes: true,
+      subscription_data: {
+        trial_period_days: trial ? 7 : undefined,
+        metadata: { userId: session.user.id, tierId },
+      },
+    });
 
-  return NextResponse.json({ url: checkoutSession.url });
+    return NextResponse.json({ url: checkoutSession.url });
+  } catch (err) {
+    console.error("Stripe checkout error:", err);
+    return NextResponse.json(
+      { error: "Failed to create checkout session. Please try again." },
+      { status: 500 },
+    );
+  }
 }

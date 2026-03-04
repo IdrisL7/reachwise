@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TIERS, type TierFeature } from "@/lib/tiers";
@@ -28,21 +29,33 @@ function FeatureItem({ feature }: { feature: TierFeature }) {
   return <li className="flex items-start gap-2.5">{content}</li>;
 }
 
-async function handleCheckout(tierId: string, trial = false) {
-  const res = await fetch("/api/stripe/checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tierId, trial }),
-  });
-  const data = await res.json();
-  if (data.url) {
-    window.location.href = data.url;
-  }
-}
-
 export function PricingSection() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const currentTier = (session?.user as any)?.tierId;
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleCheckout(tierId: string, trial = false) {
+    setCheckoutLoading(tierId);
+    setError("");
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tierId, trial }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || "Failed to start checkout. Please try again.");
+        setCheckoutLoading(null);
+      }
+    } catch {
+      setError("Something went wrong. Please try again.");
+      setCheckoutLoading(null);
+    }
+  }
 
   return (
     <section
@@ -62,6 +75,12 @@ export function PricingSection() {
             evidence-first layer that makes your messages worth sending.
           </p>
         </div>
+
+        {error && (
+          <div className="mx-auto mt-8 max-w-md bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg text-sm text-center">
+            {error}
+          </div>
+        )}
 
         <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-3 lg:mt-20">
           {TIERS.map((tier) => (
@@ -105,20 +124,22 @@ export function PricingSection() {
               ) : (
                 <div className="mt-6 flex flex-col gap-2">
                   <button
+                    disabled={checkoutLoading === tier.id}
                     onClick={() => {
+                      if (status === "loading") return;
                       if (!session) {
                         window.location.href = `/register?tier=${tier.id}`;
                       } else {
                         handleCheckout(tier.id, tier.id === "starter");
                       }
                     }}
-                    className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer ${
+                    className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer disabled:opacity-50 disabled:hover:scale-100 ${
                       tier.highlighted
                         ? "bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.2)] hover:bg-violet-500 hover:shadow-[0_0_24px_rgba(139,92,246,0.35)] active:scale-[0.97]"
                         : "border border-zinc-600/40 text-zinc-300 hover:border-violet-500/40 hover:text-white hover:shadow-[0_2px_12px_rgba(139,92,246,0.06)]"
                     }`}
                   >
-                    {tier.cta}
+                    {checkoutLoading === tier.id ? "Redirecting..." : tier.cta}
                   </button>
                   {tier.id === "concierge" && (
                     <Link
