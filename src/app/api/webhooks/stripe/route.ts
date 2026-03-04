@@ -3,6 +3,7 @@ import { stripe, syncSubscriptionToUser, getTierFromPriceId } from "@/lib/stripe
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/sendgrid";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -32,6 +33,11 @@ export async function POST(req: NextRequest) {
           session.subscription as string,
         );
         await syncSubscriptionToUser(subscription);
+        logAudit({
+          userId: subscription.metadata.userId,
+          event: "subscription_created",
+          metadata: { subscriptionId: subscription.id, tierId: subscription.metadata.tierId },
+        }).catch(() => {});
 
         // Send confirmation email
         const userId = subscription.metadata.userId;
@@ -65,6 +71,11 @@ export async function POST(req: NextRequest) {
     case "customer.subscription.updated": {
       const subscription = event.data.object;
       await syncSubscriptionToUser(subscription);
+      logAudit({
+        userId: subscription.metadata.userId,
+        event: "subscription_updated",
+        metadata: { subscriptionId: subscription.id, status: subscription.status },
+      }).catch(() => {});
       break;
     }
 
@@ -86,10 +97,48 @@ export async function POST(req: NextRequest) {
 
     case "invoice.payment_failed": {
       const invoice = event.data.object;
-      console.warn(`Payment failed for customer ${invoice.customer}`, {
+      const customerId = invoice.customer as string;
+      console.warn(`Payment failed for customer ${customerId}`, {
         invoiceId: invoice.id,
         attemptCount: invoice.attempt_count,
       });
+
+      const [failedUser] = await db
+        .select({ id: schema.users.id, email: schema.users.email, name: schema.users.name })
+        .from(schema.users)
+        .where(eq(schema.users.stripeCustomerId, customerId))
+        .limit(1);
+
+      if (failedUser) {
+        const settingsUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://www.getsignalhooks.com"}/app/settings`;
+
+        if ((invoice.attempt_count || 0) >= 3) {
+          await db
+            .update(schema.users)
+            .set({ tierId: "starter", stripeSubscriptionId: null })
+            .where(eq(schema.users.id, failedUser.id));
+
+          await sendEmail({
+            to: failedUser.email,
+            subject: "Your GetSignalHooks subscription has been paused",
+            body: `Hi ${failedUser.name || "there"},\n\nWe weren't able to process your payment after multiple attempts. Your account has been downgraded to the Starter plan.\n\nTo restore your subscription, please update your payment method:\n${settingsUrl}\n\nIf you need help, just reply to this email.\n\n— The GetSignalHooks Team`,
+            userId: failedUser.id,
+          }).catch((err) => console.error("Failed to send dunning email:", err));
+
+          logAudit({
+            userId: failedUser.id,
+            event: "subscription_downgraded_payment_failed",
+            metadata: { invoiceId: invoice.id, attemptCount: invoice.attempt_count },
+          }).catch(() => {});
+        } else {
+          await sendEmail({
+            to: failedUser.email,
+            subject: "Action needed: payment failed for GetSignalHooks",
+            body: `Hi ${failedUser.name || "there"},\n\nWe couldn't process your latest payment. Please update your payment method to keep your subscription active:\n${settingsUrl}\n\nIf this was a temporary issue, we'll try again automatically.\n\n— The GetSignalHooks Team`,
+            userId: failedUser.id,
+          }).catch((err) => console.error("Failed to send dunning email:", err));
+        }
+      }
       break;
     }
   }

@@ -10,6 +10,7 @@ const navItems = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/hooks", label: "Hooks" },
   { href: "/app/leads", label: "Leads" },
+  { href: "/app/templates", label: "Templates" },
   { href: "/app/analytics", label: "Analytics" },
   { href: "/app/settings", label: "Settings" },
 ];

@@ -12,6 +12,7 @@ import {
   type ClassifiedSource,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
+import { getCachedHooks, setCachedHooks } from "@/lib/hook-cache";
 
 // ---------------------------------------------------------------------------
 // Route handler
@@ -28,6 +29,24 @@ export async function POST(request: Request) {
     const rawUrl = body?.url?.trim();
     const companyName = body?.companyName?.trim();
     const context = body?.context?.trim();
+
+    // Validate URL format
+    if (rawUrl) {
+      try {
+        const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`);
+        if (!parsed.hostname.includes(".")) {
+          return NextResponse.json(
+            { error: "Invalid URL: must be a valid domain (e.g., https://acme.com)." },
+            { status: 400 },
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid URL format. Provide a valid company URL (e.g., https://acme.com)." },
+          { status: 400 },
+        );
+      }
+    }
 
     const braveApiKey = process.env.BRAVE_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
@@ -95,6 +114,22 @@ export async function POST(request: Request) {
 
     const fallbackHooks = applyUrlToMockHooks(url);
 
+    // Check cache first
+    try {
+      const cached = await getCachedHooks(url);
+      if (cached) {
+        return NextResponse.json({
+          hooks: (cached.hooks as any[]).map((h: any) => h.hook || h),
+          structured_hooks: cached.hooks,
+          citations: cached.citations,
+          status: "ok" as CompanyResolutionStatus,
+          cached: true,
+        });
+      }
+    } catch {
+      // Cache miss or error — continue to generate
+    }
+
     try {
       // 1. Gather and classify sources from Brave
       const sources = await fetchSources(url, braveApiKey!);
@@ -160,6 +195,9 @@ export async function POST(request: Request) {
             source: resolution.candidates[0].source,
           }
         : null;
+
+      // Cache for next time (fire and forget)
+      setCachedHooks(url, validHooks, citations).catch(() => {});
 
       return NextResponse.json({
         hooks: flatHooks,

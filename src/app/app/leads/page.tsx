@@ -119,12 +119,23 @@ export default function LeadsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Leads</h1>
-        <button
-          onClick={() => setShowUpload(!showUpload)}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-        >
-          {showUpload ? "Cancel" : "Upload CSV"}
-        </button>
+        <div className="flex items-center gap-2">
+          {leads.length > 0 && (
+            <a
+              href="/api/leads/export"
+              download
+              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+            >
+              Export CSV
+            </a>
+          )}
+          <button
+            onClick={() => setShowUpload(!showUpload)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            {showUpload ? "Cancel" : "Upload CSV"}
+          </button>
+        </div>
       </div>
 
       {message && (

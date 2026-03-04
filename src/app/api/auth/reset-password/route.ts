@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
-  const rateLimited = checkRateLimit(getClientIp(request), "auth:reset-password");
+  const rateLimited = await checkRateLimit(getClientIp(request), "auth:reset-password");
   if (rateLimited) return rateLimited;
 
   try {

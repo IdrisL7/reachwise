@@ -16,6 +16,13 @@ export default function HooksPage() {
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState<number | null>(null);
+
+  async function copyHook(text: string, index: number) {
+    await navigator.clipboard.writeText(text);
+    setCopied(index);
+    setTimeout(() => setCopied(null), 2000);
+  }
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -140,9 +147,16 @@ export default function HooksPage() {
                 >
                   {hook.angle}
                 </span>
-                <span className="text-xs text-zinc-600 ml-auto">
+                <span className="text-xs text-zinc-600">
                   {hook.confidence} confidence
                 </span>
+                <button
+                  onClick={() => copyHook(hook.text, i)}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 ml-auto transition-colors"
+                  title="Copy hook"
+                >
+                  {copied === i ? "Copied!" : "Copy"}
+                </button>
               </div>
               <p className="text-zinc-200 mb-2">{hook.text}</p>
               {hook.source_snippet && (

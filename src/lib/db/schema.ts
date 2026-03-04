@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { TierId } from "@/lib/tiers";
 
@@ -62,7 +62,9 @@ export const usageEvents = sqliteTable("usage_events", {
   }).notNull(),
   metadata: text("metadata", { mode: "json" }),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
-});
+}, (table) => [
+  index("usage_events_user_id_idx").on(table.userId),
+]);
 
 // ── Business tables ──
 
@@ -83,7 +85,10 @@ export const leads = sqliteTable("leads", {
   lastContactedAt: text("last_contacted_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
-});
+}, (table) => [
+  index("leads_user_id_idx").on(table.userId),
+  index("leads_status_idx").on(table.status),
+]);
 
 export const claimLocks = sqliteTable("claim_locks", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
@@ -95,7 +100,8 @@ export const claimLocks = sqliteTable("claim_locks", {
 
 export const auditLog = sqliteTable("audit_log", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  leadId: text("lead_id").notNull().references(() => leads.id),
+  userId: text("user_id").references(() => users.id),
+  leadId: text("lead_id").references(() => leads.id),
   event: text("event").notNull(),
   reason: text("reason"),
   runId: text("run_id"),
@@ -162,4 +168,25 @@ export const outboundMessages = sqliteTable("outbound_messages", {
   }).notNull().default("draft"),
   metadata: text("metadata", { mode: "json" }),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("outbound_messages_lead_id_idx").on(table.leadId),
+]);
+
+// ── Caching & rate limiting ──
+
+export const hookCache = sqliteTable("hook_cache", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  urlHash: text("url_hash").notNull().unique(),
+  url: text("url").notNull(),
+  hooks: text("hooks", { mode: "json" }).notNull(),
+  citations: text("citations", { mode: "json" }),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  expiresAt: text("expires_at").notNull(),
+});
+
+export const rateLimits = sqliteTable("rate_limits", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull().default(1),
+  resetAt: text("reset_at").notNull(),
 });

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { stripe } from "@/lib/stripe";
+import { logAudit } from "@/lib/audit";
 
 export async function DELETE() {
   const session = await auth();
@@ -13,6 +14,8 @@ export async function DELETE() {
   const userId = session.user.id;
 
   try {
+    await logAudit({ userId, event: "account_deletion_initiated" });
+
     // Get user details for Stripe cancellation
     const [user] = await db
       .select({

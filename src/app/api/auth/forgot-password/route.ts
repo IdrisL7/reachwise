@@ -6,7 +6,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import crypto from "crypto";
 
 export async function POST(request: NextRequest) {
-  const rateLimited = checkRateLimit(getClientIp(request), "auth:forgot-password");
+  const rateLimited = await checkRateLimit(getClientIp(request), "auth:forgot-password");
   if (rateLimited) return rateLimited;
 
   try {

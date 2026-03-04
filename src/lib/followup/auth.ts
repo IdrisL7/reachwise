@@ -91,6 +91,24 @@ export async function validateAuth(
   return { method: "api_key", scopes: apiKey.scopes };
 }
 
+/** Check if API key has the required scope. Returns 403 response if not. */
+export function requireScope(
+  scopes: string[] | null,
+  required: string,
+): NextResponse | null {
+  if (scopes === null) return null; // Bearer token — no scope restrictions
+  if (scopes.includes(required)) return null;
+
+  return NextResponse.json(
+    {
+      status: "error",
+      code: "INSUFFICIENT_SCOPE",
+      message: `This API key lacks the '${required}' scope.`,
+    },
+    { status: 403 },
+  );
+}
+
 export class AuthError extends Error {
   constructor(message = "Missing or invalid authorization token.") {
     super(message);

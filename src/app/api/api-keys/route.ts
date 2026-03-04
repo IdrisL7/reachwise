@@ -7,6 +7,7 @@ import {
 } from "@/lib/followup/auth";
 import { db, schema } from "@/lib/db";
 import { eq, isNull } from "drizzle-orm";
+import { logAudit } from "@/lib/audit";
 
 const VALID_SCOPES = ["leads", "hooks", "followups", "templates"] as const;
 
@@ -47,6 +48,11 @@ export async function POST(request: NextRequest) {
       .insert(schema.apiKeys)
       .values({ name, keyHash, keyPrefix, scopes, expiresAt })
       .returning();
+
+    logAudit({
+      event: "api_key_created",
+      metadata: { keyId: record.id, name: record.name, scopes: record.scopes },
+    }).catch(() => {});
 
     return NextResponse.json(
       {
@@ -123,6 +129,11 @@ export async function DELETE(request: NextRequest) {
         { status: 404 },
       );
     }
+
+    logAudit({
+      event: "api_key_revoked",
+      metadata: { keyId: revoked.id, name: revoked.name },
+    }).catch(() => {});
 
     return NextResponse.json({ status: "ok", revoked: revoked.id });
   } catch (error) {

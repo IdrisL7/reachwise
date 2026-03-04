@@ -8,7 +8,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 /** POST /api/auth/register — create a new account */
 export async function POST(request: NextRequest) {
-  const rateLimited = checkRateLimit(getClientIp(request), "auth:register");
+  const rateLimited = await checkRateLimit(getClientIp(request), "auth:register");
   if (rateLimited) return rateLimited;
 
   try {

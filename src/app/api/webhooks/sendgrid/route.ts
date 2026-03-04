@@ -46,15 +46,32 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // Update message status for bounces
+      // Update message status and lead status for bounces
       if (
         event.gsh_message_id &&
-        (event.event === "bounce" || event.event === "dropped")
+        (event.event === "bounce" || event.event === "dropped" || event.event === "spam_report")
       ) {
         await db
           .update(schema.outboundMessages)
           .set({ status: "failed" })
           .where(eq(schema.outboundMessages.id, event.gsh_message_id));
+
+        // Mark the lead as unreachable and remove claim locks
+        const [msg] = await db
+          .select({ leadId: schema.outboundMessages.leadId })
+          .from(schema.outboundMessages)
+          .where(eq(schema.outboundMessages.id, event.gsh_message_id))
+          .limit(1);
+
+        if (msg?.leadId) {
+          await db
+            .update(schema.leads)
+            .set({ status: "unreachable", updatedAt: new Date().toISOString() })
+            .where(eq(schema.leads.id, msg.leadId));
+          await db
+            .delete(schema.claimLocks)
+            .where(eq(schema.claimLocks.leadId, msg.leadId));
+        }
       }
     }
 
