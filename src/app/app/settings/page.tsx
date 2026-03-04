@@ -12,12 +12,6 @@ interface ApiKey {
   createdAt: string;
 }
 
-interface Integration {
-  connected: boolean;
-  integration: { id: string; status: string; lastSyncAt: string | null } | null;
-  auth_url: string;
-}
-
 function BillingSection() {
   const { data: session } = useSession();
   const tierId = (session?.user as any)?.tierId || "starter";
@@ -88,8 +82,6 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [newKeyName, setNewKeyName] = useState("");
   const [newKey, setNewKey] = useState("");
-  const [hubspot, setHubspot] = useState<Integration | null>(null);
-  const [salesforce, setSalesforce] = useState<Integration | null>(null);
   const [loading, setLoading] = useState(false);
 
   function getToken(): string {
@@ -106,18 +98,11 @@ export default function SettingsPage() {
   }, []);
 
   async function loadData() {
-    const [keysRes, hsRes, sfRes] = await Promise.all([
-      fetch("/api/api-keys", { headers: headers() }).catch(() => null),
-      fetch("/api/integrations/hubspot", { headers: headers() }).catch(() => null),
-      fetch("/api/integrations/salesforce", { headers: headers() }).catch(() => null),
-    ]);
-
+    const keysRes = await fetch("/api/api-keys", { headers: headers() }).catch(() => null);
     if (keysRes?.ok) {
       const data = await keysRes.json();
       setKeys(data.keys || []);
     }
-    if (hsRes?.ok) setHubspot(await hsRes.json());
-    if (sfRes?.ok) setSalesforce(await sfRes.json());
   }
 
   async function createKey() {
@@ -233,21 +218,10 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-medium">HubSpot</p>
-                <p className="text-xs text-zinc-500">
-                  {hubspot?.connected ? "Connected" : "Not connected"}
-                </p>
+                <p className="text-xs text-zinc-500">Sync leads bidirectionally with HubSpot</p>
               </div>
             </div>
-            {hubspot?.connected ? (
-              <span className="text-xs text-emerald-400">Active</span>
-            ) : (
-              <a
-                href={hubspot?.auth_url || "#"}
-                className="text-xs text-emerald-400 hover:underline"
-              >
-                Connect
-              </a>
-            )}
+            <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">Coming soon</span>
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between">
@@ -257,21 +231,10 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-medium">Salesforce</p>
-                <p className="text-xs text-zinc-500">
-                  {salesforce?.connected ? "Connected" : "Not connected"}
-                </p>
+                <p className="text-xs text-zinc-500">Sync leads bidirectionally with Salesforce</p>
               </div>
             </div>
-            {salesforce?.connected ? (
-              <span className="text-xs text-emerald-400">Active</span>
-            ) : (
-              <a
-                href={salesforce?.auth_url || "#"}
-                className="text-xs text-emerald-400 hover:underline"
-              >
-                Connect
-              </a>
-            )}
+            <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">Coming soon</span>
           </div>
         </div>
       </section>
