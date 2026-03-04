@@ -1,0 +1,45 @@
+services:
+  # ── Caddy reverse proxy ──
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - gsh
+    depends_on:
+      - app
+
+  # ── Next.js app ──
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+    # Mount Docker socket so the app can manage n8n containers
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./src/lib/n8n-templates:/app/src/lib/n8n-templates:ro
+    networks:
+      - gsh
+    depends_on: []
+
+networks:
+  gsh:
+    name: gsh-n8n
+    driver: bridge
+
+volumes:
+  caddy_data:
+  caddy_config:
