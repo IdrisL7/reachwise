@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { auth } from "@/lib/auth";
+import { db, schema } from "@/lib/db";
+import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 
@@ -19,6 +21,14 @@ export default async function AppLayout({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  // Read fresh tier from DB (JWT may be stale after upgrade)
+  const [freshUser] = await db
+    .select({ tierId: schema.users.tierId })
+    .from(schema.users)
+    .where(eq(schema.users.id, session.user.id))
+    .limit(1);
+  const tierId = freshUser?.tierId || session.user.tierId;
 
   return (
     <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
@@ -43,10 +53,10 @@ export default async function AppLayout({
             <span className="text-xs text-zinc-500 hidden sm:block">
               {session.user.email}
             </span>
-            <span className="text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded">
-              {session.user.tierId}
+            <span className="text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded capitalize">
+              {tierId}
             </span>
-            {session.user.tierId !== "concierge" && (
+            {tierId !== "concierge" && (
               <Link
                 href="/#pricing"
                 className="text-xs bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-0.5 rounded transition-colors"

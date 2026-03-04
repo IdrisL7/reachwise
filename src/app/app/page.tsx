@@ -10,19 +10,21 @@ export default async function DashboardPage() {
   if (!session?.user) return null;
 
   const userId = session.user.id;
-  const tierId = session.user.tierId as TierId;
-  const limits = getLimits(tierId);
 
-  // Fetch stats
+  // Read fresh tier from DB (JWT may be stale after upgrade)
   const [user] = await db
     .select({
       hooksUsed: schema.users.hooksUsedThisMonth,
+      tierId: schema.users.tierId,
       trialEndsAt: schema.users.trialEndsAt,
       stripeSubscriptionId: schema.users.stripeSubscriptionId,
     })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
     .limit(1);
+
+  const tierId = (user?.tierId as TierId) || "starter";
+  const limits = getLimits(tierId);
 
   const [leadCount] = await db
     .select({ count: sql<number>`count(*)` })
