@@ -28,7 +28,16 @@ src/
 │   ├── setup/                      # 5-step onboarding wizard
 │   ├── docs/                       # API documentation
 │   ├── contact/                    # Sales contact form
+│   ├── forgot-password/            # Password reset request
+│   ├── reset-password/             # Set new password
+│   ├── privacy/                    # Privacy policy
+│   ├── terms/                      # Terms of service
+│   ├── unsubscribed/               # Unsubscribe confirmation
 │   ├── followup-engine/            # Feature page
+│   ├── not-found.tsx               # Custom 404 page
+│   ├── global-error.tsx            # Sentry error boundary
+│   ├── robots.ts                   # robots.txt generation
+│   ├── sitemap.ts                  # sitemap.xml generation
 │   ├── app/                        # Authenticated dashboard
 │   │   ├── page.tsx                # Dashboard (stats, quick actions)
 │   │   ├── hooks/                  # Hook generator UI
@@ -36,8 +45,8 @@ src/
 │   │   ├── analytics/              # Usage analytics
 │   │   └── settings/               # API keys, integrations, billing
 │   ├── internal/                   # Internal admin tools
-│   └── api/                        # 31 API route handlers
-├── components/                     # 12 UI components
+│   └── api/                        # 38 API route handlers
+├── components/                     # 14 UI components
 └── lib/
     ├── auth.ts                     # NextAuth configuration
     ├── stripe.ts                   # Stripe client + helpers
@@ -57,7 +66,7 @@ src/
 
 | Table | Purpose |
 |-------|---------|
-| `users` | User accounts with tier, Stripe IDs, usage tracking |
+| `users` | User accounts with tier, Stripe IDs, usage tracking, password change tracking, unsubscribe preference |
 | `accounts` | OAuth provider accounts (Auth.js) |
 | `sessions` | Active sessions (Auth.js) |
 | `verification_tokens` | Email verification tokens |
@@ -116,6 +125,13 @@ src/
 | `/api/webhooks/sendgrid` | POST | SendGrid event webhook handler |
 | `/api/auth/register` | POST | User registration |
 | `/api/auth/[...nextauth]` | * | NextAuth session routes |
+| `/api/auth/forgot-password` | POST | Send password reset email |
+| `/api/auth/reset-password` | POST | Reset password with token |
+| `/api/auth/verify-email` | GET | Verify email address |
+| `/api/auth/resend-verification` | POST | Resend verification email |
+| `/api/auth/delete-account` | DELETE | Delete account + all data |
+| `/api/auth/unsubscribe` | GET, POST | Email unsubscribe/resubscribe |
+| `/api/cron/onboarding-emails` | GET | Onboarding drip sequence (Day 1/3/6) |
 | `/api/api-keys` | POST, GET, DELETE | API key management |
 
 ### Workflows & Prospect Agent
@@ -210,6 +226,7 @@ turso db shell <your-db-name> < drizzle/0000_faithful_calypso.sql
 turso db shell <your-db-name> < drizzle/0001_add_api_keys.sql
 turso db shell <your-db-name> < drizzle/0002_add_users_and_usage.sql
 turso db shell <your-db-name> < drizzle/0003_add_stripe_fields.sql
+turso db shell <your-db-name> < drizzle/0004_add_user_fields.sql
 ```
 
 Or paste each file's contents into the Turso dashboard shell (remove `--> statement-breakpoint` lines).
@@ -258,6 +275,15 @@ This runs the Next.js app + Caddy reverse proxy with automatic SSL.
 2. Verify sender domain with DNS records (CNAME + TXT for DKIM/DMARC)
 3. Set `SENDGRID_API_KEY` and `SENDGRID_FROM_EMAIL`
 
+**Optional (Monitoring & Cron):**
+| Variable | Description |
+|----------|-------------|
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry DSN for error monitoring |
+| `SENTRY_ORG` | Sentry organization slug |
+| `SENTRY_PROJECT` | Sentry project slug |
+| `SENTRY_AUTH_TOKEN` | Sentry auth token (for source maps) |
+| `CRON_SECRET` | Secret for authenticating Vercel Cron jobs |
+
 ## Key Features
 
 - **Evidence-First Hooks**: AI generates hooks anchored on real public signals (earnings, hiring, tech changes) with evidence tier classification (A/B/C) and source citations
@@ -268,3 +294,14 @@ This runs the Next.js app + Caddy reverse proxy with automatic SSL.
 - **API Key System**: Self-serve `gsh_` prefixed keys with SHA-256 hashing and scope control
 - **Rate Limiting**: In-memory sliding window with different limits per endpoint and auth status
 - **Email Analytics**: SendGrid webhook tracking for opens, clicks, bounces, and replies
+- **Password Reset**: Token-based password reset flow with rate limiting
+- **Email Verification**: Verification emails on registration with resend capability
+- **Account Deletion**: Full cascade delete with Stripe subscription cancellation and type-to-confirm safety
+- **Session Security**: JWT refresh every 5 minutes, automatic invalidation on password change or account deletion
+- **Cookie Consent**: GDPR/PECR compliant consent banner with essential/all cookie options
+- **Unsubscribe System**: HMAC-signed unsubscribe tokens (CAN-SPAM/GDPR compliant)
+- **Onboarding Emails**: Automated drip sequence (Day 1/3/6) via Vercel Cron
+- **Error Monitoring**: Sentry integration (client, server, edge) with error replays
+- **Security Headers**: HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy
+- **SEO**: Open Graph/Twitter Card meta tags, robots.txt, sitemap.xml
+- **Legal Pages**: Privacy Policy and Terms of Service
