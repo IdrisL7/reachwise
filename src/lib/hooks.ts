@@ -30,6 +30,7 @@ export type Source = {
 export type ClassifiedSource = Source & {
   tier: EvidenceTier;
   stale?: boolean;
+  anchorScore?: number;
 };
 
 export type CompanyCandidate = {
@@ -173,6 +174,57 @@ function getDomain(url: string): string {
   } catch {
     return url;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Company anchor scoring
+// ---------------------------------------------------------------------------
+
+const SIGNAL_PAGE_PATTERNS = [
+  /\/press/i, /\/newsroom/i, /\/blog\b/i, /\/changelog/i,
+  /\/release-notes/i, /\/careers/i, /\/jobs\b/i, /\/partners/i,
+  /\/announcements/i, /\/whats-new/i,
+];
+
+/**
+ * Compute how strongly a source is anchored to the target company.
+ * Score >= 3 → company-specific (eligible for Tier A).
+ * Score < 3 → market context only (forced to Tier B).
+ */
+export function computeAnchorScore(
+  source: Source,
+  companyName: string,
+  domain: string,
+): number {
+  let score = 0;
+  const titleAndFacts = (source.title + " " + source.facts.join(" ")).toLowerCase();
+  const nameLower = companyName.toLowerCase();
+  const domainLower = domain.toLowerCase();
+
+  // +3 if company name appears in title or facts
+  if (nameLower.length >= 2 && titleAndFacts.includes(nameLower)) {
+    score += 3;
+  }
+
+  // +3 if domain appears in title/facts or the source is on the company domain
+  const sourceHost = getDomain(source.url).toLowerCase();
+  if (titleAndFacts.includes(domainLower) || sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+    score += 3;
+  }
+
+  // +2 if source is on company domain AND path is a signal page
+  if (sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+    if (SIGNAL_PAGE_PATTERNS.some((p) => p.test(source.url))) {
+      score += 2;
+    }
+  }
+
+  // +1 if source is within 90 days
+  if (source.date && !isStale(source.date)) {
+    score += 1;
+  }
+
+  return score;
 }
 
 // ---------------------------------------------------------------------------
@@ -596,6 +648,9 @@ function scoreSource(source: ClassifiedSource): number {
   if (source.tier === "A") score += 30;
   else if (source.tier === "B") score += 10;
 
+  // Anchor score — company-specific sources rank higher
+  score += (source.anchorScore ?? 0) * 3;
+
   // Recency
   if (!source.stale) score += 20;
 
@@ -617,6 +672,7 @@ export type FetchSourcesResult = {
   sources: ClassifiedSource[];
   signalCount: number;
   lowSignal: boolean;
+  hasAnchoredSources: boolean;
 };
 
 export async function fetchSources(
@@ -647,18 +703,30 @@ export async function fetchSourcesWithGating(
   // Deduplicate
   const deduped = deduplicateSources(allSources);
 
+  // Compute anchor scores and reclassify
+  const anchored = deduped.map((source) => {
+    const anchorScore = computeAnchorScore(source, companyName, domain);
+    // If anchor score < 3, force to Tier B (market context) regardless of previous tier
+    if (anchorScore < 3 && source.tier === "A") {
+      return { ...source, tier: "B" as EvidenceTier, anchorScore };
+    }
+    return { ...source, anchorScore };
+  });
+
   // Rank by score and take top 10
-  const ranked = deduped
+  const ranked = anchored
     .sort((a, b) => scoreSource(b) - scoreSource(a))
     .slice(0, 10);
 
   // Count signal facts for gating
   const signalCount = countSignalFacts(ranked);
+  const hasAnchoredSources = ranked.some((s) => (s.anchorScore ?? 0) >= 3 && s.tier === "A");
 
   return {
     sources: ranked,
     signalCount,
     lowSignal: signalCount < 2,
+    hasAnchoredSources,
   };
 }
 
@@ -789,17 +857,21 @@ export function buildSystemPrompt(): string {
     "3. Question: end with a binary (yes/no) or highly specific question.",
     "",
     "## Evidence tier rules",
-    "Each source is classified into a tier. Follow these rules strictly:",
+    "Each source is classified into a tier based on company-specific anchoring. Follow strictly:",
     "",
-    "### Tier A sources (strong evidence)",
+    "### Tier A sources (company-anchored, strong evidence)",
+    "These sources mention the company BY NAME and describe a specific company action or change.",
     "Generate exactly 3 hooks per source, one for each angle:",
-    "- trigger: what changed → question about timing or readiness.",
+    "- trigger: a SPECIFIC company action/change (launch, acquisition, hire, funding, partnership).",
+    "  HARD RULE: If no company action exists in the source, do NOT use the trigger angle.",
+    "  A market trend or industry report is NOT a trigger.",
     "- risk: what breaks if the change is ignored → binary question.",
     "- tradeoff: two valid paths the company could take → specific question about direction.",
     "Each hook MUST contain a verbatim quote from the source.",
     "",
-    "### Tier B sources (weak/generic evidence)",
-    "Generate exactly 1 verification hook per source. Rules:",
+    "### Tier B sources (market context / unanchored)",
+    "These sources do NOT specifically mention the company, or describe general market trends.",
+    "Generate exactly 1 market-context hook per source. Rules:",
     "- Angle MUST be 'trigger'. No risk or tradeoff hooks for Tier B.",
     '- Format: "It sounds like [verbatim quote from source]. Did I get that right?"',
     "- Do NOT assert pain, problems, or implications. ONLY verify what the source says.",
@@ -868,9 +940,10 @@ export function buildUserPrompt(
 
   const sourcesBlock = usableSources
     .map(
-      (s, i) =>
-        [
-          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}]${s.stale ? " [STALE]" : ""}`,
+      (s, i) => {
+        const anchorLabel = (s.anchorScore ?? 0) >= 3 ? "COMPANY-ANCHORED" : "MARKET-CONTEXT";
+        return [
+          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}] [${anchorLabel}]${s.stale ? " [STALE]" : ""}`,
           `Publisher: ${s.publisher}`,
           s.date ? `Date: ${s.date}` : "Date: unknown",
           `URL: ${s.url}`,
@@ -878,7 +951,8 @@ export function buildUserPrompt(
           ...s.facts.map((f) => `- ${f}`),
         ]
           .filter(Boolean)
-          .join("\n"),
+          .join("\n");
+      },
     )
     .join("\n\n");
 
@@ -1182,8 +1256,18 @@ export async function generateHooksForUrl(opts: {
     throw new Error("Missing BRAVE_API_KEY or CLAUDE_API_KEY");
   }
 
-  const { sources, signalCount, lowSignal } = await fetchSourcesWithGating(opts.url, braveApiKey);
+  const { sources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, braveApiKey);
   const domain = getDomain(opts.url);
+
+  const NO_ANCHOR_SUGGESTION = [
+    "Low Signal: no company-specific signals found — only market context available.",
+    "For better hooks, provide one of these:",
+    `  - ${domain}/press or ${domain}/newsroom`,
+    `  - ${domain}/blog or ${domain}/changelog`,
+    `  - ${domain}/careers or LinkedIn company page`,
+    "  - Recent news articles mentioning the company by name",
+    "  - Partner or customer announcement pages",
+  ].join("\n");
 
   const LOW_SIGNAL_SUGGESTION = [
     `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
@@ -1200,7 +1284,30 @@ export async function generateHooksForUrl(opts: {
   if (usableSources.length === 0) {
     return {
       hooks: [],
-      suggestion: LOW_SIGNAL_SUGGESTION,
+      suggestion: NO_ANCHOR_SUGGESTION,
+      lowSignal: true,
+    };
+  }
+
+  // If no company-anchored sources, show low signal with specific guidance
+  if (!hasAnchoredSources) {
+    // Still generate from Tier B (market context) but cap at 1 hook
+    const sourceLookup = new Map<number, ClassifiedSource>();
+    usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
+
+    const systemPrompt = buildSystemPrompt();
+    const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
+    const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+
+    const validHooks: Hook[] = [];
+    for (const raw of rawHooks) {
+      const validated = validateHook(raw, sourceLookup);
+      if (validated) validHooks.push(validated);
+    }
+
+    return {
+      hooks: validHooks.slice(0, 1),
+      suggestion: NO_ANCHOR_SUGGESTION,
       lowSignal: true,
     };
   }
@@ -1223,7 +1330,7 @@ export async function generateHooksForUrl(opts: {
   const cappedHooks: Hook[] = [];
   for (const hook of validHooks) {
     if (hook.evidence_tier === "B") {
-      if (tierBSourcesSeen.has(hook.news_item)) continue; // Already have 1 for this source
+      if (tierBSourcesSeen.has(hook.news_item)) continue;
       tierBSourcesSeen.add(hook.news_item);
     }
     cappedHooks.push(hook);
@@ -1231,7 +1338,6 @@ export async function generateHooksForUrl(opts: {
 
   // Signal vs Fundamental gate
   if (lowSignal) {
-    // Only 1 verification hook max, or none if no quotes survived validation
     const result = cappedHooks.slice(0, 1);
     return {
       hooks: result,
@@ -1240,11 +1346,11 @@ export async function generateHooksForUrl(opts: {
     };
   }
 
-  // Normal generation — if nothing survived the quote+evidence validation, return low signal
+  // Normal generation — if nothing survived validation, return low signal
   if (cappedHooks.length === 0) {
     return {
       hooks: [],
-      suggestion: LOW_SIGNAL_SUGGESTION,
+      suggestion: NO_ANCHOR_SUGGESTION,
       lowSignal: true,
     };
   }

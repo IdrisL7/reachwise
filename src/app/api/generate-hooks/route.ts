@@ -116,8 +116,8 @@ export async function POST(request: Request) {
     }
 
     try {
-      // 1. Gather and classify sources with signal gating
-      const { sources, signalCount, lowSignal } = await fetchSourcesWithGating(url, braveApiKey!);
+      // 1. Gather and classify sources with signal gating + anchor scoring
+      const { sources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(url, braveApiKey!);
 
       const citations = sources.map((s) => ({
         source_title: s.title,
@@ -125,7 +125,18 @@ export async function POST(request: Request) {
         date: s.date,
         url: s.url,
         tier: s.tier,
+        anchorScore: s.anchorScore,
       }));
+
+      const noAnchorSuggestion = [
+        "Low Signal: no company-specific signals found — only market context available.",
+        "For better hooks, provide: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles mentioning the company by name.",
+      ].join(" ");
+
+      const lowSignalSuggestion = [
+        `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
+        "For better hooks, try: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles.",
+      ].join(" ");
 
       // 2. Check if all sources are Tier C (insufficient evidence)
       const usableSources = sources.filter((s) => s.tier !== "C");
@@ -136,8 +147,7 @@ export async function POST(request: Request) {
           citations,
           status: "ok" as CompanyResolutionStatus,
           lowSignal: true,
-          suggestion:
-            "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
+          suggestion: noAnchorSuggestion,
         });
       }
 
@@ -168,13 +178,22 @@ export async function POST(request: Request) {
         cappedHooks.push(hook);
       }
 
-      const lowSignalSuggestion = [
-        `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
-        "For better hooks, try fetching from:",
-        `the company's press/newsroom page, blog/changelog, careers page, LinkedIn, or recent news articles.`,
-      ].join(" ");
+      // 7. No anchored sources → show low signal + max 1 market-context hook
+      if (!hasAnchoredSources) {
+        const result = cappedHooks.slice(0, 1);
+        return NextResponse.json({
+          hooks: result.map((h) => h.hook),
+          structured_hooks: result,
+          citations,
+          status: "ok" as CompanyResolutionStatus,
+          lowSignal: true,
+          signalCount,
+          suggestion: noAnchorSuggestion,
+          companyName: companyName ?? undefined,
+        });
+      }
 
-      // 7. Signal vs Fundamental gate: if low signal, return max 1 verification hook
+      // 8. Signal vs Fundamental gate: if low signal, return max 1 verification hook
       if (lowSignal) {
         const result = cappedHooks.slice(0, 1);
         return NextResponse.json({
@@ -189,7 +208,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 8. If nothing survived validation, return low signal
+      // 9. If nothing survived validation, return low signal
       if (cappedHooks.length === 0) {
         return NextResponse.json({
           hooks: [],
@@ -198,12 +217,12 @@ export async function POST(request: Request) {
           status: "ok" as CompanyResolutionStatus,
           lowSignal: true,
           signalCount,
-          suggestion: lowSignalSuggestion,
+          suggestion: noAnchorSuggestion,
           companyName: companyName ?? undefined,
         });
       }
 
-      // 9. Build response
+      // 10. Build response
       const flatHooks = cappedHooks.map((h) => h.hook);
 
       const resolvedCompany = resolution && resolution.candidates[0]
