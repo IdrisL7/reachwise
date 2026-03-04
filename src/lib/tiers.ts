@@ -107,7 +107,7 @@ export const TIERS: Tier[] = [
       doneForYouSetup: true,
       prioritySupport: true,
     },
-    cta: "Book a call",
+    cta: "Get started",
   },
 ];
 
