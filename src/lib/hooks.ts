@@ -85,17 +85,40 @@ export const BANNED_WORDS = [
   "interested in",
   "teams like you",
   "on your radar",
+  // Unsourced-claim blocklist — these are only allowed if literally in the evidence
+  "teams lose",
+  "teams in your space",
+  "usually lose",
+  "% of qualified",
+  "% better than",
+  "% faster than",
+  "% more than",
+  "industry average",
+  "industry benchmark",
+  "peers in your space",
+  "compared to peers",
+];
+
+// Claims that are ONLY allowed if the exact phrase appears in source evidence.
+// If the hook contains these but the evidence_snippet does not, the hook is rejected.
+const UNSOURCED_CLAIM_PATTERNS = [
+  /revamp/i,
+  /redesign/i,
+  /\bhiring\b/i,
+  /performance lift/i,
+  /pipeline strength/i,
+  /strong pipeline/i,
+  /\d+%\s*(better|faster|more|less|higher|lower|improvement|increase|decrease|lift|drop)/i,
+  /benchmark/i,
+  /outperform/i,
 ];
 
 export const VALID_ANGLES: Angle[] = ["trigger", "risk", "tradeoff"];
 export const VALID_CONFIDENCES: Confidence[] = ["high", "med"];
 export const MAX_HOOK_CHARS = 240;
 
-const MOCK_HOOKS: string[] = [
-  "Noticed {{url}} just revamped the product page — are you seeing the lift you expected in demo requests, or is there still friction in the funnel?",
-  "Teams in your space usually lose 20–30% of qualified leads to slow follow-up. Is that something on the radar yet at {{url}}?",
-  "Saw you are hiring across sales and CS — usually a sign of strong pipeline but also where outbound messaging starts to fragment. Have you standardized messaging across the new hires?",
-];
+// No mock/template hooks — every hook must be sourced from real evidence.
+const MOCK_HOOKS: string[] = [];
 
 // Signal keywords for classifying facts as signal vs fundamental
 const SIGNAL_KEYWORDS = [
@@ -753,77 +776,81 @@ export function buildSystemPrompt(): string {
   return [
     "You are an elite SDR copywriter. You turn structured company research into cold email opening hooks.",
     "",
+    "## MANDATORY: Verbatim Evidence Quote Rule",
+    "Every hook MUST include a verbatim quote of 5–12 words copied directly from the source facts.",
+    'Wrap the quote in double quotes inside the hook text. Example: Saw you "launched a new API gateway in Q1" — is the migration on track?',
+    "If you cannot find a quoteable phrase of 5–12 words in the source facts, do NOT generate a hook for that source.",
+    'The "evidence_snippet" field must contain the EXACT full sentence/fact from which you pulled the quote.',
+    "",
     "## Hook structure",
-    "Every hook MUST follow the Signal → Implication → Question pattern:",
-    "1. Signal: a concrete, factual observation drawn ONLY from the provided source facts.",
-    "2. Implication: what that signal means for the prospect.",
-    "3. Question: end with a binary (yes/no) or highly specific question (answerable in under 5 seconds).",
+    "Every hook MUST follow: Verbatim Quote → Implication → Question",
+    '1. Quote: a verbatim 5–12 word phrase from the source facts, in double quotes.',
+    "2. Implication: what that signal means for the prospect (1 short clause).",
+    "3. Question: end with a binary (yes/no) or highly specific question.",
     "",
     "## Evidence tier rules",
     "Each source is classified into a tier. Follow these rules strictly:",
     "",
     "### Tier A sources (strong evidence)",
     "Generate exactly 3 hooks per source, one for each angle:",
-    "- trigger: what changed (launch, hire, announcement, product update, funding) → question about timing or readiness.",
-    "- risk: what breaks, leaks, or degrades if the change is ignored (cost, speed, quality, compliance, conversion) → binary question.",
-    "- tradeoff: two valid paths the company could take (platform shift vs point tools; centralize vs federate; speed vs accuracy) → specific question about which direction.",
+    "- trigger: what changed → question about timing or readiness.",
+    "- risk: what breaks if the change is ignored → binary question.",
+    "- tradeoff: two valid paths the company could take → specific question about direction.",
+    "Each hook MUST contain a verbatim quote from the source.",
     "",
     "### Tier B sources (weak/generic evidence)",
-    "Generate exactly 1 verification hook per source using the 'trigger' angle only.",
-    "Verification hooks are soft and non-assertive:",
-    '- Format: "It sounds like [observation from source]. Did I get that right?" or similar.',
-    "- Do NOT assert pain or problems. Only verify what the source says.",
-    "- Still must include a specificity token (see below).",
+    "Generate exactly 1 verification hook per source. Rules:",
+    "- Angle MUST be 'trigger'. No risk or tradeoff hooks for Tier B.",
+    '- Format: "It sounds like [verbatim quote from source]. Did I get that right?"',
+    "- Do NOT assert pain, problems, or implications. ONLY verify what the source says.",
+    "- MUST contain a verbatim quote from the source facts.",
+    "- If no quoteable phrase exists, output NOTHING for this source.",
     "",
     "### Tier C sources",
     "Do NOT generate any hooks. Skip entirely.",
     "",
+    "## Unsourced Claims Blocklist (HARD constraint)",
+    "NEVER include these claims unless the EXACT words appear in the source facts:",
+    "- redesign / revamp",
+    "- hiring / job postings",
+    "- performance lift / conversion lift",
+    "- pipeline strength / strong pipeline",
+    "- any percentage stat (X% better/faster/more)",
+    "- any benchmark or industry comparison",
+    "If the model generates these without source backing, rewrite as verification:",
+    '  "Did I get it right that [quote from source]?"',
+    "Or drop the hook entirely.",
+    "",
     "## No-assumptions rule (HARD constraint)",
     "- NEVER assert internal problems ('disconnected systems', 'fragmented touchpoints',",
-    "  'your team struggles with...', 'your prospects struggle...') unless the source EXPLICITLY describes them.",
-    "- If a claim is not directly supported by the evidence, either:",
-    "  a) Convert it into a verification question: 'Did I get it right that...?'",
-    "  b) Remove it entirely.",
-    "- Do not use discovery-call bait or generic fluff.",
-    "- Do not imply you know what's happening inside the company. Stick to what the source says.",
+    "  'your team struggles with...') unless the source EXPLICITLY says so.",
+    "- NEVER use generic benchmarks ('teams lose 20–30%...', 'X% of companies...').",
+    "- If a claim is not in the evidence, either convert to verification question or remove.",
     "",
-    "## Quality rules (HARD constraints — violating any one means the hook is rejected)",
+    "## Quality rules (violating any one = hook rejected)",
     "- Max 240 characters per hook. 1–2 sentences.",
     "- Must end with a question mark.",
     "- No raw URLs in hook text.",
-    "- BANNED phrases (never use any of these, even paraphrased):",
-    "  curious, worth a quick, just checking in, just checking, hope you're well, touching base,",
+    "- BANNED phrases: curious, worth a quick, just checking in, hope you're well, touching base,",
     "  I'd love to, quick question, quick chat, I came across, I noticed your company,",
     "  game-changing, innovative solution, disrupting the space, cutting-edge,",
-    "  interested in, teams like you, on your radar.",
-    "- No generic benchmarking like 'X% better than peers' without explicit proof from the source.",
-    "",
-    "## Specificity token rule (MANDATORY)",
-    "Each hook MUST include at least ONE of the following from the source evidence:",
-    "- A number (e.g. '3 new SKUs', 'Q4', '2024')",
-    "- A date or timeframe",
-    "- A named product or module",
-    "- A named initiative (e.g. 'Customer 360')",
-    "- A named partner or customer",
-    '- A quoted phrase from the source in double quotes',
-    "- A concrete workflow term (e.g. lead routing, identity resolution, case deflection)",
-    "",
-    "If you cannot include any specificity token from the evidence, do NOT generate a hook for that source.",
+    "  interested in, teams like you, on your radar, teams lose, usually lose,",
+    "  industry average, industry benchmark, compared to peers.",
     "",
     "## Confidence scoring",
-    "- high: the source fact is specific and recent (named event, metric, date within last 6 months).",
-    "- med: fact is real but somewhat generic or older.",
-    "- low: you are stretching or inferring beyond what the facts state.",
-    "Only output hooks where confidence is high or med. Never output low-confidence hooks.",
+    "- high: source fact is specific and recent (named event, metric, date within 6 months).",
+    "- med: fact is real but generic or older.",
+    "- low: you are inferring beyond what the facts state.",
+    "Only output hooks where confidence is high or med.",
     "",
     "## Output format",
     "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
     '{  "news_item": <1-indexed source number>,',
     '   "angle": "trigger" | "risk" | "tradeoff",',
-    '   "hook": "<the hook text>",',
-    '   "evidence_snippet": "<the exact source fact you drew from>",',
+    '   "hook": "<the hook text — MUST contain a verbatim quote in double quotes>",',
+    '   "evidence_snippet": "<the EXACT full fact/sentence you quoted from>",',
     '   "source_title": "<title of the source>",',
-    '   "source_date": "<date of the source, or empty string if unknown>",',
+    '   "source_date": "<date of the source, or empty string>",',
     '   "source_url": "<URL of the source>",',
     '   "evidence_tier": "A" | "B",',
     '   "confidence": "high" | "med"',
@@ -1013,6 +1040,47 @@ export function hasSpecificityToken(hook: string): boolean {
   return false;
 }
 
+/**
+ * Extract the verbatim quote from hook text (text inside double quotes).
+ * Returns the quoted phrase or null if none found.
+ */
+function extractQuoteFromHook(hook: string): string | null {
+  // Match text inside double quotes (straight or curly)
+  const match = hook.match(/["\u201C]([^"\u201D]{5,})["\u201D]/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Check if a quoted phrase actually appears (fuzzy) in the evidence snippet.
+ * We lowercase both and check substring containment.
+ */
+function quoteExistsInEvidence(quote: string, evidenceSnippet: string): boolean {
+  if (!quote || !evidenceSnippet) return false;
+  const normQuote = quote.toLowerCase().replace(/\s+/g, " ").trim();
+  const normEvidence = evidenceSnippet.toLowerCase().replace(/\s+/g, " ").trim();
+  // Check if at least 80% of the quote words appear in sequence in the evidence
+  if (normEvidence.includes(normQuote)) return true;
+  // Fallback: check if most words from the quote appear in the evidence
+  const quoteWords = normQuote.split(" ");
+  const matchingWords = quoteWords.filter((w) => normEvidence.includes(w));
+  return matchingWords.length >= Math.ceil(quoteWords.length * 0.8);
+}
+
+/**
+ * Check if hook contains unsourced claims that aren't backed by evidence.
+ * Returns the offending pattern if found without evidence backing, null otherwise.
+ */
+function containsUnsourcedClaim(hook: string, evidenceSnippet: string): boolean {
+  const hookLower = hook.toLowerCase();
+  const evidenceLower = (evidenceSnippet || "").toLowerCase();
+  for (const pattern of UNSOURCED_CLAIM_PATTERNS) {
+    if (pattern.test(hookLower) && !pattern.test(evidenceLower)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function validateHook(
   raw: ClaudeHookPayload,
   sourceLookup?: Map<number, ClassifiedSource>,
@@ -1034,11 +1102,24 @@ export function validateHook(
     sourceLookup?.get(raw.news_item)?.tier ?? "B"
   );
 
+  // Tier B: ONLY trigger angle allowed, no risk/tradeoff
+  if (validTier === "B" && angle !== "trigger") return null;
+
+  const evidenceSnippet = (raw.evidence_snippet || "").trim();
+
+  // MANDATORY: Hook must contain a verbatim quote from evidence (5+ words in double quotes)
+  const quote = extractQuoteFromHook(hook);
+  if (!quote) return null; // No quote found → reject
+  if (!quoteExistsInEvidence(quote, evidenceSnippet)) return null; // Quote not in evidence → reject
+
+  // Reject hooks with unsourced claims (redesign, hiring, stats not in evidence)
+  if (containsUnsourcedClaim(hook, evidenceSnippet)) return null;
+
   return {
     news_item: typeof raw.news_item === "number" ? raw.news_item : 1,
     angle,
     hook,
-    evidence_snippet: (raw.evidence_snippet || "").trim(),
+    evidence_snippet: evidenceSnippet,
     source_title: (raw.source_title || "").trim(),
     source_date: (raw.source_date || "").trim(),
     source_url: (raw.source_url || "").trim(),
@@ -1072,41 +1153,28 @@ export async function generateHooksForUrl(opts: {
   }
 
   const { sources, signalCount, lowSignal } = await fetchSourcesWithGating(opts.url, braveApiKey);
+  const domain = getDomain(opts.url);
+
+  const LOW_SIGNAL_SUGGESTION = [
+    `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
+    "For better hooks, try fetching from these sources:",
+    `  - ${domain}/press or ${domain}/newsroom`,
+    `  - ${domain}/blog or ${domain}/changelog`,
+    `  - ${domain}/careers or LinkedIn jobs page`,
+    "  - Recent news articles about the company",
+    "  - Partner announcement pages",
+  ].join("\n");
 
   // Check if all sources are Tier C
   const usableSources = sources.filter((s) => s.tier !== "C");
   if (usableSources.length === 0) {
     return {
       hooks: [],
-      suggestion: "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
+      suggestion: LOW_SIGNAL_SUGGESTION,
       lowSignal: true,
     };
   }
 
-  // Signal vs Fundamental gate
-  if (lowSignal) {
-    // Generate only 1 verification hook
-    const sourceLookup = new Map<number, ClassifiedSource>();
-    usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
-
-    const systemPrompt = buildSystemPrompt();
-    const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
-    const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
-
-    const validHooks: Hook[] = [];
-    for (const raw of rawHooks) {
-      const validated = validateHook(raw, sourceLookup);
-      if (validated) validHooks.push(validated);
-    }
-
-    return {
-      hooks: validHooks.slice(0, 1), // Only 1 verification hook
-      suggestion: `Low signal: only ${signalCount} signal fact(s) found. For better hooks, try these sources: the company's press page, changelog, careers page, or partner announcements.`,
-      lowSignal: true,
-    };
-  }
-
-  // Normal generation
   const sourceLookup = new Map<number, ClassifiedSource>();
   usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
@@ -1120,6 +1188,37 @@ export async function generateHooksForUrl(opts: {
     if (validated) validHooks.push(validated);
   }
 
-  const limit = opts.count ?? validHooks.length;
-  return { hooks: validHooks.slice(0, limit), lowSignal: false };
+  // Enforce Tier B cap: max 1 hook per Tier B source
+  const tierBSourcesSeen = new Set<number>();
+  const cappedHooks: Hook[] = [];
+  for (const hook of validHooks) {
+    if (hook.evidence_tier === "B") {
+      if (tierBSourcesSeen.has(hook.news_item)) continue; // Already have 1 for this source
+      tierBSourcesSeen.add(hook.news_item);
+    }
+    cappedHooks.push(hook);
+  }
+
+  // Signal vs Fundamental gate
+  if (lowSignal) {
+    // Only 1 verification hook max, or none if no quotes survived validation
+    const result = cappedHooks.slice(0, 1);
+    return {
+      hooks: result,
+      suggestion: LOW_SIGNAL_SUGGESTION,
+      lowSignal: true,
+    };
+  }
+
+  // Normal generation — if nothing survived the quote+evidence validation, return low signal
+  if (cappedHooks.length === 0) {
+    return {
+      hooks: [],
+      suggestion: LOW_SIGNAL_SUGGESTION,
+      lowSignal: true,
+    };
+  }
+
+  const limit = opts.count ?? cappedHooks.length;
+  return { hooks: cappedHooks.slice(0, limit), lowSignal: false };
 }

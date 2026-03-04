@@ -5,7 +5,6 @@ import {
   buildUserPrompt,
   callClaude,
   validateHook,
-  applyUrlToMockHooks,
   resolveCompanyByName,
   type Hook,
   type CompanyResolutionResult,
@@ -59,20 +58,8 @@ export async function POST(request: Request) {
     }
 
     if (!braveApiKey || !claudeApiKey) {
-      if (rawUrl) {
-        const fallbackHooks = applyUrlToMockHooks(rawUrl);
-        console.warn(
-          "generate-hooks: Missing BRAVE_API_KEY or CLAUDE_API_KEY, returning mock hooks.",
-        );
-        await new Promise((r) => setTimeout(r, 800));
-        return NextResponse.json({ hooks: fallbackHooks });
-      }
-
       return NextResponse.json(
-        {
-          error:
-            "Server misconfiguration: cannot resolve companyName without BRAVE_API_KEY and CLAUDE_API_KEY.",
-        },
+        { error: "Server misconfiguration: missing API keys. Please contact support." },
         { status: 500 },
       );
     }
@@ -111,8 +98,6 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-
-    const fallbackHooks = applyUrlToMockHooks(url);
 
     // Check cache first
     try {
@@ -165,36 +150,61 @@ export async function POST(request: Request) {
       const userPrompt = buildUserPrompt(url, sources, context);
       const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-      // 5. Quality gate
+      // 5. Quality gate (includes verbatim quote check + unsourced claim check)
       const validHooks: Hook[] = [];
       for (const raw of rawHooks) {
         const validated = validateHook(raw, sourceLookup);
         if (validated) validHooks.push(validated);
       }
 
-      // 6. Signal vs Fundamental gate: if low signal, return only 1 verification hook
+      // 6. Enforce Tier B cap: max 1 hook per Tier B source
+      const tierBSeen = new Set<number>();
+      const cappedHooks: Hook[] = [];
+      for (const hook of validHooks) {
+        if (hook.evidence_tier === "B") {
+          if (tierBSeen.has(hook.news_item)) continue;
+          tierBSeen.add(hook.news_item);
+        }
+        cappedHooks.push(hook);
+      }
+
+      const lowSignalSuggestion = [
+        `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
+        "For better hooks, try fetching from:",
+        `the company's press/newsroom page, blog/changelog, careers page, LinkedIn, or recent news articles.`,
+      ].join(" ");
+
+      // 7. Signal vs Fundamental gate: if low signal, return max 1 verification hook
       if (lowSignal) {
-        const suggestion = `Low signal: only ${signalCount} signal fact(s) found. For better hooks, try these sources: the company's press page, changelog, careers page, or partner announcements.`;
+        const result = cappedHooks.slice(0, 1);
         return NextResponse.json({
-          hooks: validHooks.slice(0, 1).map((h) => h.hook),
-          structured_hooks: validHooks.slice(0, 1),
+          hooks: result.map((h) => h.hook),
+          structured_hooks: result,
           citations,
           status: "ok" as CompanyResolutionStatus,
           lowSignal: true,
           signalCount,
-          suggestion,
+          suggestion: lowSignalSuggestion,
           companyName: companyName ?? undefined,
         });
       }
 
-      // 7. If nothing survived validation, fall back
-      if (validHooks.length === 0) {
-        console.warn("generate-hooks: No hooks passed quality gate, returning mock hooks.");
-        return NextResponse.json({ hooks: fallbackHooks });
+      // 8. If nothing survived validation, return low signal
+      if (cappedHooks.length === 0) {
+        return NextResponse.json({
+          hooks: [],
+          structured_hooks: [],
+          citations,
+          status: "ok" as CompanyResolutionStatus,
+          lowSignal: true,
+          signalCount,
+          suggestion: lowSignalSuggestion,
+          companyName: companyName ?? undefined,
+        });
       }
 
-      // 8. Build response
-      const flatHooks = validHooks.map((h) => h.hook);
+      // 9. Build response
+      const flatHooks = cappedHooks.map((h) => h.hook);
 
       const resolvedCompany = resolution && resolution.candidates[0]
         ? {
@@ -207,11 +217,11 @@ export async function POST(request: Request) {
         : null;
 
       // Cache for next time (fire and forget)
-      setCachedHooks(url, validHooks, citations).catch(() => {});
+      setCachedHooks(url, cappedHooks, citations).catch(() => {});
 
       return NextResponse.json({
         hooks: flatHooks,
-        structured_hooks: validHooks,
+        structured_hooks: cappedHooks,
         citations,
         status: "ok" as CompanyResolutionStatus,
         lowSignal: false,
@@ -221,8 +231,13 @@ export async function POST(request: Request) {
       });
     } catch (error) {
       console.error("generate-hooks: Error during external calls", error);
-      await new Promise((r) => setTimeout(r, 800));
-      return NextResponse.json({ hooks: fallbackHooks });
+      return NextResponse.json({
+        hooks: [],
+        structured_hooks: [],
+        status: "ok" as CompanyResolutionStatus,
+        lowSignal: true,
+        suggestion: "Something went wrong during research. Please try again.",
+      });
     }
   } catch (error) {
     console.error("Unexpected error in /api/generate-hooks", error);
