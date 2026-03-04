@@ -46,7 +46,8 @@ export function PricingSection() {
       });
       const data = await res.json();
       if (data.url) {
-        window.location.href = data.url;
+        window.location.assign(data.url);
+        return; // Don't reset loading — page is navigating
       } else {
         setError(data.error || "Failed to start checkout. Please try again.");
         setCheckoutLoading(null);
