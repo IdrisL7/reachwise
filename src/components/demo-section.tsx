@@ -90,17 +90,63 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
   );
 }
 
+// Pre-generated sample hooks for the demo (no API call needed)
+const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string } = {
+  company: "Stripe (https://stripe.com)",
+  hooks: [
+    "Stripe just launched Revenue Recognition for subscriptions — that suggests the finance team is under pressure to close the books faster. If reconciliation is still eating up cycles, this might be the right time to talk about how we cut that timeline in half.",
+    "I noticed Stripe's headcount on the billing infrastructure team grew 40% in the last two quarters. When a team scales that fast, onboarding and knowledge transfer usually become the bottleneck. We've helped similar engineering orgs keep velocity up during growth spurts.",
+    "Stripe's developer documentation just added a section on webhook reliability patterns — which tells me they're hearing from customers about missed events. Our monitoring layer catches those gaps automatically, which might save your integration team some firefighting.",
+  ],
+  structured: [
+    {
+      hook: "Stripe just launched Revenue Recognition for subscriptions — that suggests the finance team is under pressure to close the books faster.",
+      angle: "trigger",
+      confidence: "high",
+      evidence_tier: "A",
+      evidence_snippet: "Stripe launches Revenue Recognition, automating ASC 606 compliance for subscription businesses.",
+      source_title: "Stripe Blog — Revenue Recognition",
+      source_date: "2025-02",
+      source_url: "https://stripe.com/blog",
+      news_item: 1,
+    },
+    {
+      hook: "Stripe's headcount on the billing infrastructure team grew 40% in the last two quarters.",
+      angle: "trigger",
+      confidence: "med",
+      evidence_tier: "B",
+      evidence_snippet: "LinkedIn data shows 23 new Billing Infrastructure roles filled at Stripe in Q3-Q4 2024.",
+      source_title: "LinkedIn Talent Insights",
+      source_date: "2025-01",
+      source_url: "",
+      news_item: 2,
+    },
+    {
+      hook: "Stripe's developer documentation just added a section on webhook reliability patterns.",
+      angle: "risk",
+      confidence: "high",
+      evidence_tier: "A",
+      evidence_snippet: "New section added to Stripe Docs: 'Handling webhook delivery failures and retry logic'.",
+      source_title: "Stripe Developer Docs",
+      source_date: "2025-02",
+      source_url: "https://docs.stripe.com",
+      news_item: 3,
+    },
+  ],
+};
+
 export function DemoSection() {
   const [companyUrl, setCompanyUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [resolvedCompanyLabel, setResolvedCompanyLabel] = useState<string | null>(null);
   const [pitchContext, setPitchContext] = useState("");
   const [mode, setMode] = useState<"single" | "batch">("single");
+  const [showingSample, setShowingSample] = useState(true);
 
-  const [hooks, setHooks] = useState<string[]>([]);
+  const [hooks, setHooks] = useState<string[]>(SAMPLE_HOOKS.hooks);
   const [structuredHooks, setStructuredHooks] = useState<
     StructuredHook[] | null
-  >(null);
+  >(SAMPLE_HOOKS.structured);
   const [emailByIndex, setEmailByIndex] = useState<Record<number, EmailUIState>>({});
 
   const [isLoading, setIsLoading] = useState(false);
@@ -127,6 +173,7 @@ export function DemoSection() {
     setError(null);
     setHooks([]);
     setStructuredHooks(null);
+    setShowingSample(false);
     setEmailByIndex({});
     setCompanyCandidates(undefined);
     setCompanyStatus(undefined);
@@ -565,16 +612,21 @@ export function DemoSection() {
 
             {mode === "single" && (
               <div className="mt-8 border-t border-zinc-700/30 pt-6">
-                {!isLoading && hooks.length === 0 && !error && (
-                  <p className="text-center text-[0.9375rem] text-zinc-600">
-                    Your hooks will appear here after you hit generate.
-                  </p>
-                )}
-
                 {isLoading && (
                   <div className="flex items-center justify-center gap-3 py-4 text-[0.9375rem] text-zinc-400">
                     <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
                     Gathering context and drafting hooks...
+                  </div>
+                )}
+
+                {showingSample && hooks.length > 0 && (
+                  <div className="mb-4 flex items-center gap-2 text-[0.8125rem]">
+                    <span className="rounded-full bg-violet-600/20 border border-violet-500/30 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-violet-300">
+                      Sample
+                    </span>
+                    <span className="text-zinc-400">
+                      Showing pre-generated hooks for <span className="font-medium text-zinc-200">{SAMPLE_HOOKS.company}</span>. Enter your own company above to generate fresh hooks.
+                    </span>
                   </div>
                 )}
 

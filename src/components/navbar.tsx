@@ -1,7 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
 export function Navbar() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
   return (
     <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#080808]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[4.25rem] max-w-[90rem] items-center justify-between px-6 lg:px-10">
@@ -12,28 +17,29 @@ export function Navbar() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-8">
+        {/* Desktop links */}
+        <div className="hidden sm:flex items-center gap-8">
           <Link
             href="/#how-it-works"
-            className="hidden text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white sm:block"
+            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
           >
             How it works
           </Link>
           <Link
             href="/#demo"
-            className="hidden text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white sm:block"
+            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
           >
             Demo
           </Link>
           <Link
             href="/#pricing"
-            className="hidden text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white sm:block"
+            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
           >
             Pricing
           </Link>
           <Link
             href="/login"
-            className="hidden text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white sm:block"
+            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
           >
             Log in
           </Link>
@@ -57,7 +63,49 @@ export function Navbar() {
             </svg>
           </Link>
         </div>
+
+        {/* Mobile menu button */}
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="sm:hidden p-2 text-zinc-400 hover:text-white transition-colors"
+          aria-label="Toggle menu"
+        >
+          {mobileOpen ? (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          ) : (
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          )}
+        </button>
       </div>
+
+      {/* Mobile dropdown */}
+      {mobileOpen && (
+        <div className="sm:hidden border-t border-white/[0.06] bg-[#080808]/95 backdrop-blur-xl px-6 py-4 space-y-3">
+          <Link href="/#how-it-works" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
+            How it works
+          </Link>
+          <Link href="/#demo" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
+            Demo
+          </Link>
+          <Link href="/#pricing" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
+            Pricing
+          </Link>
+          <Link href="/login" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
+            Log in
+          </Link>
+          <Link
+            href="/register"
+            onClick={() => setMobileOpen(false)}
+            className="block w-full text-center bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mt-2"
+          >
+            Try it free
+          </Link>
+        </div>
+      )}
     </nav>
   );
 }

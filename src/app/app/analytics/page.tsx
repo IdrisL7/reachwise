@@ -93,8 +93,13 @@ export default async function AnalyticsPage() {
       {/* Recent activity */}
       <h2 className="text-lg font-semibold mb-4">Recent Activity (7 days)</h2>
       {recentEvents.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
-          <p className="text-zinc-500">No activity yet. Generate some hooks to get started.</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-10 text-center">
+          <div className="text-4xl mb-4">📊</div>
+          <h3 className="text-lg font-semibold text-zinc-200 mb-2">No activity yet</h3>
+          <p className="text-sm text-zinc-500 max-w-md mx-auto">
+            Generate hooks and send emails to see your open rates, click rates, and engagement
+            metrics here. All activity from the last 30 days will be tracked.
+          </p>
         </div>
       ) : (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">

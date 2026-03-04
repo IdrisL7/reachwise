@@ -106,6 +106,19 @@ export default function HooksPage() {
         </div>
       )}
 
+      {!loading && hooks.length === 0 && !error && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-10 text-center">
+          <div className="text-4xl mb-4">🎣</div>
+          <h2 className="text-lg font-semibold text-zinc-200 mb-2">
+            Generate your first hooks
+          </h2>
+          <p className="text-sm text-zinc-500 max-w-md mx-auto">
+            Enter a company URL above and we&apos;ll research their public signals — earnings,
+            hiring, tech changes — and generate evidence-backed hooks you can drop into any outbound message.
+          </p>
+        </div>
+      )}
+
       {hooks.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">

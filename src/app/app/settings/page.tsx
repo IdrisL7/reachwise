@@ -280,7 +280,7 @@ export default function SettingsPage() {
       <BillingSection />
 
       {/* Account */}
-      <section>
+      <section className="mb-10">
         <h2 className="text-lg font-semibold mb-4">Account</h2>
         <button
           onClick={() => signOut({ callbackUrl: "/" })}
@@ -289,6 +289,89 @@ export default function SettingsPage() {
           Sign out
         </button>
       </section>
+
+      {/* Danger zone */}
+      <DeleteAccountSection />
     </div>
+  );
+}
+
+function DeleteAccountSection() {
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+
+  async function handleDelete() {
+    if (confirmText !== "DELETE") return;
+    setDeleting(true);
+
+    try {
+      const res = await fetch("/api/auth/delete-account", { method: "DELETE" });
+      if (res.ok) {
+        signOut({ callbackUrl: "/?deleted=true" });
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to delete account.");
+        setDeleting(false);
+      }
+    } catch {
+      alert("Something went wrong.");
+      setDeleting(false);
+    }
+  }
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold mb-4 text-red-400">Danger Zone</h2>
+      <div className="bg-zinc-900 border border-red-900/40 rounded-lg p-4">
+        {!confirming ? (
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-zinc-200">Delete account</p>
+              <p className="text-xs text-zinc-500">
+                Permanently delete your account, leads, API keys, and all associated data.
+              </p>
+            </div>
+            <button
+              onClick={() => setConfirming(true)}
+              className="text-xs text-red-400 hover:text-red-300 border border-red-800 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Delete account
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm text-red-300 mb-3">
+              This action is irreversible. Your subscription will be cancelled and all data permanently deleted.
+            </p>
+            <p className="text-xs text-zinc-400 mb-2">
+              Type <span className="font-mono text-red-400 font-bold">DELETE</span> to confirm:
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="DELETE"
+                className="flex-1 bg-black border border-red-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-600"
+              />
+              <button
+                onClick={handleDelete}
+                disabled={confirmText !== "DELETE" || deleting}
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors"
+              >
+                {deleting ? "Deleting..." : "Confirm delete"}
+              </button>
+              <button
+                onClick={() => { setConfirming(false); setConfirmText(""); }}
+                className="text-xs text-zinc-500 hover:text-zinc-300 px-3 py-2"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

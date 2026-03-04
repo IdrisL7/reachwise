@@ -160,14 +160,22 @@ export default function LeadsPage() {
         <p className="text-zinc-500">Loading...</p>
       ) : leads.length === 0 ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-12 text-center">
-          <p className="text-zinc-400 mb-2">No leads yet.</p>
-          <p className="text-sm text-zinc-600">
-            Upload a CSV or create leads via the API.
+          <div className="text-4xl mb-4">📋</div>
+          <h2 className="text-lg font-semibold text-zinc-200 mb-2">No leads yet</h2>
+          <p className="text-sm text-zinc-500 max-w-md mx-auto mb-4">
+            Upload a CSV from Apollo, Clay, or any spreadsheet to start managing
+            your outbound pipeline. Or create leads via the API.
           </p>
+          <button
+            onClick={() => setShowUpload(true)}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            Upload CSV
+          </button>
         </div>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="text-left text-zinc-500 border-b border-zinc-800">
                 <th className="px-4 py-3">Email</th>

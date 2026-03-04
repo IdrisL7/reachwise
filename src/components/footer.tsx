@@ -11,7 +11,7 @@ export function Footer() {
           </span>
         </a>
 
-        <div className="flex items-center gap-8 text-[0.875rem] text-zinc-500">
+        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[0.875rem] text-zinc-500">
           <a
             href="#how-it-works"
             className="transition-colors duration-200 hover:text-zinc-300"
@@ -29,6 +29,18 @@ export function Footer() {
             className="transition-colors duration-200 hover:text-zinc-300"
           >
             Contact
+          </a>
+          <a
+            href="/privacy"
+            className="transition-colors duration-200 hover:text-zinc-300"
+          >
+            Privacy
+          </a>
+          <a
+            href="/terms"
+            className="transition-colors duration-200 hover:text-zinc-300"
+          >
+            Terms
           </a>
         </div>
 

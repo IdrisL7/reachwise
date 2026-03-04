@@ -41,6 +41,8 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   // Auth attempts
   "auth:login": { limit: 5, windowSeconds: 300 },
   "auth:register": { limit: 3, windowSeconds: 600 },
+  "auth:forgot-password": { limit: 3, windowSeconds: 600 },
+  "auth:reset-password": { limit: 5, windowSeconds: 600 },
 };
 
 /**
