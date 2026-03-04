@@ -45,6 +45,8 @@ export async function POST(request: NextRequest) {
       .where(eq(schema.outboundMessages.leadId, lead.id))
       .orderBy(desc(schema.outboundMessages.createdAt));
 
+    const currentStep = typeof body.step === "number" ? body.step : lead.sequenceStep;
+
     const result = await generateFollowUp({
       lead: {
         email: lead.email,
@@ -61,18 +63,22 @@ export async function POST(request: NextRequest) {
         sentAt: m.sentAt,
       })),
       sequence,
-      currentStep: lead.sequenceStep,
+      currentStep,
       hooks: body.hooks as Hook[] | undefined,
       tone: body.style?.tone,
       wordCountHint: body.style?.word_count_hint,
+      avoidAngle: body.avoid_angle,
     });
+
+    const mode = body.mode || "send";
 
     return NextResponse.json({
       email: { subject: result.subject, body: result.body },
       meta: {
-        step: lead.sequenceStep,
+        step: currentStep,
         angle: result.hookUsed?.angle,
         sequence_id: sequenceId,
+        mode,
       },
     });
   } catch (error: any) {

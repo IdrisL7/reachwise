@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 interface ApiKey {
   id: string;
@@ -16,6 +16,72 @@ interface Integration {
   connected: boolean;
   integration: { id: string; status: string; lastSyncAt: string | null } | null;
   auth_url: string;
+}
+
+function BillingSection() {
+  const { data: session } = useSession();
+  const tierId = (session?.user as any)?.tierId || "starter";
+  const [billingLoading, setBillingLoading] = useState(false);
+
+  async function openPortal() {
+    setBillingLoading(true);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  async function handleUpgrade(targetTier: string) {
+    setBillingLoading(true);
+    try {
+      const res = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tierId: targetTier }),
+      });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setBillingLoading(false);
+    }
+  }
+
+  const nextTier = tierId === "starter" ? "pro" : tierId === "pro" ? "concierge" : null;
+
+  return (
+    <section className="mb-10">
+      <h2 className="text-lg font-semibold mb-4">Billing</h2>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">Current Plan</p>
+            <p className="text-xs text-zinc-500 capitalize">{tierId}</p>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={openPortal}
+              disabled={billingLoading}
+              className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+            >
+              Manage Subscription
+            </button>
+            {nextTier && (
+              <button
+                onClick={() => handleUpgrade(nextTier)}
+                disabled={billingLoading}
+                className="text-xs text-white bg-emerald-600 hover:bg-emerald-500 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Upgrade to {nextTier.charAt(0).toUpperCase() + nextTier.slice(1)}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 export default function SettingsPage() {
@@ -209,6 +275,9 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
+
+      {/* Billing */}
+      <BillingSection />
 
       {/* Account */}
       <section>

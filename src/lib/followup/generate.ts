@@ -193,15 +193,23 @@ function stripTrailingSignature(body: string): string {
 // Pick the best hook (prefer different angle than previous messages)
 // ---------------------------------------------------------------------------
 
-function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[]): Hook {
+function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[], avoidAngle?: string): Hook {
   if (hooks.length === 0) {
     throw new Error("No hooks available for this company");
   }
 
+  // Filter out avoided angle if specified
+  const candidates = avoidAngle
+    ? hooks.filter((h) => h.angle !== avoidAngle)
+    : hooks;
+
+  // Fall back to all hooks if filtering removed everything
+  const pool = candidates.length > 0 ? candidates : hooks;
+
   // If no previous messages, just pick the first high-confidence one
   if (previousMessages.length === 0) {
-    const highConf = hooks.find((h) => h.confidence === "high");
-    return highConf || hooks[0];
+    const highConf = pool.find((h) => h.confidence === "high");
+    return highConf || pool[0];
   }
 
   // Try to pick a hook with a different angle than the most recent message's hook
@@ -211,15 +219,15 @@ function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[]): Hook 
   const angleOrder: Hook["angle"][] = ["trigger", "risk", "tradeoff"];
   const preferredAngle = angleOrder[usedCount % angleOrder.length];
 
-  const preferred = hooks.find(
+  const preferred = pool.find(
     (h) => h.angle === preferredAngle && h.confidence === "high",
   );
   if (preferred) return preferred;
 
-  const anyPreferred = hooks.find((h) => h.angle === preferredAngle);
+  const anyPreferred = pool.find((h) => h.angle === preferredAngle);
   if (anyPreferred) return anyPreferred;
 
-  return hooks[0];
+  return pool[0];
 }
 
 // ---------------------------------------------------------------------------
@@ -235,6 +243,7 @@ export async function generateFollowUp(opts: {
   tone?: string;
   wordCountHint?: number;
   senderProfile?: { name: string; role?: string; company?: string };
+  avoidAngle?: string;
 }): Promise<FollowUpResult> {
   const claudeApiKey = process.env.CLAUDE_API_KEY;
   if (!claudeApiKey) {
@@ -256,7 +265,7 @@ export async function generateFollowUp(opts: {
     throw new Error("Could not generate any hooks for this lead's company");
   }
 
-  const hook = pickBestHook(hooks, opts.previousMessages);
+  const hook = pickBestHook(hooks, opts.previousMessages, opts.avoidAngle);
   const sequenceType = mapStepToSequenceType(opts.currentStep, opts.sequence.maxSteps);
   const tone = opts.tone || "direct";
   const wordCountHint = opts.wordCountHint || (sequenceType === "first" ? 80 : 60);

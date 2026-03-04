@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 import { TIERS, type TierFeature } from "@/lib/tiers";
 
 function FeatureItem({ feature }: { feature: TierFeature }) {
@@ -25,7 +28,22 @@ function FeatureItem({ feature }: { feature: TierFeature }) {
   return <li className="flex items-start gap-2.5">{content}</li>;
 }
 
+async function handleCheckout(tierId: string) {
+  const res = await fetch("/api/stripe/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tierId }),
+  });
+  const data = await res.json();
+  if (data.url) {
+    window.location.href = data.url;
+  }
+}
+
 export function PricingSection() {
+  const { data: session } = useSession();
+  const currentTier = (session?.user as any)?.tierId;
+
   return (
     <section
       id="pricing"
@@ -80,16 +98,38 @@ export function PricingSection() {
               <p className="mt-6 text-[0.8125rem] leading-[1.5] text-zinc-500">
                 {tier.bestFor}
               </p>
-              <a
-                href={tier.id === "concierge" ? "/contact" : "#waitlist"}
-                className={`mt-6 flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] ${
-                  tier.highlighted
-                    ? "bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.2)] hover:bg-violet-500 hover:shadow-[0_0_24px_rgba(139,92,246,0.35)] active:scale-[0.97]"
-                    : "border border-zinc-600/40 text-zinc-300 hover:border-violet-500/40 hover:text-white hover:shadow-[0_2px_12px_rgba(139,92,246,0.06)]"
-                }`}
-              >
-                {tier.cta}
-              </a>
+              {currentTier === tier.id ? (
+                <div className="mt-6 flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold border border-emerald-600/40 text-emerald-400">
+                  Current Plan
+                </div>
+              ) : (
+                <div className="mt-6 flex flex-col gap-2">
+                  <button
+                    onClick={() => {
+                      if (!session) {
+                        window.location.href = `/register?tier=${tier.id}`;
+                      } else {
+                        handleCheckout(tier.id);
+                      }
+                    }}
+                    className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer ${
+                      tier.highlighted
+                        ? "bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.2)] hover:bg-violet-500 hover:shadow-[0_0_24px_rgba(139,92,246,0.35)] active:scale-[0.97]"
+                        : "border border-zinc-600/40 text-zinc-300 hover:border-violet-500/40 hover:text-white hover:shadow-[0_2px_12px_rgba(139,92,246,0.06)]"
+                    }`}
+                  >
+                    {tier.cta}
+                  </button>
+                  {tier.id === "concierge" && (
+                    <Link
+                      href="/contact"
+                      className="flex h-9 items-center justify-center rounded-lg text-[0.8125rem] font-medium border border-zinc-600/40 text-zinc-400 hover:text-white hover:border-violet-500/40 transition-all duration-200"
+                    >
+                      or Book a call
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

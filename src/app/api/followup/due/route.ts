@@ -52,14 +52,21 @@ export async function GET(request: NextRequest) {
 
       dueLeads.push({
         id: lead.id,
+        lead_id: lead.id,
         email: lead.email,
+        email_to: lead.email,
         name: lead.name,
         company_name: lead.companyName,
         company_website: lead.companyWebsite,
+        account_domain: lead.companyWebsite || null,
         sequence_step: lead.sequenceStep,
+        followup_step: lead.sequenceStep,
         next_step: lead.sequenceStep,
         sequence_id: sequenceId,
         last_contacted_at: lead.lastContactedAt,
+        rep_id: null,
+        timezone: null,
+        mode: "send",
       });
 
       if (dueLeads.length >= limit) break;

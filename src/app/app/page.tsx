@@ -95,7 +95,7 @@ export default async function DashboardPage() {
           <p className="text-2xl font-bold capitalize">{tierId}</p>
           {tierId !== "concierge" && (
             <Link
-              href="/app/settings"
+              href="/#pricing"
               className="text-xs text-emerald-400 hover:underline"
             >
               Upgrade

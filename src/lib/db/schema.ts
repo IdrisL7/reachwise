@@ -12,6 +12,8 @@ export const users = sqliteTable("users", {
   image: text("image"),
   passwordHash: text("password_hash"), // for credentials auth
   tierId: text("tier_id").$type<TierId>().notNull().default("starter"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
   hooksUsedThisMonth: integer("hooks_used_this_month").notNull().default(0),
   hooksResetAt: text("hooks_reset_at").notNull().default(sql`(datetime('now'))`),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
