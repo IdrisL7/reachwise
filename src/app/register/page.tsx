@@ -44,12 +44,14 @@ function RegisterForm() {
       if (result?.error) {
         setError("Account created but sign-in failed. Try logging in.");
         setLoading(false);
-      } else if (tierParam && tierParam !== "starter") {
-        // Redirect to Stripe checkout for the selected tier
+      } else {
+        // Always redirect to Stripe checkout — trial for starter, direct for others
+        const selectedTier = tierParam || "starter";
+        const isTrial = selectedTier === "starter";
         const checkoutRes = await fetch("/api/stripe/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tierId: tierParam }),
+          body: JSON.stringify({ tierId: selectedTier, trial: isTrial }),
         });
         const checkoutData = await checkoutRes.json();
         if (checkoutData.url) {
@@ -57,8 +59,6 @@ function RegisterForm() {
         } else {
           window.location.href = "/app";
         }
-      } else {
-        window.location.href = "/app";
       }
     } catch {
       setError("Something went wrong. Please try again.");
@@ -130,7 +130,7 @@ function RegisterForm() {
         <p className="text-xs text-zinc-600 text-center">
           {tierParam && tierParam !== "starter"
             ? `You'll be redirected to checkout for the ${tierParam.charAt(0).toUpperCase() + tierParam.slice(1)} plan.`
-            : <>Starts on the free Starter tier. <Link href="/#pricing" className="text-emerald-400 hover:underline">Upgrade</Link> anytime.</>}
+            : <>7-day free trial on Starter. No charge until day 8. <Link href="/#pricing" className="text-emerald-400 hover:underline">View plans</Link>.</>}
         </p>
       </form>
     </div>

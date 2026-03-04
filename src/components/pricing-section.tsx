@@ -28,11 +28,11 @@ function FeatureItem({ feature }: { feature: TierFeature }) {
   return <li className="flex items-start gap-2.5">{content}</li>;
 }
 
-async function handleCheckout(tierId: string) {
+async function handleCheckout(tierId: string, trial = false) {
   const res = await fetch("/api/stripe/checkout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ tierId }),
+    body: JSON.stringify({ tierId, trial }),
   });
   const data = await res.json();
   if (data.url) {
@@ -109,7 +109,7 @@ export function PricingSection() {
                       if (!session) {
                         window.location.href = `/register?tier=${tier.id}`;
                       } else {
-                        handleCheckout(tier.id);
+                        handleCheckout(tier.id, tier.id === "starter");
                       }
                     }}
                     className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer ${

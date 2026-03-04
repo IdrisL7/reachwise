@@ -50,7 +50,7 @@ export const TIERS: Tier[] = [
       doneForYouSetup: false,
       prioritySupport: false,
     },
-    cta: "Get started",
+    cta: "Start 7-day free trial",
   },
   {
     id: "pro",

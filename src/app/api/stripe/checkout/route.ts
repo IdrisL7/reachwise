@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { tierId } = await req.json();
+  const { tierId, trial } = await req.json();
   if (!VALID_TIERS.includes(tierId)) {
     return NextResponse.json({ error: "Invalid tier" }, { status: 400 });
   }
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     currency: "gbp",
     allow_promotion_codes: true,
     subscription_data: {
+      trial_period_days: trial ? 7 : undefined,
       metadata: { userId: session.user.id, tierId },
     },
   });
