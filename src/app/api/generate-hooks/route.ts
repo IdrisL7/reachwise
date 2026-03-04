@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import {
-  fetchSources,
+  fetchSourcesWithGating,
   buildSystemPrompt,
   buildUserPrompt,
   callClaude,
@@ -131,8 +131,16 @@ export async function POST(request: Request) {
     }
 
     try {
-      // 1. Gather and classify sources from Brave
-      const sources = await fetchSources(url, braveApiKey!);
+      // 1. Gather and classify sources with signal gating
+      const { sources, signalCount, lowSignal } = await fetchSourcesWithGating(url, braveApiKey!);
+
+      const citations = sources.map((s) => ({
+        source_title: s.title,
+        publisher: s.publisher,
+        date: s.date,
+        url: s.url,
+        tier: s.tier,
+      }));
 
       // 2. Check if all sources are Tier C (insufficient evidence)
       const usableSources = sources.filter((s) => s.tier !== "C");
@@ -140,14 +148,9 @@ export async function POST(request: Request) {
         return NextResponse.json({
           hooks: [],
           structured_hooks: [],
-          citations: sources.map((s) => ({
-            source_title: s.title,
-            publisher: s.publisher,
-            date: s.date,
-            url: s.url,
-            tier: s.tier,
-          })),
+          citations,
           status: "ok" as CompanyResolutionStatus,
+          lowSignal: true,
           suggestion:
             "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
         });
@@ -169,22 +172,29 @@ export async function POST(request: Request) {
         if (validated) validHooks.push(validated);
       }
 
-      // 6. If nothing survived validation, fall back
+      // 6. Signal vs Fundamental gate: if low signal, return only 1 verification hook
+      if (lowSignal) {
+        const suggestion = `Low signal: only ${signalCount} signal fact(s) found. For better hooks, try these sources: the company's press page, changelog, careers page, or partner announcements.`;
+        return NextResponse.json({
+          hooks: validHooks.slice(0, 1).map((h) => h.hook),
+          structured_hooks: validHooks.slice(0, 1),
+          citations,
+          status: "ok" as CompanyResolutionStatus,
+          lowSignal: true,
+          signalCount,
+          suggestion,
+          companyName: companyName ?? undefined,
+        });
+      }
+
+      // 7. If nothing survived validation, fall back
       if (validHooks.length === 0) {
         console.warn("generate-hooks: No hooks passed quality gate, returning mock hooks.");
         return NextResponse.json({ hooks: fallbackHooks });
       }
 
-      // 7. Build response
+      // 8. Build response
       const flatHooks = validHooks.map((h) => h.hook);
-
-      const citations = sources.map((s) => ({
-        source_title: s.title,
-        publisher: s.publisher,
-        date: s.date,
-        url: s.url,
-        tier: s.tier,
-      }));
 
       const resolvedCompany = resolution && resolution.candidates[0]
         ? {
@@ -204,6 +214,8 @@ export async function POST(request: Request) {
         structured_hooks: validHooks,
         citations,
         status: "ok" as CompanyResolutionStatus,
+        lowSignal: false,
+        signalCount,
         companyName: companyName ?? undefined,
         resolvedCompany,
       });

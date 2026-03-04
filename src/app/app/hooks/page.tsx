@@ -8,6 +8,7 @@ interface Hook {
   confidence: string;
   evidence_tier: string;
   source_snippet?: string;
+  source_url?: string;
 }
 
 export default function HooksPage() {
@@ -17,6 +18,8 @@ export default function HooksPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
+  const [suggestion, setSuggestion] = useState("");
+  const [lowSignal, setLowSignal] = useState(false);
 
   async function copyHook(text: string, index: number) {
     await navigator.clipboard.writeText(text);
@@ -31,6 +34,8 @@ export default function HooksPage() {
     setLoading(true);
     setError("");
     setHooks([]);
+    setSuggestion("");
+    setLowSignal(false);
 
     try {
       const res = await fetch("/api/generate-hooks", {
@@ -38,14 +43,44 @@ export default function HooksPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           url: url || undefined,
-          company_name: companyName || undefined,
+          companyName: companyName || undefined,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to generate hooks");
+      if (!res.ok) throw new Error(data.error || data.message || "Failed to generate hooks");
 
-      setHooks(data.hooks || []);
+      // Map structured_hooks (with .hook field) to display format, fallback to flat hooks
+      const structured = data.structured_hooks as Array<{
+        hook: string;
+        angle: string;
+        confidence: string;
+        evidence_tier: string;
+        evidence_snippet?: string;
+        source_url?: string;
+      }> | undefined;
+
+      if (structured && structured.length > 0) {
+        setHooks(structured.map((h) => ({
+          text: h.hook,
+          angle: h.angle,
+          confidence: h.confidence,
+          evidence_tier: h.evidence_tier,
+          source_snippet: h.evidence_snippet,
+          source_url: h.source_url,
+        })));
+      } else if (Array.isArray(data.hooks)) {
+        // Flat string hooks (legacy/mock)
+        setHooks(data.hooks.map((h: string) => ({
+          text: h,
+          angle: "trigger",
+          confidence: "med",
+          evidence_tier: "B",
+        })));
+      }
+
+      if (data.suggestion) setSuggestion(data.suggestion);
+      if (data.lowSignal) setLowSignal(true);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -126,10 +161,17 @@ export default function HooksPage() {
         </div>
       )}
 
+      {suggestion && (
+        <div className={`border rounded-lg px-4 py-3 mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800 text-amber-300" : "bg-blue-900/30 border-blue-800 text-blue-300"}`}>
+          {suggestion}
+        </div>
+      )}
+
       {hooks.length > 0 && (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">
             {hooks.length} hook{hooks.length !== 1 ? "s" : ""} found
+            {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
           </h2>
           {hooks.map((hook, i) => (
             <div

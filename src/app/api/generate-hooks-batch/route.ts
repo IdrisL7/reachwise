@@ -19,6 +19,8 @@ type BatchItemResult = {
   url: string;
   hooks: Hook[];
   error: string | null;
+  suggestion?: string;
+  lowSignal?: boolean;
 };
 
 type BatchResponse = {
@@ -56,7 +58,13 @@ export async function POST(request: Request) {
             pitchContext: item.pitchContext,
             count: maxHooksPerUrl,
           });
-          return { url, hooks: result.hooks, error: null };
+          return {
+            url,
+            hooks: result.hooks,
+            error: null,
+            suggestion: result.suggestion,
+            lowSignal: result.lowSignal,
+          };
         } catch (err) {
           console.error(`generate-hooks-batch: failed for ${url}`, err);
           return { url, hooks: [], error: "Failed to generate hooks" };

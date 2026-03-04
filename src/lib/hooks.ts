@@ -29,6 +29,7 @@ export type Source = {
 
 export type ClassifiedSource = Source & {
   tier: EvidenceTier;
+  stale?: boolean;
 };
 
 export type CompanyCandidate = {
@@ -96,6 +97,61 @@ const MOCK_HOOKS: string[] = [
   "Saw you are hiring across sales and CS — usually a sign of strong pipeline but also where outbound messaging starts to fragment. Have you standardized messaging across the new hires?",
 ];
 
+// Signal keywords for classifying facts as signal vs fundamental
+const SIGNAL_KEYWORDS = [
+  "announced", "announces", "announcing",
+  "launched", "launches", "launching",
+  "released", "releases", "releasing",
+  "acquired", "acquires", "acquisition",
+  "raised", "funding", "series",
+  "hired", "hiring", "hires", "job posting",
+  "partnered", "partnership", "partners with",
+  "expanded", "expands", "expansion",
+  "introduced", "introduces", "introducing",
+  "updated", "updates", "update",
+  "now supports", "added support",
+  "migrated", "migration",
+  "closed", "closing",
+  "won", "awarded",
+  "rebranded", "rebrand",
+  "merged", "merger",
+  "opened", "opening",
+  "deprecated", "sunset",
+  "Q1", "Q2", "Q3", "Q4",
+  "revenue", "ARR", "MRR",
+  "customers", "users",
+  "headcount", "employees",
+  "valuation",
+];
+
+// ---------------------------------------------------------------------------
+// Company name extraction from URL
+// ---------------------------------------------------------------------------
+
+export function extractCompanyName(url: string): string {
+  try {
+    const hostname = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
+    // Remove www. and TLD
+    const parts = hostname.replace(/^www\./, "").split(".");
+    const name = parts[0] || "";
+    // Convert hyphens to spaces, capitalize
+    return name
+      .split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  } catch {
+    return url.replace(/^https?:\/\/(www\.)?/, "").split("/")[0].split(".")[0] || url;
+  }
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Evidence tier classification
 // ---------------------------------------------------------------------------
@@ -149,25 +205,52 @@ const TIER_C_URL_PATTERNS = [
 /** Returns true if the facts contain concrete specifics (numbers, dates, dollar amounts). */
 function factsHaveSpecifics(facts: string[]): boolean {
   const joined = facts.join(" ");
-  // Numbers like 15%, $2M, 300+, Q4, 2024, etc.
   if (/\d/.test(joined)) return true;
-  // Named quarters
   if (/Q[1-4]/i.test(joined)) return true;
   return false;
 }
 
-export function classifySource(source: Source): EvidenceTier {
-  const url = source.url.toLowerCase();
-  const title = source.title.toLowerCase();
+/** Check if a source's date makes it stale (>90 days old). */
+function isStale(dateStr: string): boolean {
+  if (!dateStr) return false; // Unknown date ≠ stale (handled separately)
+  try {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return false;
+    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    return date.getTime() < ninetyDaysAgo;
+  } catch {
+    return false;
+  }
+}
 
+/**
+ * Classify a source into evidence tiers with recency awareness.
+ * Company-site sources from prong C are NOT auto Tier A — they need
+ * dated + specific change/intent to earn Tier A.
+ */
+export function classifySource(source: Source, isCompanySite = false): EvidenceTier {
   // Tier C: aggregator/scraper sites
   for (const pattern of TIER_C_URL_PATTERNS) {
     if (pattern.test(source.url)) return "C";
   }
 
-  // Tier C: no facts or all facts trivially short
+  // Tier C: no facts or trivially short
   if (source.facts.length === 0) return "C";
   if (source.facts.every((f) => f.trim().length < 20)) return "C";
+
+  // Homepage or generic marketing pages → always B or C
+  const urlLower = source.url.toLowerCase();
+  const isHomepage = /^https?:\/\/[^/]+\/?$/.test(urlLower);
+  const isGenericPage = /\/(about|solutions|platform|products|features|pricing|why-|overview)\b/i.test(urlLower);
+  if (isHomepage || isGenericPage) return "B";
+
+  // For company-site sources (prong C): require date + signal content for Tier A
+  if (isCompanySite) {
+    const hasDate = !!source.date;
+    const hasSignalContent = factsContainSignals(source.facts);
+    if (hasDate && hasSignalContent && factsHaveSpecifics(source.facts)) return "A";
+    return "B";
+  }
 
   // Tier A: URL pattern match
   for (const pattern of TIER_A_URL_PATTERNS) {
@@ -179,93 +262,71 @@ export function classifySource(source: Source): EvidenceTier {
     if (pattern.test(source.title)) return "A";
   }
 
-  // Tier A: has date + concrete specifics in facts
+  // Tier A: has date + concrete specifics
   if (source.date && factsHaveSpecifics(source.facts)) return "A";
-
-  // Tier B: homepage or generic marketing pages
-  const isHomepage = /^https?:\/\/[^/]+\/?$/.test(url);
-  const isGenericPage = /\/(about|solutions|platform|products|features|pricing|why-|overview)\b/i.test(url);
-  if (isHomepage || isGenericPage) return "B";
 
   // Tier C: no date and no specifics
   if (!source.date && !factsHaveSpecifics(source.facts)) return "C";
 
-  // Default: B (has some content but not strong enough for A)
+  // Default: B
   return "B";
 }
 
-// ---------------------------------------------------------------------------
-// Brave search → structured sources
-// ---------------------------------------------------------------------------
+/**
+ * Apply stale downgrade: A→B, B→C for sources older than 90 days.
+ * Sources with no date get capped at Tier B.
+ */
+function applyRecencyDowngrade(source: ClassifiedSource): ClassifiedSource {
+  const stale = isStale(source.date);
+  const noDate = !source.date;
 
-export async function fetchSources(
-  url: string,
-  apiKey: string,
-): Promise<ClassifiedSource[]> {
-  const query = `"${url}" OR site:${url}`;
-
-  const response = await fetch(
-    `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=8`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Subscription-Token": apiKey,
-      },
-      next: { revalidate: 0 },
-    } as RequestInit & { next?: { revalidate: number } },
-  );
-
-  if (!response.ok) {
-    throw new Error(`Brave API error: ${response.status}`);
+  if (stale) {
+    const downgraded: EvidenceTier = source.tier === "A" ? "B" : "C";
+    return { ...source, tier: downgraded, stale: true };
   }
 
-  const data = (await response.json()) as {
-    web?: {
-      results?: BraveWebResult[];
-    };
-  };
+  // No date and no specifics → don't assume recency, cap at B
+  if (noDate && source.tier === "A") {
+    return { ...source, tier: "B" };
+  }
 
-  const webResults = data?.web?.results ?? [];
-
-  const sources: ClassifiedSource[] = webResults
-    .map((r) => {
-      const facts: string[] = [];
-      if (r.description?.trim()) facts.push(r.description.trim());
-      if (r.snippet?.trim() && r.snippet.trim() !== r.description?.trim()) {
-        facts.push(r.snippet.trim());
-      }
-      if (facts.length === 0) return null;
-
-      const fallbackUrl = r.url || url;
-      let publisher = "";
-      try {
-        publisher = r.meta_url?.hostname || new URL(fallbackUrl).hostname;
-      } catch {
-        publisher = r.meta_url?.hostname || fallbackUrl;
-      }
-
-      const source: Source = {
-        title: (r.title || "Untitled").trim(),
-        publisher,
-        date: r.page_age || "",
-        url: r.url || "",
-        facts,
-      };
-
-      return {
-        ...source,
-        tier: classifySource(source),
-      };
-    })
-    .filter((s): s is ClassifiedSource => s !== null)
-    .slice(0, 6);
-
-  return sources;
+  return source;
 }
 
 // ---------------------------------------------------------------------------
-// Brave search → company name resolution
+// Signal vs Fundamental classification
+// ---------------------------------------------------------------------------
+
+/** Check if facts contain signal keywords (change/intent/event). */
+function factsContainSignals(facts: string[]): boolean {
+  const joined = facts.join(" ").toLowerCase();
+  return SIGNAL_KEYWORDS.some((kw) => joined.includes(kw.toLowerCase()));
+}
+
+export type FactClassification = "signal" | "fundamental";
+
+/** Classify a single fact as signal or fundamental. */
+export function classifyFact(fact: string): FactClassification {
+  const lower = fact.toLowerCase();
+  if (SIGNAL_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()))) {
+    return "signal";
+  }
+  return "fundamental";
+}
+
+/** Count signal facts across all sources. */
+export function countSignalFacts(sources: ClassifiedSource[]): number {
+  let count = 0;
+  for (const source of sources) {
+    for (const fact of source.facts) {
+      if (classifyFact(fact) === "signal") count++;
+    }
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Brave API helpers
 // ---------------------------------------------------------------------------
 
 type BraveWebResult = {
@@ -276,6 +337,311 @@ type BraveWebResult = {
   page_age?: string;
   meta_url?: { hostname?: string };
 };
+
+type BraveNewsResult = {
+  title?: string;
+  url?: string;
+  description?: string;
+  age?: string;
+  meta_url?: { hostname?: string };
+};
+
+function braveHeaders(apiKey: string) {
+  return {
+    Accept: "application/json",
+    "Accept-Encoding": "gzip",
+    "X-Subscription-Token": apiKey,
+  };
+}
+
+function webResultToSource(r: BraveWebResult, fallbackUrl: string): Source | null {
+  const facts: string[] = [];
+  if (r.description?.trim()) facts.push(r.description.trim());
+  if (r.snippet?.trim() && r.snippet.trim() !== r.description?.trim()) {
+    facts.push(r.snippet.trim());
+  }
+  if (facts.length === 0) return null;
+
+  let publisher = "";
+  try {
+    publisher = r.meta_url?.hostname || new URL(r.url || fallbackUrl).hostname;
+  } catch {
+    publisher = r.meta_url?.hostname || fallbackUrl;
+  }
+
+  return {
+    title: (r.title || "Untitled").trim(),
+    publisher,
+    date: r.page_age || "",
+    url: r.url || "",
+    facts,
+  };
+}
+
+function newsResultToSource(r: BraveNewsResult): Source | null {
+  if (!r.description?.trim() && !r.title?.trim()) return null;
+
+  const facts: string[] = [];
+  if (r.description?.trim()) facts.push(r.description.trim());
+
+  let publisher = "";
+  try {
+    publisher = r.meta_url?.hostname || (r.url ? new URL(r.url).hostname : "");
+  } catch {
+    publisher = r.meta_url?.hostname || "";
+  }
+
+  return {
+    title: (r.title || "Untitled").trim(),
+    publisher,
+    date: r.age || "",
+    url: r.url || "",
+    facts,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Prong A: Brave News Search
+// ---------------------------------------------------------------------------
+
+async function fetchNewsSignals(
+  companyName: string,
+  domain: string,
+  apiKey: string,
+): Promise<ClassifiedSource[]> {
+  const query = `("${companyName}" OR "${domain}") -site:${domain}`;
+  const freshnessList = ["pm", "pq", "py"]; // month → quarter → year
+
+  for (const freshness of freshnessList) {
+    try {
+      const response = await fetch(
+        `https://api.search.brave.com/res/v1/news/search?q=${encodeURIComponent(query)}&count=15&freshness=${freshness}`,
+        { headers: braveHeaders(apiKey) },
+      );
+
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as {
+        results?: BraveNewsResult[];
+      };
+
+      const results = data?.results ?? [];
+      const sources = results
+        .map((r) => newsResultToSource(r))
+        .filter((s): s is Source => s !== null)
+        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s) }));
+
+      if (sources.length >= 3 || freshness === "py") return sources;
+      // Expand freshness if too few results
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
+// Prong B: Improved Web Search (event-focused, excludes company site)
+// ---------------------------------------------------------------------------
+
+async function fetchWebSignals(
+  companyName: string,
+  domain: string,
+  apiKey: string,
+): Promise<ClassifiedSource[]> {
+  const eventVerbs = [
+    "announced", "launches", "launched", "release", "released",
+    "changelog", '"release notes"', "partnership", "partners",
+    "hires", "hiring", '"job posting"', "funding",
+    "acquired", "acquisition", '"now supports"', "introduces",
+  ].join(" OR ");
+
+  const query = `("${companyName}" OR "${domain}") (${eventVerbs}) -site:${domain}`;
+  const freshnessList = ["pm", "pq"];
+
+  for (const freshness of freshnessList) {
+    try {
+      const response = await fetch(
+        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&freshness=${freshness}`,
+        { headers: braveHeaders(apiKey) },
+      );
+
+      if (!response.ok) continue;
+
+      const data = (await response.json()) as { web?: { results?: BraveWebResult[] } };
+      const results = data?.web?.results ?? [];
+
+      const sources = results
+        .map((r) => webResultToSource(r, domain))
+        .filter((s): s is Source => s !== null)
+        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s) }));
+
+      if (sources.length >= 3 || freshness === "pq") return sources;
+    } catch {
+      continue;
+    }
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------
+// Prong C: Company's Own Signals (blog, press, changelog, careers)
+// ---------------------------------------------------------------------------
+
+async function fetchCompanyOwnSignals(
+  domain: string,
+  apiKey: string,
+): Promise<ClassifiedSource[]> {
+  const signalPaths = [
+    "changelog", '"release notes"', "press", "newsroom",
+    "blog", "careers", "jobs", "partners", "integrations", '"case study"',
+  ].join(" OR ");
+
+  const query = `site:${domain} (${signalPaths})`;
+
+  try {
+    const response = await fetch(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&freshness=pm`,
+      { headers: braveHeaders(apiKey) },
+    );
+
+    if (!response.ok) return [];
+
+    const data = (await response.json()) as { web?: { results?: BraveWebResult[] } };
+    const results = data?.web?.results ?? [];
+
+    return results
+      .map((r) => webResultToSource(r, domain))
+      .filter((s): s is Source => s !== null)
+      .map((s) => applyRecencyDowngrade({
+        ...s,
+        tier: classifySource(s, true), // isCompanySite=true → stricter Tier A rules
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Merge & Deduplicate
+// ---------------------------------------------------------------------------
+
+function canonicalizeUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    // Strip tracking params
+    const trackingParams = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "ref", "source"];
+    trackingParams.forEach((p) => u.searchParams.delete(p));
+    return u.hostname.replace(/^www\./, "") + u.pathname.replace(/\/$/, "") + u.search;
+  } catch {
+    return url;
+  }
+}
+
+function normalizeTitle(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function deduplicateSources(sources: ClassifiedSource[]): ClassifiedSource[] {
+  const seen = new Map<string, ClassifiedSource>();
+  const seenTitles = new Set<string>();
+  const seenDomainPaths = new Set<string>();
+
+  for (const source of sources) {
+    const canonUrl = canonicalizeUrl(source.url);
+    const normTitle = normalizeTitle(source.title);
+    const domainPath = canonUrl.split("?")[0]; // URL without query string
+
+    // Skip if we've seen this URL, title, or domain+path
+    if (seen.has(canonUrl)) continue;
+    if (normTitle.length > 10 && seenTitles.has(normTitle)) continue;
+    if (seenDomainPaths.has(domainPath)) continue;
+
+    seen.set(canonUrl, source);
+    if (normTitle.length > 10) seenTitles.add(normTitle);
+    seenDomainPaths.add(domainPath);
+  }
+
+  return Array.from(seen.values());
+}
+
+/** Score a source for ranking (higher = better). */
+function scoreSource(source: ClassifiedSource): number {
+  let score = 0;
+
+  // Tier
+  if (source.tier === "A") score += 30;
+  else if (source.tier === "B") score += 10;
+
+  // Recency
+  if (!source.stale) score += 20;
+
+  // Signal content
+  const signalCount = source.facts.filter((f) => classifyFact(f) === "signal").length;
+  score += signalCount * 10;
+
+  // Specificity (numbers, named products)
+  if (factsHaveSpecifics(source.facts)) score += 5;
+
+  return score;
+}
+
+// ---------------------------------------------------------------------------
+// Main fetchSources: three-pronged, merged, deduplicated, gated
+// ---------------------------------------------------------------------------
+
+export type FetchSourcesResult = {
+  sources: ClassifiedSource[];
+  signalCount: number;
+  lowSignal: boolean;
+};
+
+export async function fetchSources(
+  url: string,
+  apiKey: string,
+): Promise<ClassifiedSource[]> {
+  const result = await fetchSourcesWithGating(url, apiKey);
+  return result.sources;
+}
+
+export async function fetchSourcesWithGating(
+  url: string,
+  apiKey: string,
+): Promise<FetchSourcesResult> {
+  const domain = getDomain(url);
+  const companyName = extractCompanyName(url);
+
+  // Run all three prongs in parallel
+  const [newsResults, webResults, companyResults] = await Promise.all([
+    fetchNewsSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
+    fetchWebSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
+    fetchCompanyOwnSignals(domain, apiKey).catch(() => [] as ClassifiedSource[]),
+  ]);
+
+  // Merge all sources
+  const allSources = [...newsResults, ...webResults, ...companyResults];
+
+  // Deduplicate
+  const deduped = deduplicateSources(allSources);
+
+  // Rank by score and take top 10
+  const ranked = deduped
+    .sort((a, b) => scoreSource(b) - scoreSource(a))
+    .slice(0, 10);
+
+  // Count signal facts for gating
+  const signalCount = countSignalFacts(ranked);
+
+  return {
+    sources: ranked,
+    signalCount,
+    lowSignal: signalCount < 2,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Brave search → company name resolution (unchanged)
+// ---------------------------------------------------------------------------
 
 export function computeCompanyResolution(
   companyName: string,
@@ -363,12 +729,8 @@ export async function resolveCompanyByName(
     `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=8`,
     {
       method: "GET",
-      headers: {
-        Accept: "application/json",
-        "X-Subscription-Token": apiKey,
-      },
-      next: { revalidate: 0 },
-    } as RequestInit & { next?: { revalidate: number } },
+      headers: braveHeaders(apiKey),
+    },
   );
 
   if (!response.ok) {
@@ -481,7 +843,7 @@ export function buildUserPrompt(
     .map(
       (s, i) =>
         [
-          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}]`,
+          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}]${s.stale ? " [STALE]" : ""}`,
           `Publisher: ${s.publisher}`,
           s.date ? `Date: ${s.date}` : "Date: unknown",
           `URL: ${s.url}`,
@@ -628,19 +990,11 @@ export function containsBannedPhrase(text: string): string | null {
 
 /** Check that a hook contains at least one specificity token from evidence. */
 export function hasSpecificityToken(hook: string): boolean {
-  // Any number (digits)
   if (/\d+/.test(hook)) return true;
-
-  // Quarter references (Q1-Q4)
   if (/\bQ[1-4]\b/i.test(hook)) return true;
-
-  // Month names
   if (/\b(January|February|March|April|May|June|July|August|September|October|November|December)\b/i.test(hook)) return true;
-
-  // Quoted phrase from source
   if (/"[^"]{3,}"/.test(hook)) return true;
 
-  // Concrete workflow terms
   const workflowTerms = [
     "lead routing", "identity resolution", "case deflection",
     "revenue recognition", "pipeline", "onboarding",
@@ -654,9 +1008,6 @@ export function hasSpecificityToken(hook: string): boolean {
     if (lower.includes(term)) return true;
   }
 
-  // Named proper nouns (capitalized multi-word or single capitalized word not at sentence start)
-  // This catches product names, initiative names, partner names, etc.
-  // Look for capitalized words that aren't at the very start of the hook
   if (/(?:^.+?\s)[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/.test(hook)) return true;
 
   return false;
@@ -666,29 +1017,18 @@ export function validateHook(
   raw: ClaudeHookPayload,
   sourceLookup?: Map<number, ClassifiedSource>,
 ): Hook | null {
-  // Angle check
   const angle = raw.angle?.toLowerCase() as Angle;
   if (!VALID_ANGLES.includes(angle)) return null;
 
-  // Confidence filter (high or med only)
   const confidence = raw.confidence?.toLowerCase() as Confidence;
   if (!VALID_CONFIDENCES.includes(confidence)) return null;
 
   const hook = (raw.hook || "").trim();
-
-  // Length check
   if (hook.length === 0 || hook.length > MAX_HOOK_CHARS) return null;
-
-  // Must end with a question
   if (!hook.endsWith("?")) return null;
-
-  // Banned phrase check
   if (containsBannedPhrase(hook) !== null) return null;
-
-  // Specificity token check
   if (!hasSpecificityToken(hook)) return null;
 
-  // Evidence tier
   const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
   const validTier = tier === "A" || tier === "B" ? tier : (
     sourceLookup?.get(raw.news_item)?.tier ?? "B"
@@ -723,7 +1063,7 @@ export async function generateHooksForUrl(opts: {
   url: string;
   pitchContext?: string;
   count?: number;
-}): Promise<{ hooks: Hook[]; suggestion?: string }> {
+}): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
   const braveApiKey = process.env.BRAVE_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
@@ -731,7 +1071,7 @@ export async function generateHooksForUrl(opts: {
     throw new Error("Missing BRAVE_API_KEY or CLAUDE_API_KEY");
   }
 
-  const sources = await fetchSources(opts.url, braveApiKey);
+  const { sources, signalCount, lowSignal } = await fetchSourcesWithGating(opts.url, braveApiKey);
 
   // Check if all sources are Tier C
   const usableSources = sources.filter((s) => s.tier !== "C");
@@ -739,10 +1079,34 @@ export async function generateHooksForUrl(opts: {
     return {
       hooks: [],
       suggestion: "Insufficient evidence. Try providing a press release, changelog, case study, or job posting URL for this company.",
+      lowSignal: true,
     };
   }
 
-  // Build source lookup for validation
+  // Signal vs Fundamental gate
+  if (lowSignal) {
+    // Generate only 1 verification hook
+    const sourceLookup = new Map<number, ClassifiedSource>();
+    usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
+
+    const systemPrompt = buildSystemPrompt();
+    const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
+    const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+
+    const validHooks: Hook[] = [];
+    for (const raw of rawHooks) {
+      const validated = validateHook(raw, sourceLookup);
+      if (validated) validHooks.push(validated);
+    }
+
+    return {
+      hooks: validHooks.slice(0, 1), // Only 1 verification hook
+      suggestion: `Low signal: only ${signalCount} signal fact(s) found. For better hooks, try these sources: the company's press page, changelog, careers page, or partner announcements.`,
+      lowSignal: true,
+    };
+  }
+
+  // Normal generation
   const sourceLookup = new Map<number, ClassifiedSource>();
   usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
@@ -757,5 +1121,5 @@ export async function generateHooksForUrl(opts: {
   }
 
   const limit = opts.count ?? validHooks.length;
-  return { hooks: validHooks.slice(0, limit) };
+  return { hooks: validHooks.slice(0, limit), lowSignal: false };
 }
