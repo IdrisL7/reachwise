@@ -167,13 +167,13 @@ export async function POST(request: Request) {
         if (validated) validHooks.push(validated);
       }
 
-      // 6. Enforce Tier B cap: max 1 hook per Tier B source
-      const tierBSeen = new Set<number>();
+      // 6. Enforce Tier B cap: max 1 Tier B hook total (market context)
+      let tierBCount = 0;
       const cappedHooks: Hook[] = [];
       for (const hook of validHooks) {
         if (hook.evidence_tier === "B") {
-          if (tierBSeen.has(hook.news_item)) continue;
-          tierBSeen.add(hook.news_item);
+          if (tierBCount >= 1) continue;
+          tierBCount++;
         }
         cappedHooks.push(hook);
       }

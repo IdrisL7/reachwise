@@ -183,7 +183,9 @@ function getDomain(url: string): string {
 const SIGNAL_PAGE_PATTERNS = [
   /\/press/i, /\/newsroom/i, /\/blog\b/i, /\/changelog/i,
   /\/release-notes/i, /\/careers/i, /\/jobs\b/i, /\/partners/i,
-  /\/announcements/i, /\/whats-new/i,
+  /\/announcements/i, /\/whats-new/i, /\/swipefiles?\b/i,
+  /\/customers?\b/i, /\/case-stud/i, /\/success-stor/i,
+  /\/results?\b/i, /\/roi\b/i,
 ];
 
 // Common English words that happen to be company names.
@@ -276,7 +278,7 @@ export function computeAnchorScore(
 const TIER_A_URL_PATTERNS = [
   /\/press/i,
   /\/newsroom/i,
-  /\/blog\//i,
+  /\/blog\b/i,
   /\/changelog/i,
   /\/release-notes/i,
   /\/releases/i,
@@ -817,7 +819,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
     return {
       title,
       publisher: domain,
-      date: new Date().toISOString().split("T")[0], // Today (we're reading it live)
+      date: "", // Marketing page — no publication date (not "fresh news")
       url: pageUrl,
       facts,
     };
@@ -1681,13 +1683,13 @@ export async function generateHooksForUrl(opts: {
     if (validated) validHooks.push(validated);
   }
 
-  // Enforce Tier B cap: max 1 hook per Tier B source
-  const tierBSourcesSeen = new Set<number>();
+  // Enforce Tier B cap: max 1 Tier B hook total (market context)
+  let tierBCount = 0;
   const cappedHooks: Hook[] = [];
   for (const hook of validHooks) {
     if (hook.evidence_tier === "B") {
-      if (tierBSourcesSeen.has(hook.news_item)) continue;
-      tierBSourcesSeen.add(hook.news_item);
+      if (tierBCount >= 1) continue;
+      tierBCount++;
     }
     cappedHooks.push(hook);
   }
