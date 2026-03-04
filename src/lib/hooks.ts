@@ -186,6 +186,19 @@ const SIGNAL_PAGE_PATTERNS = [
   /\/announcements/i, /\/whats-new/i,
 ];
 
+// Common English words that happen to be company names.
+// When the extracted name matches one of these, we require domain-level anchoring
+// (not just the word appearing in text) to avoid false positives.
+const GENERIC_NAME_WORDS = new Set([
+  "sales", "data", "cloud", "app", "apps", "tech", "digital", "web",
+  "smart", "fast", "go", "get", "one", "hub", "link", "open", "next",
+  "base", "core", "flow", "snap", "pay", "trade", "market", "shop",
+  "code", "mail", "lead", "leads", "signal", "boost", "click", "bit",
+  "box", "plan", "crew", "team", "work", "build", "launch", "scale",
+  "guide", "track", "start", "stack", "source", "point", "key",
+  "spring", "pulse", "spark", "bridge", "path", "nest", "wave",
+]);
+
 /**
  * Compute how strongly a source is anchored to the target company.
  * Score >= 3 → company-specific (eligible for Tier A).
@@ -200,15 +213,32 @@ export function computeAnchorScore(
   const titleAndFacts = (source.title + " " + source.facts.join(" ")).toLowerCase();
   const nameLower = companyName.toLowerCase();
   const domainLower = domain.toLowerCase();
+  const sourceHost = getDomain(source.url).toLowerCase();
+
+  // Check if the company name is a common word — if so, only domain match counts
+  const isGenericName = GENERIC_NAME_WORDS.has(nameLower) || nameLower.length <= 3;
 
   // +3 if company name appears in title or facts
-  if (nameLower.length >= 2 && titleAndFacts.includes(nameLower)) {
+  // But skip this for generic names (the word "sales" appears in every business article)
+  if (!isGenericName && nameLower.length >= 2 && titleAndFacts.includes(nameLower)) {
     score += 3;
   }
 
-  // +3 if domain appears in title/facts or the source is on the company domain
-  const sourceHost = getDomain(source.url).toLowerCase();
-  if (titleAndFacts.includes(domainLower) || sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+  // For generic names, require exact domain or "domain.tld" in text
+  if (isGenericName && nameLower.length >= 2) {
+    // Only count if the full domain (e.g. "sales.co") appears, not just the word
+    if (titleAndFacts.includes(domainLower)) {
+      score += 3;
+    }
+  }
+
+  // +3 if source is on the company domain
+  if (sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+    score += 3;
+  }
+
+  // +3 if domain string appears in title/facts (for third-party articles mentioning the domain)
+  if (titleAndFacts.includes(domainLower) && sourceHost !== domainLower) {
     score += 3;
   }
 
