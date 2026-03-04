@@ -928,7 +928,7 @@ export async function callClaude(
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
-      max_tokens: 1500,
+      max_tokens: 4096,
       system: systemPrompt,
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -954,7 +954,37 @@ export async function callClaude(
     .replace(/\s*```\s*$/, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch {
+    // Truncation recovery: try to find the last complete JSON object in the array
+    // by finding the last "}]" or "}" and closing the array
+    const lastCompleteObj = cleaned.lastIndexOf("}");
+    if (lastCompleteObj > 0) {
+      const truncated = cleaned.slice(0, lastCompleteObj + 1);
+      // Ensure it ends as a valid array
+      const asArray = truncated.endsWith("]") ? truncated : truncated + "]";
+      try {
+        parsed = JSON.parse(asArray);
+      } catch {
+        // Last resort: extract individual complete objects
+        const objects: unknown[] = [];
+        const objRegex = /\{[^{}]*\}/g;
+        let match;
+        while ((match = objRegex.exec(cleaned)) !== null) {
+          try {
+            objects.push(JSON.parse(match[0]));
+          } catch {
+            // skip malformed object
+          }
+        }
+        parsed = objects.length > 0 ? objects : [];
+      }
+    } else {
+      parsed = [];
+    }
+  }
 
   if (!Array.isArray(parsed)) {
     throw new Error("Claude did not return a JSON array");
