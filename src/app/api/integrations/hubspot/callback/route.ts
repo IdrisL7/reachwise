@@ -1,26 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { exchangeHubSpotCode } from "@/lib/integrations/hubspot";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 
 /** GET /api/integrations/hubspot/callback — OAuth callback handler */
 export async function GET(request: NextRequest) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
   const error = url.searchParams.get("error");
 
   if (error) {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     return NextResponse.redirect(
-      `${appUrl}/setup?error=hubspot_denied&message=${encodeURIComponent(error)}`,
+      `${appUrl}/app/settings?error=hubspot_denied`,
     );
   }
 
   if (!code) {
-    return NextResponse.json(
-      { status: "error", message: "Missing authorization code" },
-      { status: 400 },
+    return NextResponse.redirect(
+      `${appUrl}/app/settings?error=hubspot_missing_code`,
     );
+  }
+
+  // Get the current user
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.redirect(`${appUrl}/login`);
   }
 
   try {
@@ -29,15 +35,19 @@ export async function GET(request: NextRequest) {
       Date.now() + tokens.expires_in * 1000,
     ).toISOString();
 
-    // Check for existing HubSpot integration
+    // Check for existing HubSpot integration for this user
     const [existing] = await db
       .select()
       .from(schema.integrations)
-      .where(eq(schema.integrations.provider, "hubspot"))
+      .where(
+        and(
+          eq(schema.integrations.provider, "hubspot"),
+          eq(schema.integrations.userId, session.user.id),
+        ),
+      )
       .limit(1);
 
     if (existing) {
-      // Update existing
       await db
         .update(schema.integrations)
         .set({
@@ -49,8 +59,8 @@ export async function GET(request: NextRequest) {
         })
         .where(eq(schema.integrations.id, existing.id));
     } else {
-      // Create new
       await db.insert(schema.integrations).values({
+        userId: session.user.id,
         provider: "hubspot",
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token,
@@ -60,13 +70,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-    return NextResponse.redirect(`${appUrl}/setup?success=hubspot_connected`);
+    return NextResponse.redirect(`${appUrl}/app/settings?success=hubspot_connected`);
   } catch (err) {
     console.error("HubSpot OAuth callback error:", err);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     return NextResponse.redirect(
-      `${appUrl}/setup?error=hubspot_failed&message=${encodeURIComponent((err as Error).message)}`,
+      `${appUrl}/app/settings?error=hubspot_failed`,
     );
   }
 }

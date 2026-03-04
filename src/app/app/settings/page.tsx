@@ -83,6 +83,7 @@ export default function SettingsPage() {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKey, setNewKey] = useState("");
   const [loading, setLoading] = useState(false);
+  const [hubspotStatus, setHubspotStatus] = useState<"loading" | "connected" | "disconnected">("loading");
 
   function getToken(): string {
     return localStorage.getItem("gsh_token") || "";
@@ -95,6 +96,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     loadData();
+    loadHubspotStatus();
   }, []);
 
   async function loadData() {
@@ -102,6 +104,16 @@ export default function SettingsPage() {
     if (keysRes?.ok) {
       const data = await keysRes.json();
       setKeys(data.keys || []);
+    }
+  }
+
+  async function loadHubspotStatus() {
+    const res = await fetch("/api/integrations/hubspot/status").catch(() => null);
+    if (res?.ok) {
+      const data = await res.json();
+      setHubspotStatus(data.connected ? "connected" : "disconnected");
+    } else {
+      setHubspotStatus("disconnected");
     }
   }
 
@@ -218,10 +230,23 @@ export default function SettingsPage() {
               </div>
               <div>
                 <p className="text-sm font-medium">HubSpot</p>
-                <p className="text-xs text-zinc-500">Sync leads bidirectionally with HubSpot</p>
+                <p className="text-xs text-zinc-500">
+                  {hubspotStatus === "connected" ? "Connected" : "Sync leads bidirectionally with HubSpot"}
+                </p>
               </div>
             </div>
-            <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">Coming soon</span>
+            {hubspotStatus === "connected" ? (
+              <span className="text-xs text-emerald-400 bg-emerald-900/30 px-2.5 py-1 rounded-full">Connected</span>
+            ) : hubspotStatus === "loading" ? (
+              <span className="text-xs text-zinc-500">Loading...</span>
+            ) : (
+              <a
+                href="/api/integrations/hubspot/connect"
+                className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Connect
+              </a>
+            )}
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between">
