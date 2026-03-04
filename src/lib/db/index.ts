@@ -21,12 +21,17 @@ function getClient(): Client {
   return _client;
 }
 
+/** Returns the real drizzle instance (not proxied). Use where the consumer inspects the db type. */
+export function getDb(): LibSQLDatabase<typeof schema> {
+  if (!_db) {
+    _db = drizzle(getClient(), { schema });
+  }
+  return _db;
+}
+
 export const db = new Proxy({} as LibSQLDatabase<typeof schema>, {
   get(_target, prop, receiver) {
-    if (!_db) {
-      _db = drizzle(getClient(), { schema });
-    }
-    return Reflect.get(_db, prop, receiver);
+    return Reflect.get(getDb(), prop, receiver);
   },
 });
 

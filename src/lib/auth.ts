@@ -1,7 +1,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { db, schema } from "@/lib/db";
+import { db, getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import type { TierId } from "@/lib/tiers";
@@ -23,7 +23,7 @@ declare module "next-auth" {
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: DrizzleAdapter(db as any, {
+  adapter: DrizzleAdapter(getDb() as any, {
     usersTable: schema.users as any,
     accountsTable: schema.accounts as any,
     sessionsTable: schema.sessions as any,
