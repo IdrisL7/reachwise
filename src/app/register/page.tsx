@@ -130,7 +130,7 @@ function RegisterForm() {
         <p className="text-xs text-zinc-600 text-center">
           {tierParam && tierParam !== "starter"
             ? `You'll be redirected to checkout for the ${tierParam.charAt(0).toUpperCase() + tierParam.slice(1)} plan.`
-            : "Starts on the free Starter tier. Upgrade anytime."}
+            : <>Starts on the free Starter tier. <Link href="/#pricing" className="text-emerald-400 hover:underline">Upgrade</Link> anytime.</>}
         </p>
       </form>
     </div>

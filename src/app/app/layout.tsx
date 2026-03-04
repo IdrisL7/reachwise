@@ -44,6 +44,14 @@ export default async function AppLayout({
             <span className="text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded">
               {session.user.tierId}
             </span>
+            {session.user.tierId !== "concierge" && (
+              <Link
+                href="/#pricing"
+                className="text-xs bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-0.5 rounded transition-colors"
+              >
+                Upgrade
+              </Link>
+            )}
           </div>
         </div>
       </header>
