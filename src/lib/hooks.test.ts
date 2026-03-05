@@ -4,6 +4,7 @@ import {
   rewriteChangeVerbs,
   hasValidQuestionStructure,
   publishGate,
+  publishGateFinal,
   publishGateValidateHook,
   type Hook,
   type ClaudeHookPayload,
@@ -1071,4 +1072,151 @@ describe("demo sample hooks pass publish gate", () => {
       expect(/\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b/i.test(withoutQuotes)).toBe(false);
     });
   }
+});
+
+// ---------------------------------------------------------------------------
+// 14. publishGateFinal — catches cached/stale hooks at the last step
+// ---------------------------------------------------------------------------
+describe("publishGateFinal (last-step enforcement)", () => {
+  it("rewrites cached hook with change verb", () => {
+    const staleHook: Hook = {
+      news_item: 2,
+      angle: "trigger",
+      hook: `You switched to "$250/reply" pricing — is that to de-risk clients, or to push quality?`,
+      evidence_snippet: "$250/reply pricing model",
+      source_title: "Cold Email Swipe Files | Sales.co",
+      source_date: "",
+      source_url: "https://sales.co/swipefiles",
+      evidence_tier: "A",
+      confidence: "high",
+    };
+
+    const result = publishGateFinal([staleHook], "sales.co");
+    expect(result).toHaveLength(1);
+    expect(result[0].hook).not.toMatch(/\bswitched\b/i);
+    expect(result[0].hook).toContain("You use");
+  });
+
+  it("drops cached Best Buy hook for sales.co (unanchored)", () => {
+    const bestBuyHook: Hook = {
+      news_item: 5,
+      angle: "trigger",
+      hook: `"12% online sales growth" at Best Buy — is that driven by supply chain, or by demand?`,
+      evidence_snippet: "Best Buy reported 12% online sales growth in Q4",
+      source_title: "Best Buy Reports Strong Holiday Sales",
+      source_date: "2026-01-15",
+      source_url: "https://reuters.com/business/bestbuy-holiday-sales",
+      evidence_tier: "B",
+      confidence: "high",
+    };
+
+    const result = publishGateFinal([bestBuyHook], "sales.co");
+    expect(result).toHaveLength(0);
+  });
+
+  it("drops cached hook with vague question (no forced-choice)", () => {
+    const vagueHook: Hook = {
+      news_item: 1,
+      angle: "trigger",
+      hook: `Your "3.2X reply rate vs templates" — is that sustainable long-term?`,
+      evidence_snippet: "3.2X reply rate vs templates",
+      source_title: "Sales.co Homepage",
+      source_date: "",
+      source_url: "https://sales.co",
+      evidence_tier: "A",
+      confidence: "high",
+    };
+
+    const result = publishGateFinal([vagueHook], "sales.co");
+    expect(result).toHaveLength(0);
+  });
+
+  it("passes valid anchored hooks through unchanged", () => {
+    const goodHook: Hook = {
+      news_item: 1,
+      angle: "trigger",
+      hook: `You claim "39% MORE QUALIFIED ACCOUNTS" — is that from lead data quality, or from the outreach copy/QA process?`,
+      evidence_snippet: "39% MORE QUALIFIED ACCOUNTS",
+      source_title: "Sales.co - Automated Customer Acquisition for B2B",
+      source_date: "",
+      source_url: "https://sales.co",
+      evidence_tier: "A",
+      confidence: "high",
+    };
+
+    const result = publishGateFinal([goodHook], "sales.co");
+    expect(result).toHaveLength(1);
+    expect(result[0].hook).toBe(goodHook.hook);
+  });
+
+  it("caps Tier B at 1 even from cache", () => {
+    const tierBHook1: Hook = {
+      news_item: 4,
+      angle: "trigger",
+      hook: `Noticed "15 Strategies That Generate 500+ Qualified Leads" — are customers buying strategy, or execution?`,
+      evidence_snippet: "15 Strategies That Generate 500+ Qualified Leads",
+      source_title: "B2B Lead Generation | Sales.co",
+      source_date: "",
+      source_url: "https://sales.co/blog/lead-generation",
+      evidence_tier: "B",
+      confidence: "high",
+    };
+    const tierBHook2: Hook = {
+      ...tierBHook1,
+      hook: `Your playbook "15 Strategies That Generate 500+ Qualified Leads" — is the focus ICP targeting, or multi-channel outreach?`,
+    };
+
+    const result = publishGateFinal([tierBHook1, tierBHook2], "sales.co");
+    const tierB = result.filter((h) => h.evidence_tier === "B");
+    expect(tierB).toHaveLength(1);
+  });
+
+  it("mixed: keeps anchored, drops unanchored, rewrites change verbs", () => {
+    const hooks: Hook[] = [
+      {
+        news_item: 1,
+        angle: "trigger",
+        hook: `You claim "39% MORE QUALIFIED ACCOUNTS" — is that from lead data quality, or from outreach copy?`,
+        evidence_snippet: "39% MORE QUALIFIED ACCOUNTS",
+        source_title: "Sales.co Homepage",
+        source_date: "",
+        source_url: "https://sales.co",
+        evidence_tier: "A",
+        confidence: "high",
+      },
+      {
+        news_item: 2,
+        angle: "trigger",
+        hook: `You switched to "$250/reply" pricing — is that to de-risk clients, or quality?`,
+        evidence_snippet: "$250/reply pricing model",
+        source_title: "Sales.co Swipefiles",
+        source_date: "",
+        source_url: "https://sales.co/swipefiles",
+        evidence_tier: "A",
+        confidence: "high",
+      },
+      {
+        news_item: 5,
+        angle: "trigger",
+        hook: `"12% online growth" at Best Buy — is that supply chain, or demand?`,
+        evidence_snippet: "Best Buy reported 12% online sales growth",
+        source_title: "Best Buy Holiday Sales",
+        source_date: "2026-01-15",
+        source_url: "https://reuters.com/bestbuy",
+        evidence_tier: "B",
+        confidence: "high",
+      },
+    ];
+
+    const result = publishGateFinal(hooks, "sales.co");
+
+    // Hook 1: passes clean
+    expect(result.some((h) => h.hook.includes("39% MORE QUALIFIED ACCOUNTS"))).toBe(true);
+    // Hook 2: rewritten (switched → use)
+    const rewritten = result.find((h) => h.hook.includes("$250/reply"));
+    expect(rewritten).toBeDefined();
+    expect(rewritten!.hook).not.toMatch(/\bswitched\b/i);
+    // Hook 3: dropped (Best Buy unanchored)
+    expect(result.some((h) => h.hook.includes("Best Buy"))).toBe(false);
+  });
 });

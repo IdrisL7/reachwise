@@ -224,7 +224,7 @@ export function extractCompanyName(url: string): string {
   }
 }
 
-function getDomain(url: string): string {
+export function getDomain(url: string): string {
   try {
     return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
   } catch {
@@ -1972,7 +1972,6 @@ export function publishGate(
  * Returns the hook if it passes, null if it fails.
  */
 export function publishGateValidateHook(hook: Hook): Hook | null {
-  // Re-validate by converting to payload and running through validateHook
   const payload: ClaudeHookPayload = {
     news_item: hook.news_item,
     angle: hook.angle,
@@ -1986,8 +1985,76 @@ export function publishGateValidateHook(hook: Hook): Hook | null {
     psych_mode: hook.psych_mode,
     why_this_works: hook.why_this_works,
   };
-  // Validate without source lookup (no source-level checks for static hooks)
   return validateHook(payload);
+}
+
+/**
+ * Run the publish gate on an already-formed Hook[] (e.g., from cache).
+ * This is the LAST step before returning hooks to the user.
+ * Every return path that includes hooks MUST call this.
+ *
+ * Rule A: Change verbs without proof → rewrite to present tense → drop if still fails
+ * Rule B: Unanchored source → drop (unless includeMarketContext=true, cap 1)
+ * Rule C: Forced-choice question → drop if missing
+ * Rule D: Tier B cap at 1
+ */
+export function publishGateFinal(
+  hooks: Hook[],
+  companyDomain?: string,
+  options?: PublishGateOptions,
+): Hook[] {
+  const includeMarketContext = options?.includeMarketContext ?? false;
+  const domainLower = (companyDomain || "").toLowerCase();
+
+  const gated: Hook[] = [];
+  let tierBCount = 0;
+
+  for (const hook of hooks) {
+    // Rule B: Unanchored source exclusion
+    if (domainLower && hook.source_url) {
+      const sourceHost = getDomain(hook.source_url).toLowerCase();
+      const isOnDomain = sourceHost === domainLower || sourceHost.endsWith("." + domainLower);
+      const titleOrSnippet = ((hook.source_title || "") + " " + (hook.evidence_snippet || "")).toLowerCase();
+      const mentionsDomain = titleOrSnippet.includes(domainLower);
+      const companyName = extractCompanyName(`https://${domainLower}`).toLowerCase();
+      const isGenericName = GENERIC_NAME_WORDS.has(companyName) || companyName.length <= 3;
+      const mentionsName = !isGenericName && titleOrSnippet.includes(companyName);
+
+      const anchored = isOnDomain || mentionsDomain || mentionsName;
+      if (!anchored) {
+        if (!includeMarketContext) continue; // Drop entirely
+        // Market context mode: allow max 1, force Tier B
+        if (tierBCount >= 1) continue;
+      }
+    }
+
+    // Run through full validateHook (Rule A: change verb rewrite, Rule C: question quality, etc.)
+    const payload: ClaudeHookPayload = {
+      news_item: hook.news_item,
+      angle: hook.angle,
+      hook: hook.hook,
+      evidence_snippet: hook.evidence_snippet,
+      source_title: hook.source_title,
+      source_date: hook.source_date,
+      source_url: hook.source_url,
+      evidence_tier: hook.evidence_tier,
+      confidence: hook.confidence,
+      psych_mode: hook.psych_mode,
+      why_this_works: hook.why_this_works,
+    };
+    const validated = validateHook(payload);
+    if (!validated) continue;
+
+    // Rule D: Tier B cap
+    if (validated.evidence_tier === "B") {
+      if (tierBCount >= 1) continue;
+      tierBCount++;
+    }
+
+    gated.push(validated);
+  }
+
+  return gated;
 }
 
 // ---------------------------------------------------------------------------

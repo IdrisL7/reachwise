@@ -5,9 +5,12 @@ import {
   buildUserPrompt,
   callClaude,
   publishGate,
+  publishGateFinal,
   resolveCompanyByName,
+  getDomain,
   type CompanyResolutionResult,
   type ClassifiedSource,
+  type Hook,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks } from "@/lib/hook-cache";
@@ -98,154 +101,144 @@ export async function POST(request: Request) {
       );
     }
 
+    const companyDomain = getDomain(url);
+
     // Check cache first
+    let candidateHooks: Hook[] | null = null;
+    let citations: Array<{ source_title: string; publisher: string; date: string; url: string; tier: string; anchorScore?: number }> = [];
+    let isLowSignal = false;
+    let signalCount = 0;
+    let hasAnchored = true;
+    let cached = false;
+
     try {
-      const cached = await getCachedHooks(url);
-      if (cached) {
-        return NextResponse.json({
-          hooks: (cached.hooks as any[]).map((h: any) => h.hook || h),
-          structured_hooks: cached.hooks,
-          citations: cached.citations,
-          status: "ok" as CompanyResolutionStatus,
-          cached: true,
-        });
+      const cachedResult = await getCachedHooks(url);
+      if (cachedResult) {
+        candidateHooks = cachedResult.hooks as Hook[];
+        citations = (cachedResult.citations || []) as typeof citations;
+        cached = true;
       }
     } catch {
       // Cache miss or error — continue to generate
     }
 
-    try {
-      // 1. Gather and classify sources with signal gating + anchor scoring
-      const { sources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(url, braveApiKey!);
+    if (!candidateHooks) {
+      try {
+        // 1. Gather and classify sources with signal gating + anchor scoring
+        const result = await fetchSourcesWithGating(url, braveApiKey!);
+        const sources = result.sources;
+        signalCount = result.signalCount;
+        isLowSignal = result.lowSignal;
+        hasAnchored = result.hasAnchoredSources;
 
-      const citations = sources.map((s) => ({
-        source_title: s.title,
-        publisher: s.publisher,
-        date: s.date,
-        url: s.url,
-        tier: s.tier,
-        anchorScore: s.anchorScore,
-      }));
+        citations = sources.map((s) => ({
+          source_title: s.title,
+          publisher: s.publisher,
+          date: s.date,
+          url: s.url,
+          tier: s.tier,
+          anchorScore: s.anchorScore,
+        }));
 
-      const noAnchorSuggestion = [
-        "Low Signal: no company-specific signals found — only market context available.",
-        "For better hooks, provide: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles mentioning the company by name.",
-      ].join(" ");
+        // 2. Check if all sources are Tier C (insufficient evidence)
+        const usableSources = sources.filter((s) => s.tier !== "C");
+        if (usableSources.length === 0) {
+          candidateHooks = [];
+        } else {
+          // 3. Build source lookup for validation
+          const sourceLookup = new Map<number, ClassifiedSource>();
+          usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-      const lowSignalSuggestion = [
-        `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
-        "For better hooks, try: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles.",
-      ].join(" ");
+          // 4. Build prompts and call Claude
+          const systemPrompt = buildSystemPrompt();
+          const userPrompt = buildUserPrompt(url, sources, context);
+          const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-      // 2. Check if all sources are Tier C (insufficient evidence)
-      const usableSources = sources.filter((s) => s.tier !== "C");
-      if (usableSources.length === 0) {
+          // 5. First pass: publishGate with source lookup (anchored-source filtering)
+          candidateHooks = publishGate(rawHooks, sourceLookup, {
+            includeMarketContext: false,
+          });
+        }
+      } catch (error) {
+        console.error("generate-hooks: Error during external calls", error);
         return NextResponse.json({
           hooks: [],
           structured_hooks: [],
-          citations,
           status: "ok" as CompanyResolutionStatus,
           lowSignal: true,
-          suggestion: noAnchorSuggestion,
+          suggestion: "Something went wrong during research. Please try again.",
         });
       }
-
-      // 3. Build source lookup for validation
-      const sourceLookup = new Map<number, ClassifiedSource>();
-      usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
-
-      // 4. Build prompts and call Claude
-      const systemPrompt = buildSystemPrompt();
-      const userPrompt = buildUserPrompt(url, sources, context);
-      const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
-
-      // 5. PUBLISH GATE — single enforcement layer
-      // Validates → rewrites change verbs → drops failures → caps Tier B
-      // Excludes unanchored sources in default mode (includeMarketContext=false)
-      const cappedHooks = publishGate(rawHooks, sourceLookup, {
-        includeMarketContext: false,
-      });
-
-      // 6. No anchored sources → show low signal + max 1 market-context hook
-      if (!hasAnchoredSources) {
-        const result = cappedHooks.slice(0, 1);
-        return NextResponse.json({
-          hooks: result.map((h) => h.hook),
-          structured_hooks: result,
-          citations,
-          status: "ok" as CompanyResolutionStatus,
-          lowSignal: true,
-          signalCount,
-          suggestion: noAnchorSuggestion,
-          companyName: companyName ?? undefined,
-        });
-      }
-
-      // 7. Signal vs Fundamental gate: if low signal, return max 1 verification hook
-      if (lowSignal) {
-        const result = cappedHooks.slice(0, 1);
-        return NextResponse.json({
-          hooks: result.map((h) => h.hook),
-          structured_hooks: result,
-          citations,
-          status: "ok" as CompanyResolutionStatus,
-          lowSignal: true,
-          signalCount,
-          suggestion: lowSignalSuggestion,
-          companyName: companyName ?? undefined,
-        });
-      }
-
-      // 8. If nothing survived publish gate, return low signal
-      if (cappedHooks.length === 0) {
-        return NextResponse.json({
-          hooks: [],
-          structured_hooks: [],
-          citations,
-          status: "ok" as CompanyResolutionStatus,
-          lowSignal: true,
-          signalCount,
-          suggestion: noAnchorSuggestion,
-          companyName: companyName ?? undefined,
-        });
-      }
-
-      // 9. Build response
-      const flatHooks = cappedHooks.map((h) => h.hook);
-
-      const resolvedCompany = resolution && resolution.candidates[0]
-        ? {
-            id: resolution.candidates[0].id,
-            name: resolution.candidates[0].name,
-            url: resolution.candidates[0].url,
-            description: resolution.candidates[0].description,
-            source: resolution.candidates[0].source,
-          }
-        : null;
-
-      // Cache for next time (fire and forget)
-      setCachedHooks(url, cappedHooks, citations).catch(() => {});
-
-      return NextResponse.json({
-        hooks: flatHooks,
-        structured_hooks: cappedHooks,
-        citations,
-        status: "ok" as CompanyResolutionStatus,
-        lowSignal: false,
-        signalCount,
-        companyName: companyName ?? undefined,
-        resolvedCompany,
-      });
-    } catch (error) {
-      console.error("generate-hooks: Error during external calls", error);
-      return NextResponse.json({
-        hooks: [],
-        structured_hooks: [],
-        status: "ok" as CompanyResolutionStatus,
-        lowSignal: true,
-        suggestion: "Something went wrong during research. Please try again.",
-      });
     }
+
+    // =========================================================================
+    // PUBLISH GATE FINAL — runs on ALL hooks (cached or fresh) right before return.
+    // This is the LAST step. Nothing bypasses this.
+    // Rule A: change verbs without proof → rewrite or drop
+    // Rule B: unanchored sources → drop (include_market_context=false)
+    // Rule C: forced-choice question → drop if missing
+    // Rule D: Tier B cap at 1
+    // =========================================================================
+    const gated = publishGateFinal(candidateHooks, companyDomain, {
+      includeMarketContext: false,
+    });
+
+    // Build suggestions
+    const noAnchorSuggestion = [
+      "Low Signal: no company-specific signals found — only market context available.",
+      "For better hooks, provide: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles mentioning the company by name.",
+    ].join(" ");
+
+    const lowSignalSuggestion = [
+      `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
+      "For better hooks, try: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles.",
+    ].join(" ");
+
+    // Determine final hook list + metadata
+    let finalHooks = gated;
+    let suggestion: string | undefined;
+    let finalLowSignal = isLowSignal;
+
+    if (!hasAnchored) {
+      finalHooks = gated.slice(0, 1);
+      suggestion = noAnchorSuggestion;
+      finalLowSignal = true;
+    } else if (isLowSignal) {
+      finalHooks = gated.slice(0, 1);
+      suggestion = lowSignalSuggestion;
+      finalLowSignal = true;
+    } else if (gated.length === 0) {
+      suggestion = noAnchorSuggestion;
+      finalLowSignal = true;
+    }
+
+    const resolvedCompany = resolution && resolution.candidates[0]
+      ? {
+          id: resolution.candidates[0].id,
+          name: resolution.candidates[0].name,
+          url: resolution.candidates[0].url,
+          description: resolution.candidates[0].description,
+          source: resolution.candidates[0].source,
+        }
+      : null;
+
+    // Cache gated hooks for next time (fire and forget) — only for fresh (non-cached) results
+    if (!cached && finalHooks.length > 0) {
+      setCachedHooks(url, finalHooks, citations).catch(() => {});
+    }
+
+    return NextResponse.json({
+      hooks: finalHooks.map((h) => h.hook),
+      structured_hooks: finalHooks,
+      citations,
+      status: "ok" as CompanyResolutionStatus,
+      lowSignal: finalLowSignal,
+      signalCount,
+      suggestion,
+      companyName: companyName ?? undefined,
+      resolvedCompany,
+      cached,
+    });
   } catch (error) {
     console.error("Unexpected error in /api/generate-hooks", error);
     return NextResponse.json(
