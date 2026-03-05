@@ -509,13 +509,21 @@ function BillingSection() {
   const { data: session } = useSession();
   const tierId = (session?.user as any)?.tierId || "starter";
   const [billingLoading, setBillingLoading] = useState(false);
+  const [billingError, setBillingError] = useState("");
 
   async function openPortal() {
     setBillingLoading(true);
+    setBillingError("");
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setBillingError(data.error || "Failed to open billing portal.");
+    } catch {
+      setBillingError("Something went wrong. Please try again.");
     } finally {
       setBillingLoading(false);
     }
@@ -523,6 +531,7 @@ function BillingSection() {
 
   async function handleUpgrade(targetTier: string) {
     setBillingLoading(true);
+    setBillingError("");
     try {
       const res = await fetch("/api/stripe/checkout", {
         method: "POST",
@@ -530,7 +539,13 @@ function BillingSection() {
         body: JSON.stringify({ tierId: targetTier }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
+      if (data.url) {
+        window.location.href = data.url;
+        return;
+      }
+      setBillingError(data.error || "Failed to start checkout.");
+    } catch {
+      setBillingError("Something went wrong. Please try again.");
     } finally {
       setBillingLoading(false);
     }
@@ -542,6 +557,11 @@ function BillingSection() {
     <section className="mb-10">
       <h2 className="text-lg font-semibold mb-4">Billing</h2>
       <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4 space-y-4">
+        {billingError && (
+          <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-2.5 rounded-lg text-sm">
+            {billingError}
+          </div>
+        )}
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium">Current Plan</p>

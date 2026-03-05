@@ -3,9 +3,12 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { data: session, status } = useSession();
+  const isLoggedIn = status === "authenticated" && !!session?.user;
 
   return (
     <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#080808]/80 backdrop-blur-xl">
@@ -37,31 +40,60 @@ export function Navbar() {
           >
             Pricing
           </Link>
-          <Link
-            href="/login"
-            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/register"
-            className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_12px_rgba(139,92,246,0.15)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
-          >
-            Try it free
-            <svg
-              className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-              />
-            </svg>
-          </Link>
+          {isLoggedIn ? (
+            <>
+              <span className="text-[0.875rem] text-zinc-500">
+                {session.user.name || session.user.email}
+              </span>
+              <Link
+                href="/app"
+                className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_12px_rgba(139,92,246,0.15)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
+              >
+                Dashboard
+                <svg
+                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                  />
+                </svg>
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_12px_rgba(139,92,246,0.15)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_20px_rgba(139,92,246,0.25)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
+              >
+                Try it free
+                <svg
+                  className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                  />
+                </svg>
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile menu button */}
@@ -94,16 +126,31 @@ export function Navbar() {
           <Link href="/#pricing" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
             Pricing
           </Link>
-          <Link href="/login" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
-            Log in
-          </Link>
-          <Link
-            href="/register"
-            onClick={() => setMobileOpen(false)}
-            className="block w-full text-center bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mt-2"
-          >
-            Try it free
-          </Link>
+          {isLoggedIn ? (
+            <>
+              <p className="text-sm text-zinc-500 py-1">{session.user.name || session.user.email}</p>
+              <Link
+                href="/app"
+                onClick={() => setMobileOpen(false)}
+                className="block w-full text-center bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mt-2"
+              >
+                Dashboard
+              </Link>
+            </>
+          ) : (
+            <>
+              <Link href="/login" onClick={() => setMobileOpen(false)} className="block text-sm text-zinc-400 hover:text-white py-1">
+                Log in
+              </Link>
+              <Link
+                href="/register"
+                onClick={() => setMobileOpen(false)}
+                className="block w-full text-center bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold py-2.5 rounded-lg transition-colors mt-2"
+              >
+                Try it free
+              </Link>
+            </>
+          )}
         </div>
       )}
     </nav>

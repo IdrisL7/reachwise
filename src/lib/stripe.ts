@@ -36,7 +36,9 @@ export function getPriceId(tierId: TierId): string {
   return map[tierId];
 }
 
-/** Get or create a Stripe customer for a user */
+/** Get or create a Stripe customer for a user.
+ *  If the stored customer ID no longer exists in Stripe (e.g. test-mode cleanup),
+ *  create a fresh one and update the DB. */
 export async function getOrCreateStripeCustomer(
   userId: string,
   email: string,
@@ -47,7 +49,16 @@ export async function getOrCreateStripeCustomer(
     .where(eq(schema.users.id, userId))
     .limit(1);
 
-  if (user?.stripeCustomerId) return user.stripeCustomerId;
+  if (user?.stripeCustomerId) {
+    // Verify the customer still exists in Stripe
+    try {
+      const existing = await stripe.customers.retrieve(user.stripeCustomerId);
+      if (!(existing as any).deleted) return user.stripeCustomerId;
+    } catch {
+      // Customer doesn't exist — fall through to create a new one
+      console.warn(`Stripe customer ${user.stripeCustomerId} not found, creating new one for user ${userId}`);
+    }
+  }
 
   const customer = await stripe.customers.create({
     email,
