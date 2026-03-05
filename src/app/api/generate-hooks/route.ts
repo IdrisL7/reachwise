@@ -52,6 +52,29 @@ export async function POST(request: Request) {
             { status: 400 },
           );
         }
+
+        // LinkedIn posts feed detection — these are inaccessible to automated fetchers
+        if (
+          parsed.hostname.includes("linkedin.com") &&
+          /\/company\/[^/]+\/posts\b/i.test(parsed.pathname)
+        ) {
+          const slug = parsed.pathname.match(/\/company\/([^/]+)/)?.[1] || "";
+          return NextResponse.json({
+            hooks: [],
+            structured_hooks: [],
+            overflow_hooks: [],
+            status: "ok" as CompanyResolutionStatus,
+            lowSignal: true,
+            suggestion: [
+              "LinkedIn posts feeds are restricted and can't be accessed for evidence extraction.",
+              "For better results, try one of these instead:",
+              slug ? `  • https://www.linkedin.com/company/${slug}/about/` : "  • The company's LinkedIn About page",
+              "  • A specific LinkedIn post URL (not the feed)",
+              "  • The company's website (e.g., benifex.com)",
+              "  • Press/newsroom, blog, or careers page",
+            ].join("\n"),
+          });
+        }
       } catch {
         return NextResponse.json(
           { error: "Invalid URL format. Provide a valid company URL (e.g., https://acme.com)." },
@@ -220,16 +243,26 @@ export async function POST(request: Request) {
     // =========================================================================
     const { top, overflow } = rankAndCap(roleGated, 3);
 
-    // Build suggestions
+    // Build suggestions — actionable, keeps user inside product
+    const targetDomain = companyDomain || "";
     const noAnchorSuggestion = [
-      "Low Signal: no company-specific signals found — only market context available.",
-      "For better hooks, provide: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles mentioning the company by name.",
-    ].join(" ");
+      "Needs more sources (company-specific signals not found yet).",
+      "We couldn't find quoteable updates tied directly to this company. Add one of these and we'll generate hooks with receipts:",
+      targetDomain ? `  • Press/Newsroom: ${targetDomain}/press or ${targetDomain}/newsroom` : "  • Press/Newsroom URL",
+      targetDomain ? `  • Blog/Changelog: ${targetDomain}/blog or ${targetDomain}/changelog` : "  • Blog/Changelog URL",
+      targetDomain ? `  • Careers page: ${targetDomain}/careers` : "  • Careers page URL",
+      "  • A specific LinkedIn post or About page",
+      "  • Recent news article mentioning the company by name",
+    ].join("\n");
 
     const lowSignalSuggestion = [
-      `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
-      "For better hooks, try: the company's press/newsroom, blog/changelog, careers page, LinkedIn, or recent news articles.",
-    ].join(" ");
+      `Needs more sources (only ${signalCount} signal fact${signalCount !== 1 ? "s" : ""} found).`,
+      "We found some basics but not enough for strong, cited hooks. Try adding:",
+      targetDomain ? `  • Press/Newsroom: ${targetDomain}/press or ${targetDomain}/newsroom` : "  • Press/Newsroom URL",
+      targetDomain ? `  • Blog/Changelog: ${targetDomain}/blog or ${targetDomain}/changelog` : "  • Blog/Changelog URL",
+      targetDomain ? `  • Careers page: ${targetDomain}/careers` : "  • Careers page URL",
+      "  • A specific LinkedIn post or About page",
+    ].join("\n");
 
     // Determine final hook list + metadata
     let finalTop = top;

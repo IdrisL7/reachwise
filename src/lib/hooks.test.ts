@@ -8,6 +8,7 @@ import {
   publishGateFinal,
   publishGateValidateHook,
   classifySource,
+  computeEntityHitScore,
   findRoleTokenHit,
   roleTokenGate,
   isTradeoffGrounded,
@@ -1806,5 +1807,60 @@ describe("Rank and Cap", () => {
     const { top, overflow } = rankAndCap(hooks, 3);
     expect(top).toHaveLength(2);
     expect(overflow).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Entity Match Gate
+// ---------------------------------------------------------------------------
+describe("Entity Match Gate", () => {
+  it("matches when source is on target domain", () => {
+    const result = computeEntityHitScore(
+      { title: "Some Page", publisher: "benifex.com", date: "", url: "https://benifex.com/blog", facts: ["some fact"] },
+      "Benifex",
+      "benifex.com",
+    );
+    expect(result.entity_hit_score).toBeGreaterThan(0);
+    expect(result.entity_matched_term).toBe("benifex.com");
+  });
+
+  it("matches when company name appears in facts", () => {
+    const result = computeEntityHitScore(
+      { title: "News article", publisher: "techcrunch.com", date: "", url: "https://techcrunch.com/article", facts: ["Benifex raises Series A funding"] },
+      "Benifex",
+      "benifex.com",
+    );
+    expect(result.entity_hit_score).toBeGreaterThan(0);
+    expect(result.entity_matched_term).toBe("benifex");
+  });
+
+  it("returns ENTITY_MISMATCH when source is about different entity", () => {
+    const result = computeEntityHitScore(
+      { title: "LinkedIn covers 282 events", publisher: "linkedin.com", date: "", url: "https://linkedin.com/pulse/media", facts: ["Media has covered LinkedIn… 282 events across 45 countries"] },
+      "Benifex",
+      "benifex.com",
+    );
+    expect(result.entity_hit_score).toBe(0);
+    expect(result.reason_code).toBe("ENTITY_MISMATCH");
+  });
+
+  it("matches when domain appears in text (third-party article)", () => {
+    const result = computeEntityHitScore(
+      { title: "Employee Benefits Platform", publisher: "hr-news.com", date: "", url: "https://hr-news.com/review", facts: ["benifex.com offers employee benefits management"] },
+      "Benifex",
+      "benifex.com",
+    );
+    expect(result.entity_hit_score).toBeGreaterThan(0);
+  });
+
+  it("skips generic names — requires domain match instead", () => {
+    const result = computeEntityHitScore(
+      { title: "Sales tips article", publisher: "blog.com", date: "", url: "https://blog.com/post", facts: ["sales teams need better tools"] },
+      "Sales",
+      "sales.co",
+    );
+    // "sales" is generic, so name match in facts doesn't count
+    expect(result.entity_hit_score).toBe(0);
+    expect(result.reason_code).toBe("ENTITY_MISMATCH");
   });
 });

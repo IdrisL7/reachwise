@@ -287,7 +287,7 @@ export default function HooksPage() {
       )}
 
       {suggestion && (
-        <div className={`border rounded-lg px-4 py-3 mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800 text-amber-300" : "bg-blue-900/30 border-blue-800 text-blue-300"}`}>
+        <div className={`border rounded-lg px-4 py-3 mb-6 text-sm whitespace-pre-line ${lowSignal ? "bg-amber-900/30 border-amber-800 text-amber-300" : "bg-blue-900/30 border-blue-800 text-blue-300"}`}>
           {suggestion}
         </div>
       )}

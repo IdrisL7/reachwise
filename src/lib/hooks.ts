@@ -77,6 +77,9 @@ export type ClassifiedSource = Source & {
   tier: EvidenceTier;
   stale?: boolean;
   anchorScore?: number;
+  entity_hit_score?: number;
+  entity_matched_term?: string | null;
+  entity_mismatch?: boolean;
 };
 
 export type CompanyCandidate = {
@@ -336,6 +339,56 @@ const GENERIC_NAME_WORDS = new Set([
   "guide", "track", "start", "stack", "source", "point", "key",
   "spring", "pulse", "spark", "bridge", "path", "nest", "wave",
 ]);
+
+// ---------------------------------------------------------------------------
+// Entity Match Gate — prevent wrong-entity evidence
+// ---------------------------------------------------------------------------
+
+export type EntityMatchResult = {
+  entity_hit_score: number;
+  entity_matched_term: string | null;
+  reason_code?: "ENTITY_MISMATCH";
+};
+
+/**
+ * Compute how strongly a source's evidence is about the target entity.
+ * Returns score + matched term. Score 0 = evidence is about a different entity.
+ *
+ * Checks title + all facts for:
+ *   - Target company name (case-insensitive, non-generic names only)
+ *   - Target domain appearing in text
+ *   - Source URL is on target domain
+ */
+export function computeEntityHitScore(
+  source: Source,
+  companyName: string,
+  domain: string,
+): EntityMatchResult {
+  const titleAndFacts = (source.title + " " + source.facts.join(" ")).toLowerCase();
+  const nameLower = companyName.toLowerCase();
+  const domainLower = domain.toLowerCase();
+  const sourceHost = getDomain(source.url).toLowerCase();
+
+  const isGenericName = GENERIC_NAME_WORDS.has(nameLower) || nameLower.length <= 3;
+
+  // Source is on the target's own domain → always entity match
+  if (sourceHost === domainLower || sourceHost.endsWith("." + domainLower)) {
+    return { entity_hit_score: 3, entity_matched_term: domainLower };
+  }
+
+  // Domain string appears in title/facts (e.g. "benifex.com" mentioned in article)
+  if (titleAndFacts.includes(domainLower)) {
+    return { entity_hit_score: 2, entity_matched_term: domainLower };
+  }
+
+  // Non-generic company name appears in title/facts
+  if (!isGenericName && nameLower.length >= 2 && titleAndFacts.includes(nameLower)) {
+    return { entity_hit_score: 2, entity_matched_term: nameLower };
+  }
+
+  // No entity match found
+  return { entity_hit_score: 0, entity_matched_term: null, reason_code: "ENTITY_MISMATCH" };
+}
 
 /**
  * Compute how strongly a source is anchored to the target company.
@@ -1295,21 +1348,35 @@ export async function fetchSourcesWithGating(
   // Deduplicate
   const deduped = deduplicateSources(allSources);
 
-  // Compute anchor scores and reclassify
+  // Compute anchor scores + entity match, then reclassify
   const anchored = deduped.map((source) => {
     const anchorScore = computeAnchorScore(source, companyName, domain);
+    const entityMatch = computeEntityHitScore(source, companyName, domain);
+
+    // ENTITY MATCH GATE: if evidence is NOT about the target entity → force Tier C
+    if (entityMatch.entity_hit_score === 0) {
+      return {
+        ...source,
+        tier: "C" as EvidenceTier,
+        anchorScore,
+        entity_hit_score: 0,
+        entity_matched_term: null,
+        entity_mismatch: true,
+      };
+    }
+
     // If anchor score < 3, force to Tier B (market context) regardless of previous tier
     if (anchorScore < 3 && source.tier === "A") {
-      return { ...source, tier: "B" as EvidenceTier, anchorScore };
+      return { ...source, tier: "B" as EvidenceTier, anchorScore, entity_hit_score: entityMatch.entity_hit_score, entity_matched_term: entityMatch.entity_matched_term };
     }
     // Promote company-owned pages with high anchor score + specificity from B to A
     // This allows homepage/swipefile pages with quantified claims to generate full hook sets
     const sourceHost = getDomain(source.url).toLowerCase();
     const isOnCompanyDomain = sourceHost === domain.toLowerCase() || sourceHost.endsWith("." + domain.toLowerCase());
     if (isOnCompanyDomain && anchorScore >= 5 && source.tier === "B" && computeSpecificityScore(source.facts) >= 3) {
-      return { ...source, tier: "A" as EvidenceTier, anchorScore };
+      return { ...source, tier: "A" as EvidenceTier, anchorScore, entity_hit_score: entityMatch.entity_hit_score, entity_matched_term: entityMatch.entity_matched_term };
     }
-    return { ...source, anchorScore };
+    return { ...source, anchorScore, entity_hit_score: entityMatch.entity_hit_score, entity_matched_term: entityMatch.entity_matched_term };
   });
 
   // Rank by score and take top 10
@@ -2596,23 +2663,22 @@ export async function generateHooksForUrl(opts: {
     : rawSources.filter((s) => (s.anchorScore ?? 0) >= 3);
 
   const NO_ANCHOR_SUGGESTION = [
-    "Low Signal: no company-specific signals found — only market context available.",
-    "For better hooks, provide one of these:",
-    `  - ${domain}/press or ${domain}/newsroom`,
-    `  - ${domain}/blog or ${domain}/changelog`,
-    `  - ${domain}/careers or LinkedIn company page`,
-    "  - Recent news articles mentioning the company by name",
-    "  - Partner or customer announcement pages",
+    "Needs more sources (company-specific signals not found yet).",
+    "We couldn't find quoteable updates tied directly to this company. Add one of these and we'll generate hooks with receipts:",
+    `  • Press/Newsroom: ${domain}/press or ${domain}/newsroom`,
+    `  • Blog/Changelog: ${domain}/blog or ${domain}/changelog`,
+    `  • Careers page: ${domain}/careers`,
+    "  • A specific LinkedIn post or About page",
+    "  • Recent news article mentioning the company by name",
   ].join("\n");
 
   const LOW_SIGNAL_SUGGESTION = [
-    `Low Signal: only ${signalCount} signal fact(s) found — only fundamentals available.`,
-    "For better hooks, try fetching from these sources:",
-    `  - ${domain}/press or ${domain}/newsroom`,
-    `  - ${domain}/blog or ${domain}/changelog`,
-    `  - ${domain}/careers or LinkedIn jobs page`,
-    "  - Recent news articles about the company",
-    "  - Partner announcement pages",
+    `Needs more sources (only ${signalCount} signal fact${signalCount !== 1 ? "s" : ""} found).`,
+    "We found some basics but not enough for strong, cited hooks. Try adding:",
+    `  • Press/Newsroom: ${domain}/press or ${domain}/newsroom`,
+    `  • Blog/Changelog: ${domain}/blog or ${domain}/changelog`,
+    `  • Careers page: ${domain}/careers`,
+    "  • A specific LinkedIn post or About page",
   ].join("\n");
 
   // Check if all sources are Tier C
