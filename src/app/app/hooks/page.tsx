@@ -10,8 +10,14 @@ interface Hook {
   evidence_tier: string;
   source_snippet?: string;
   source_url?: string;
+  source_title?: string;
   psych_mode?: string;
   why_this_works?: string;
+}
+
+interface GeneratedEmail {
+  subject: string;
+  body: string;
 }
 
 export default function HooksPage() {
@@ -27,6 +33,9 @@ export default function HooksPage() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showGateModal, setShowGateModal] = useState(false);
   const [copiedEvidence, setCopiedEvidence] = useState<number | null>(null);
+  const [generatingEmail, setGeneratingEmail] = useState<number | null>(null);
+  const [generatedEmails, setGeneratedEmails] = useState<Record<number, GeneratedEmail>>({});
+  const [copiedEmail, setCopiedEmail] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/workspace-profile")
@@ -38,26 +47,54 @@ export default function HooksPage() {
   }, []);
 
   async function copyHook(text: string, index: number) {
-    if (!hasProfile) {
-      setShowGateModal(true);
-      return;
-    }
     await navigator.clipboard.writeText(text);
     setCopied(index);
     setTimeout(() => setCopied(null), 2000);
   }
 
   async function copyHookWithEvidence(hook: Hook, index: number) {
-    if (!hasProfile) {
-      setShowGateModal(true);
-      return;
-    }
     let content = `Hook: ${hook.text}`;
     if (hook.source_snippet) content += `\nEvidence: ${hook.source_snippet}`;
     if (hook.source_url) content += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(content);
     setCopiedEvidence(index);
     setTimeout(() => setCopiedEvidence(null), 2000);
+  }
+
+  async function generateEmail(hook: Hook, index: number) {
+    setGeneratingEmail(index);
+    try {
+      const res = await fetch("/api/generate-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyUrl: url || companyName,
+          hook: {
+            hook: hook.text,
+            angle: hook.angle,
+            confidence: hook.confidence,
+            evidence_tier: hook.evidence_tier,
+            evidence_snippet: hook.source_snippet || "",
+            source_title: hook.source_title || hook.source_url || "",
+            source_url: hook.source_url || "",
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to generate email");
+      setGeneratedEmails((prev) => ({ ...prev, [index]: data.email }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setGeneratingEmail(null);
+    }
+  }
+
+  async function copyEmail(email: GeneratedEmail, index: number) {
+    const content = `Subject: ${email.subject}\n\n${email.body}`;
+    await navigator.clipboard.writeText(content);
+    setCopiedEmail(index);
+    setTimeout(() => setCopiedEmail(null), 2000);
   }
 
   async function generateHooks(e: React.FormEvent) {
@@ -67,6 +104,7 @@ export default function HooksPage() {
     setLoading(true);
     setError("");
     setHooks([]);
+    setGeneratedEmails({});
     setSuggestion("");
     setLowSignal(false);
 
@@ -91,6 +129,7 @@ export default function HooksPage() {
         evidence_tier: string;
         evidence_snippet?: string;
         source_url?: string;
+        source_title?: string;
         psych_mode?: string;
         why_this_works?: string;
       }> | undefined;
@@ -103,6 +142,7 @@ export default function HooksPage() {
           evidence_tier: h.evidence_tier,
           source_snippet: h.evidence_snippet,
           source_url: h.source_url,
+          source_title: h.source_title,
           psych_mode: h.psych_mode,
           why_this_works: h.why_this_works,
         })));
@@ -224,7 +264,7 @@ export default function HooksPage() {
               key={i}
               className="bg-zinc-900 border border-zinc-800 rounded-lg p-5"
             >
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex items-center gap-2 mb-3 flex-wrap">
                 <span
                   className={`text-xs font-medium px-2 py-0.5 rounded border ${tierColors[hook.evidence_tier] || tierColors.C}`}
                 >
@@ -246,28 +286,49 @@ export default function HooksPage() {
                 <span className="text-xs text-zinc-600">
                   {hook.confidence} confidence
                 </span>
-                <div className="flex items-center gap-2 ml-auto">
-                  <button
-                    onClick={() => copyHookWithEvidence(hook, i)}
-                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                    title="Copy hook with evidence"
-                  >
-                    {copiedEvidence === i ? "Copied!" : "Copy + Evidence"}
-                  </button>
-                  <button
-                    onClick={() => copyHook(hook.text, i)}
-                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                    title="Copy hook"
-                  >
-                    {copied === i ? "Copied!" : "Copy"}
-                  </button>
-                </div>
               </div>
-              <p className="text-zinc-200 mb-2">{hook.text}</p>
+              <p className="text-zinc-200 mb-3">{hook.text}</p>
               {hook.source_snippet && (
-                <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3">
+                <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
                   {hook.source_snippet}
                 </p>
+              )}
+              <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+                <button
+                  onClick={() => copyHook(hook.text, i)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+                >
+                  {copied === i ? "Copied!" : "Copy Hook"}
+                </button>
+                <button
+                  onClick={() => copyHookWithEvidence(hook, i)}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+                >
+                  {copiedEvidence === i ? "Copied!" : "Copy + Evidence"}
+                </button>
+                <button
+                  onClick={() => generateEmail(hook, i)}
+                  disabled={generatingEmail === i}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                >
+                  {generatingEmail === i ? "Writing..." : generatedEmails[i] ? "Regenerate Email" : "Generate Email"}
+                </button>
+                {generatedEmails[i] && (
+                  <button
+                    onClick={() => copyEmail(generatedEmails[i], i)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 transition-colors"
+                  >
+                    {copiedEmail === i ? "Copied!" : "Copy Email"}
+                  </button>
+                )}
+              </div>
+              {generatedEmails[i] && (
+                <div className="mt-3 bg-black border border-zinc-800 rounded-lg p-4">
+                  <p className="text-xs text-zinc-500 mb-1">Subject:</p>
+                  <p className="text-sm text-zinc-200 font-medium mb-3">{generatedEmails[i].subject}</p>
+                  <p className="text-xs text-zinc-500 mb-1">Body:</p>
+                  <p className="text-sm text-zinc-300 whitespace-pre-line">{generatedEmails[i].body}</p>
+                </div>
               )}
             </div>
           ))}
