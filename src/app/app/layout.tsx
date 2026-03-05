@@ -5,6 +5,7 @@ import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
+import { SignOutButton } from "@/components/sign-out-button";
 
 const navItems = [
   { href: "/app", label: "Dashboard" },
@@ -65,6 +66,7 @@ export default async function AppLayout({
                 Upgrade
               </Link>
             )}
+            <SignOutButton />
           </div>
         </div>
       </header>
