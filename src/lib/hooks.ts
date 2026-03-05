@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import type { EvidenceTier } from "./types";
+import type { SenderContext } from "./workspace";
 
 export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
@@ -172,6 +173,33 @@ const VAGUE_QUESTION_PATTERNS = [
   /\bkeeping pace\b/i,
   /\bcurious if\b/i,
   /\bconverting to pipeline\b/i,
+];
+
+// Invented causality: ungrounded causal claims that sound authoritative but aren't evidence-based
+const INVENTED_CAUSALITY_PATTERNS = [
+  /\bthe usual bottleneck is\b/i,
+  /\btypically this means\b/i,
+  /\bmost teams struggle with\b/i,
+  /\bdisconnected systems\b/i,
+  /\bthe challenge is\b/i,
+  /\bthe problem is usually\b/i,
+  /\bcommonly leads to\b/i,
+  /\boften results in\b/i,
+];
+
+// Abstract nouns that signal consultant-speak when overloaded in questions
+const ABSTRACT_NOUNS = [
+  "compliance", "engagement", "methodology", "positioning", "strategy",
+  "alignment", "optimization", "transformation", "enablement", "governance",
+  "framework", "paradigm", "synergy", "ecosystem", "philosophy",
+];
+
+// Question framing bans: consultant-speak question patterns
+const QUESTION_FRAMING_BANS = [
+  /\bfocusing on\b/i,
+  /\bdriven by\b/i,
+  /\bwhat'?s your (approach|strategy|philosophy)\b/i,
+  /\bhow are you (thinking|approaching)\b/i,
 ];
 
 // No mock/template hooks — every hook must be sourced from real evidence.
@@ -1265,7 +1293,7 @@ export async function resolveCompanyByName(
 // Build the Claude prompt
 // ---------------------------------------------------------------------------
 
-export function buildSystemPrompt(): string {
+export function buildSystemPrompt(senderContext?: SenderContext | null): string {
   return [
     "You are an elite SDR copywriter who uses sales psychology to craft cold email opening hooks.",
     "Your hooks earn attention fast, center the prospect (never 'we/us'), create productive tension,",
@@ -1404,6 +1432,31 @@ export function buildSystemPrompt(): string {
     "- med: fact is real but generic or older.",
     "Only output hooks where confidence is high or med.",
     "",
+    ...(senderContext
+      ? [
+          "## SENDER CONTEXT",
+          `The sender sells: ${senderContext.whatYouSell}`,
+          `ICP: ${senderContext.icpIndustry}, ${senderContext.icpCompanySize} employees, targeting ${senderContext.buyerRoles.join(", ")}`,
+          `Primary outcome: ${senderContext.primaryOutcome}`,
+          `Category: ${senderContext.offerCategory}`,
+          ...(senderContext.proof ? [`Proof points: ${senderContext.proof.join("; ")}`] : []),
+          "",
+          "## RELEVANCE BRIDGE RULES (only when sender context is provided)",
+          "- Add at most ONE sentence tying the prospect's signal to the sender's outcome.",
+          '- Template: "[Signal verb] + [prospect noun] — [sender outcome] for [buyer role]. [Binary question]?"',
+          "- Max 80 characters for the bridge portion. Total hook still max 240 characters.",
+          "- Never name the sender's product directly. Reference their outcome category only.",
+          '- Never claim "we help teams like you" or similar generic framing.',
+          "- The bridge must follow logically from the evidence. If no natural connection exists, omit it.",
+          "",
+        ]
+      : [
+          "## VERIFICATION-ONLY MODE",
+          "Do NOT reference the sender's product or offer. Generate signal-verification hooks only.",
+          "Do NOT attempt a relevance bridge sentence.",
+          "Hooks should verify the prospect's signal and ask a narrow operational question.",
+          "",
+        ]),
     "## Output format",
     "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
     '{  "news_item": <1-indexed source number>,',
@@ -1820,6 +1873,19 @@ export function validateHook(
 
   // Question quality: reject vague/philosophical/open-ended questions
   if (hasVagueQuestion(hook)) return null;
+
+  // Invented causality ban: reject hooks with ungrounded causal claims
+  if (INVENTED_CAUSALITY_PATTERNS.some((p) => p.test(hook))) return null;
+
+  // Question framing bans: reject consultant-speak question patterns
+  const questionPart = hook.split(/\s*—\s*/).pop() || hook;
+  if (QUESTION_FRAMING_BANS.some((p) => p.test(questionPart))) return null;
+
+  // Abstract noun overload: reject questions with 3+ abstract nouns
+  const abstractCount = ABSTRACT_NOUNS.filter((noun) =>
+    new RegExp(`\\b${noun}\\b`, "i").test(questionPart)
+  ).length;
+  if (abstractCount >= 3) return null;
 
   // Positive question structure: must be forced-choice/mechanism/ownership/timing
   if (!hasValidQuestionStructure(hook)) return null;

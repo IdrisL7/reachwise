@@ -3,6 +3,7 @@ import {
   validateHook,
   rewriteChangeVerbs,
   hasValidQuestionStructure,
+  buildSystemPrompt,
   publishGate,
   publishGateFinal,
   publishGateValidateHook,
@@ -12,6 +13,7 @@ import {
   type PsychMode,
 } from "./hooks";
 import type { EvidenceTier, StructuredHook } from "./types";
+import type { SenderContext } from "./workspace";
 
 // ---------------------------------------------------------------------------
 // Helper: build a source lookup from an array of sources
@@ -484,7 +486,7 @@ describe("question quality validator", () => {
     const result = validateHook(
       {
         ...basePayload,
-        hook: `Your "3.2X reply rate vs templates" — is that driven by list targeting, or by copy personalization?`,
+        hook: `Your "3.2X reply rate vs templates" — is the main lever list targeting, or copy personalization?`,
       },
       sourceLookup,
     );
@@ -1035,7 +1037,7 @@ describe("demo sample hooks pass publish gate", () => {
       hook: {
         news_item: 3,
         angle: "risk",
-        hook: 'Your docs now cover "handling webhook delivery failures and retry logic" — is that driven by enterprise customer requests, or internal reliability targets?',
+        hook: 'Your docs now cover "handling webhook delivery failures and retry logic" — is that from enterprise customer requests, or internal reliability targets?',
         evidence_snippet: "New section added to Stripe Docs: Handling webhook delivery failures and retry logic.",
         source_title: "Stripe Developer Docs",
         source_date: "2025-02",
@@ -1218,5 +1220,158 @@ describe("publishGateFinal (last-step enforcement)", () => {
     expect(rewritten!.hook).not.toMatch(/\bswitched\b/i);
     // Hook 3: dropped (Best Buy unanchored)
     expect(result.some((h) => h.hook.includes("Best Buy"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sender context prompt injection
+// ---------------------------------------------------------------------------
+describe("sender context prompt injection", () => {
+  it("buildSystemPrompt includes SENDER CONTEXT section when provided", () => {
+    const ctx: SenderContext = {
+      whatYouSell: "We help B2B teams book more meetings",
+      icpIndustry: "SaaS",
+      icpCompanySize: "51-200",
+      buyerRoles: ["VP Sales"],
+      primaryOutcome: "Meetings",
+      offerCategory: "outbound_agency" as const,
+      proof: ["+22% reply rate"],
+    };
+    const prompt = buildSystemPrompt(ctx);
+    expect(prompt).toContain("SENDER CONTEXT");
+    expect(prompt).toContain("We help B2B teams book more meetings");
+    expect(prompt).toContain("at most ONE sentence");
+    expect(prompt).not.toContain("VERIFICATION-ONLY");
+  });
+
+  it("buildSystemPrompt uses verification-only mode when null", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(prompt).toContain("VERIFICATION-ONLY");
+    expect(prompt).not.toContain("SENDER CONTEXT");
+  });
+
+  it("buildSystemPrompt uses verification-only mode when undefined", () => {
+    const prompt = buildSystemPrompt();
+    expect(prompt).toContain("VERIFICATION-ONLY");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Invented causality ban
+// ---------------------------------------------------------------------------
+describe("invented causality ban", () => {
+  it("rejects 'the usual bottleneck is'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'You posted "3 SDR roles" — the usual bottleneck is hiring speed. Backfilling or expanding?',
+      evidence_snippet: "Company posted 3 SDR roles on LinkedIn this month",
+      source_title: "LinkedIn",
+      source_date: "2026-03-01",
+      source_url: "https://linkedin.com/company/test",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("rejects 'most teams struggle with'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'You said "scaling fast" — most teams struggle with onboarding. Hiring or training first?',
+      evidence_snippet: "Company is scaling fast with new hires",
+      source_title: "Blog",
+      source_date: "2026-03-01",
+      source_url: "https://test.com/blog",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("rejects 'typically this means'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'You posted "new CTO hire" — typically this means a stack change. Swapping tools or keeping?',
+      evidence_snippet: "Company announced new CTO hire last week",
+      source_title: "News",
+      source_date: "2026-03-01",
+      source_url: "https://news.com/test",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Question framing bans
+// ---------------------------------------------------------------------------
+describe("question framing bans", () => {
+  it("rejects 'focusing on' in question", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Your site says "multi-channel outreach" — are you focusing on email or LinkedIn?',
+      evidence_snippet: "Company offers multi-channel outreach solutions",
+      source_title: "Website",
+      source_date: "2026-03-01",
+      source_url: "https://test.com",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("rejects 'driven by' in question", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Your blog mentions "2X reply rates" — is that driven by personalization or list quality?',
+      evidence_snippet: "Company claims 2X reply rates for customers",
+      source_title: "Blog",
+      source_date: "2026-03-01",
+      source_url: "https://test.com/blog",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Abstract noun overload
+// ---------------------------------------------------------------------------
+describe("abstract noun overload", () => {
+  it("rejects question with 3+ abstract nouns", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Your site says "enterprise ready" — is your compliance engagement methodology aligned with governance?',
+      evidence_snippet: "Company website says enterprise ready",
+      source_title: "Website",
+      source_date: "2026-03-01",
+      source_url: "https://test.com",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("passes question with 2 or fewer abstract nouns", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Your site says "SOC2 certified since 2024" — is compliance handled in-house or outsourced?',
+      evidence_snippet: "Company is SOC2 certified since 2024",
+      source_title: "Website",
+      source_date: "2026-03-01",
+      source_url: "https://test.com",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).not.toBeNull();
   });
 });

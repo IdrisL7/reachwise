@@ -168,7 +168,7 @@ export async function POST(request: Request) {
           usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
           // 4. Build prompts and call Claude
-          const systemPrompt = buildSystemPrompt();
+          const systemPrompt = buildSystemPrompt(_senderContext);
           const userPrompt = buildUserPrompt(url, sources, context);
           const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
