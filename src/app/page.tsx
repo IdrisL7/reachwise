@@ -8,6 +8,7 @@ import { WhoItsForSection } from "@/components/who-its-for-section";
 import { TrustBlock } from "@/components/trust-block";
 import { WaitlistCTA } from "@/components/waitlist-cta";
 import { Footer } from "@/components/footer";
+import { SalesChatWidget } from "@/components/sales-chat-widget";
 
 export default function Home() {
   return (
@@ -22,6 +23,7 @@ export default function Home() {
       <WhoItsForSection />
       <WaitlistCTA />
       <Footer />
+      <SalesChatWidget />
     </div>
   );
 }
