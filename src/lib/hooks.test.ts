@@ -7,6 +7,7 @@ import {
   publishGate,
   publishGateFinal,
   publishGateValidateHook,
+  classifySource,
   type Hook,
   type ClaudeHookPayload,
   type ClassifiedSource,
@@ -1241,7 +1242,7 @@ describe("sender context prompt injection", () => {
     expect(prompt).toContain("SENDER CONTEXT");
     expect(prompt).toContain("We help B2B teams book more meetings");
     expect(prompt).toContain("at most ONE sentence");
-    expect(prompt).not.toContain("VERIFICATION-ONLY");
+    expect(prompt).not.toContain("## VERIFICATION-ONLY MODE");
   });
 
   it("buildSystemPrompt uses verification-only mode when null", () => {
@@ -1371,6 +1372,220 @@ describe("abstract noun overload", () => {
       source_url: "https://test.com",
       evidence_tier: "A",
       confidence: "high",
+    });
+    expect(result).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Secondary source classification
+// ---------------------------------------------------------------------------
+
+describe("classifySource — secondary commentary detection", () => {
+  it("caps a third-party blog post about the target company at Tier B", () => {
+    const source = {
+      title: "LinkedIn 2026 Updates for B2B Sales Outreach",
+      publisher: "rev-empire.com",
+      date: "2026-02-15",
+      url: "https://rev-empire.com/blog/linkedin-2026-updates-b2b-sales-outreach/",
+      facts: [
+        "LinkedIn launched AI-powered conversational search in January 2026",
+        "New Sales Assistant feature announced in February 2026",
+        "Company Intelligence API available for enterprise customers",
+      ],
+    };
+    const tier = classifySource(source, false, "linkedin.com");
+    expect(tier).toBe("B");
+  });
+
+  it("does NOT cap the company's own blog as secondary", () => {
+    const source = {
+      title: "Announcing our new Sales Assistant",
+      publisher: "linkedin.com",
+      date: "2026-01-15",
+      url: "https://blog.linkedin.com/2026/01/sales-assistant-launch",
+      facts: [
+        "LinkedIn launched AI-powered Sales Assistant on January 15, 2026",
+        "Available to all Sales Navigator Enterprise customers",
+      ],
+    };
+    const tier = classifySource(source, false, "linkedin.com");
+    expect(tier).toBe("A");
+  });
+
+  it("caps medium.com posts as Tier B secondary commentary", () => {
+    const source = {
+      title: "Why LinkedIn's 2026 changes matter for outbound",
+      publisher: "medium.com",
+      date: "2026-02-20",
+      url: "https://medium.com/@someone/linkedin-2026-changes-outbound",
+      facts: [
+        "LinkedIn announced three major updates in early 2026",
+        "Conversational search changes how prospects are found",
+      ],
+    };
+    const tier = classifySource(source, false, "linkedin.com");
+    expect(tier).toBe("B");
+  });
+
+  it("caps substack newsletters as Tier B", () => {
+    const source = {
+      title: "LinkedIn updates roundup",
+      publisher: "newsletter.substack.com",
+      date: "2026-02-10",
+      url: "https://newsletter.substack.com/p/linkedin-updates-roundup",
+      facts: [
+        "LinkedIn rolled out conversational search in January 2026",
+        "New Company Intelligence API for enterprise",
+      ],
+    };
+    const tier = classifySource(source, false, "linkedin.com");
+    expect(tier).toBe("B");
+  });
+
+  it("caps third-party /insights/ pages as Tier B", () => {
+    const source = {
+      title: "Q1 2026 Sales Tech Trends",
+      publisher: "salestech.com",
+      date: "2026-03-01",
+      url: "https://salestech.com/insights/q1-2026-sales-tech-trends",
+      facts: [
+        "LinkedIn launched 3 major features in Q1 2026",
+        "$200M investment in AI capabilities",
+      ],
+    };
+    const tier = classifySource(source, false, "linkedin.com");
+    expect(tier).toBe("B");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tier B hook validation — launch/announce language ban
+// ---------------------------------------------------------------------------
+
+describe("validateHook — Tier B launch language ban", () => {
+  it("rejects Tier B hooks using 'launched'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'LinkedIn launched "AI-powered conversational search" in January 2026 — are you optimizing for InMail or cold email?',
+      evidence_snippet: "LinkedIn launched AI-powered conversational search in January 2026",
+      source_title: "Rev Empire Blog",
+      source_date: "2026-02-15",
+      source_url: "https://rev-empire.com/blog/linkedin-2026",
+      evidence_tier: "B",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("rejects Tier B hooks using 'announced'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'LinkedIn announced "Company Intelligence API" in Feb 2026 — is your enrichment stack internal or third-party?',
+      evidence_snippet: "LinkedIn announced Company Intelligence API for enterprise customers",
+      source_title: "Agency Blog",
+      source_date: "2026-02-20",
+      source_url: "https://example.com/blog/linkedin",
+      evidence_tier: "B",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("rejects Tier B hooks using 'rolled out'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'LinkedIn rolled out "Sales Assistant" and "conversational search" — are you running prospecting in LinkedIn or in your outbound stack?',
+      evidence_snippet: "LinkedIn rolled out Sales Assistant and conversational search",
+      source_title: "Newsletter",
+      source_date: "2026-02-15",
+      source_url: "https://example.com/newsletter/issue-42",
+      evidence_tier: "B",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("allows Tier B hooks with verification framing (no launch language)", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Read a Feb 2026 breakdown citing "conversational search, Sales Assistant, Company Intelligence API" — are you planning to prospect inside LinkedIn or keep enrichment in your outbound stack?',
+      evidence_snippet: "LinkedIn updates include conversational search, Sales Assistant, Company Intelligence API",
+      source_title: "Rev Empire Blog",
+      source_date: "2026-02-15",
+      source_url: "https://rev-empire.com/blog/linkedin-2026",
+      evidence_tier: "B",
+      confidence: "med",
+    });
+    expect(result).not.toBeNull();
+  });
+
+  it("allows Tier A hooks to use launch language", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'LinkedIn launched "AI-powered conversational search" in Jan 2026 — are you shifting prospecting into LinkedIn or keeping enrichment in your outbound stack?',
+      evidence_snippet: "LinkedIn launched AI-powered conversational search in January 2026",
+      source_title: "LinkedIn Blog",
+      source_date: "2026-01-15",
+      source_url: "https://blog.linkedin.com/2026/01/conversational-search",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Date discipline validation
+// ---------------------------------------------------------------------------
+
+describe("validateHook — date discipline", () => {
+  it("rejects 'early 2026' when evidence says 'January 2026'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Read a breakdown citing "conversational search and Sales Assistant" updates in early 2026 — are you prospecting inside LinkedIn or through your outbound stack?',
+      evidence_snippet: "LinkedIn updates in January 2026 include conversational search and Sales Assistant",
+      source_title: "Blog",
+      source_date: "2026-02-15",
+      source_url: "https://example.com/blog",
+      evidence_tier: "B",
+      confidence: "med",
+    });
+    expect(result).toBeNull();
+  });
+
+  it("allows 'early 2026' when evidence literally says 'early 2026'", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Read a breakdown citing "conversational search and Sales Assistant" updates in early 2026 — are you prospecting inside LinkedIn or through your outbound stack?',
+      evidence_snippet: "LinkedIn rolled out several updates in early 2026 including conversational search and Sales Assistant",
+      source_title: "Blog",
+      source_date: "2026-02-15",
+      source_url: "https://example.com/blog",
+      evidence_tier: "B",
+      confidence: "med",
+    });
+    expect(result).not.toBeNull();
+  });
+
+  it("allows exact month references from evidence", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Read a Feb 2026 breakdown citing "conversational search, Sales Assistant, Company Intelligence API" — are you planning to prospect inside LinkedIn or keep enrichment in your outbound stack?',
+      evidence_snippet: "LinkedIn updates include conversational search, Sales Assistant, Company Intelligence API",
+      source_title: "Blog",
+      source_date: "2026-02-15",
+      source_url: "https://example.com/blog",
+      evidence_tier: "B",
+      confidence: "med",
     });
     expect(result).not.toBeNull();
   });

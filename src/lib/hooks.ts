@@ -202,6 +202,16 @@ const QUESTION_FRAMING_BANS = [
   /\bhow are you (thinking|approaching)\b/i,
 ];
 
+// Vague date patterns that should be rejected unless the source literally uses them.
+// Hooks must use exact dates from the source (e.g. "Jan 2026", "February 2026").
+const VAGUE_DATE_PATTERNS = [
+  /\bearly\s+\d{4}\b/i,
+  /\blate\s+\d{4}\b/i,
+  /\bmid[- ]\d{4}\b/i,
+  /\bthis year\b/i,
+  /\bthis quarter\b/i,
+];
+
 // No mock/template hooks — every hook must be sourced from real evidence.
 const MOCK_HOOKS: string[] = [];
 
@@ -405,6 +415,88 @@ const TIER_C_URL_PATTERNS = [
   /wikipedia\.org/i,
 ];
 
+/**
+ * Patterns that indicate a source is secondary commentary (agency blog, newsletter,
+ * opinion piece) rather than a primary/authoritative source. These domains are NOT
+ * the subject company — they're third-party writers reporting on or commenting about it.
+ *
+ * A secondary source is capped at Tier B unless it links to and cites a primary source
+ * that we also fetch.
+ */
+const SECONDARY_COMMENTARY_URL_PATTERNS = [
+  /\/blog\b/i,
+  /\/article\b/i,
+  /\/opinion\b/i,
+  /\/insights?\b/i,
+  /\/perspectives?\b/i,
+  /\/newsletter\b/i,
+  /\/roundup\b/i,
+  /\/recap\b/i,
+  /\/review\b/i,
+  /\/analysis\b/i,
+  /\/commentary\b/i,
+  /\/podcast\b/i,
+  /\/episode\b/i,
+];
+
+/** Known secondary/commentary domains — agency blogs, newsletters, aggregators. */
+const SECONDARY_COMMENTARY_DOMAINS = [
+  /rev-empire\.com/i,
+  /saleshacker\.com/i,
+  /outreach\.io\/blog/i,
+  /gong\.io\/blog/i,
+  /hubspot\.com\/blog/i,
+  /close\.com\/blog/i,
+  /apollo\.io\/blog/i,
+  /lemlist\.com\/blog/i,
+  /woodpecker\.co\/blog/i,
+  /mailshake\.com\/blog/i,
+  /smartlead\.ai\/blog/i,
+  /instantly\.ai\/blog/i,
+  /medium\.com/i,
+  /substack\.com/i,
+  /forbes\.com\/sites/i,
+  /entrepreneur\.com/i,
+  /inc\.com/i,
+  /techcrunch\.com/i,
+  /venturebeat\.com/i,
+  /thenextweb\.com/i,
+  /businessinsider\.com/i,
+  /zdnet\.com/i,
+];
+
+/**
+ * Returns true if a source URL is from a third-party commentary/secondary site
+ * (not the target company's own domain).
+ */
+function isSecondaryCommentary(sourceUrl: string, targetDomain?: string): boolean {
+  const sourceHost = getDomain(sourceUrl).toLowerCase();
+
+  // If we know the target domain and this source IS the target domain, it's not secondary
+  if (targetDomain) {
+    const td = targetDomain.toLowerCase();
+    if (sourceHost === td || sourceHost.endsWith("." + td)) return false;
+  }
+
+  // Check known commentary domains
+  for (const pattern of SECONDARY_COMMENTARY_DOMAINS) {
+    if (pattern.test(sourceUrl)) return true;
+  }
+
+  // Check commentary URL path patterns (only for third-party domains)
+  if (targetDomain) {
+    const td = targetDomain.toLowerCase();
+    const isOwnDomain = sourceHost === td || sourceHost.endsWith("." + td);
+    if (!isOwnDomain) {
+      for (const pattern of SECONDARY_COMMENTARY_URL_PATTERNS) {
+        if (pattern.test(sourceUrl)) return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 /** Returns true if the facts contain concrete specifics (numbers, dates, dollar amounts). */
 function factsHaveSpecifics(facts: string[]): boolean {
   const joined = facts.join(" ");
@@ -430,8 +522,11 @@ function isStale(dateStr: string): boolean {
  * Classify a source into evidence tiers with recency awareness.
  * Company-site sources from prong C are NOT auto Tier A — they need
  * dated + specific change/intent to earn Tier A.
+ *
+ * @param targetDomain - The domain of the company being researched (e.g. "linkedin.com").
+ *   Used to distinguish the company's own pages from third-party commentary.
  */
-export function classifySource(source: Source, isCompanySite = false): EvidenceTier {
+export function classifySource(source: Source, isCompanySite = false, targetDomain?: string): EvidenceTier {
   // Tier C: aggregator/scraper sites
   for (const pattern of TIER_C_URL_PATTERNS) {
     if (pattern.test(source.url)) return "C";
@@ -440,6 +535,15 @@ export function classifySource(source: Source, isCompanySite = false): EvidenceT
   // Tier C: no facts or trivially short
   if (source.facts.length === 0) return "C";
   if (source.facts.every((f) => f.trim().length < 20)) return "C";
+
+  // Secondary commentary cap: third-party blog/agency/newsletter → max Tier B
+  // These sources are reporting on or commenting about the target company,
+  // NOT primary announcements from the company itself.
+  if (isSecondaryCommentary(source.url, targetDomain)) {
+    // Even with strong facts, secondary sources cap at B
+    if (source.facts.length > 0 && sourceHasConcreteEvidence(source.facts)) return "B";
+    return factsHaveSpecifics(source.facts) ? "B" : "C";
+  }
 
   // Homepage or generic marketing pages → B, unless they have highly specific claims
   const urlLower = source.url.toLowerCase();
@@ -647,7 +751,7 @@ async function fetchNewsSignals(
       const sources = results
         .map((r) => newsResultToSource(r))
         .filter((s): s is Source => s !== null)
-        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s) }));
+        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
 
       if (sources.length >= 3 || freshness === "py") return sources;
       // Expand freshness if too few results
@@ -692,7 +796,7 @@ async function fetchWebSignals(
       const sources = results
         .map((r) => webResultToSource(r, domain))
         .filter((s): s is Source => s !== null)
-        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s) }));
+        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
 
       if (sources.length >= 3 || freshness === "pq") return sources;
     } catch {
@@ -733,7 +837,7 @@ async function fetchCompanyOwnSignals(
       .filter((s): s is Source => s !== null)
       .map((s) => applyRecencyDowngrade({
         ...s,
-        tier: classifySource(s, true), // isCompanySite=true → stricter Tier A rules
+        tier: classifySource(s, true, domain), // isCompanySite=true → stricter Tier A rules
       }));
   } catch {
     return [];
@@ -968,7 +1072,7 @@ async function fetchDirectCompanyPages(
           // Homepage with specific claims → classify with isCompanySite=true
           sources.push(applyRecencyDowngrade({
             ...src,
-            tier: classifySource(src, true),
+            tier: classifySource(src, true, domain),
           }));
         }
       }
@@ -999,7 +1103,7 @@ async function fetchDirectCompanyPages(
       if (src) {
         sources.push(applyRecencyDowngrade({
           ...src,
-          tier: classifySource(src, true),
+          tier: classifySource(src, true, domain),
         }));
       }
     }
@@ -1343,7 +1447,9 @@ export function buildSystemPrompt(senderContext?: SenderContext | null): string 
     "## Evidence tier rules",
     "Each source is classified into a tier. Follow strictly:",
     "",
-    "### Tier A sources (company-anchored, strong evidence)",
+    "### Tier A sources (primary/authoritative, company-anchored)",
+    "These are the company's own pages (press releases, blog, changelog, careers) OR",
+    "major publications (Reuters, Bloomberg, WSJ, TechCrunch front-page) with original reporting.",
     "Generate exactly 3 hooks per source using 3 DIFFERENT psychology modes (A–F).",
     "Each hook must also specify one of these angles:",
     "- trigger: a SPECIFIC company action/change. HARD RULE: if no action exists in evidence, skip this angle.",
@@ -1351,15 +1457,27 @@ export function buildSystemPrompt(senderContext?: SenderContext | null): string 
     "- tradeoff: two valid paths → specific question about direction.",
     "Each hook MUST contain a verbatim quote from the source.",
     "",
-    "### Tier B sources (market context / unanchored)",
+    "### Tier B sources (secondary commentary / verification-only)",
+    "These are third-party blogs, agency commentary, newsletters, or opinion pieces that",
+    "REPORT ON or COMMENT ABOUT the target company. They are NOT primary announcements.",
     "Generate exactly 1 hook per source. Rules:",
     "- Angle MUST be 'trigger'. Psychology mode MUST be 'relevance' (mode A).",
-    '- Format: "It sounds like [verbatim quote from source]. Did I get that right?"',
-    "- Do NOT assert pain or implications. ONLY verify.",
+    "- VERIFICATION-ONLY: Do NOT use 'launch' or 'announce' language. The source is commentary, not the company speaking.",
+    "- Frame as reading/seeing a report, NOT as the company doing something:",
+    '  BAD: "LinkedIn launched conversational search" (secondary source cannot confirm this)',
+    '  GOOD: "Read a Feb 2026 breakdown of LinkedIn\'s Jan–Feb updates" (attributes to what you actually read)',
+    "- Do NOT assert pain, implications, or outcomes. ONLY verify the signal.",
+    "- The question must ask about a workflow tradeoff implied by the signal, NOT about channel preference or strategy.",
     "- If no quoteable phrase exists, skip this source entirely.",
     "",
     "### Tier C sources",
     "Skip entirely. Generate nothing.",
+    "",
+    "## Date discipline (HARD constraint)",
+    "- Dates in hooks MUST match what the source actually says. If the source says 'January 2026' or 'Feb 2026', use those exact dates.",
+    "- Do NOT generalize to 'early 2026', 'recently', 'this year', or 'in 2026' unless the source uses that exact wording.",
+    "- If the source references multiple specific dates (e.g., Jan and Feb updates), list them: 'Jan–Feb 2026'.",
+    "- If the source has no date, do NOT invent one. Omit the date from the hook.",
     "",
     "## Question quality (HARD constraint — hooks rejected if violated)",
     "Every hook must end with an ANSWERABLE question. Acceptable types:",
@@ -1381,10 +1499,11 @@ export function buildSystemPrompt(senderContext?: SenderContext | null): string 
     "- Social proof: ONLY when evidence names specific customers, partners, or case studies",
     "- Humor: OFF — do not use humor in hooks",
     "",
-    "## Newsjacking (gated)",
-    "When a source is dated within 90 days AND the company is named in the source:",
+    "## Newsjacking (gated — Tier A only)",
+    "When a Tier A source is dated within 90 days AND the company is named in the source:",
     'Pattern: Saw the news on "{QUOTE}" — does this change your priority between [A] and [B]?',
     "Only use for actual news events (launches, funding, partnerships, hires). Not for marketing pages.",
+    "NEVER use newsjacking language ('Saw the news', 'Saw the launch') for Tier B sources.",
     "",
     "## Unsourced Claims Blocklist (HARD constraint)",
     "NEVER include these claims unless the EXACT words appear in the source facts:",
@@ -1901,6 +2020,29 @@ export function validateHook(
   // Tier B: ONLY trigger angle allowed, no risk/tradeoff
   if (validTier === "B" && angle !== "trigger") return null;
 
+  // Tier B: reject launch/announce language — secondary sources can't confirm launches
+  if (validTier === "B") {
+    const tierBBannedPatterns = [
+      /\blaunched?\b/i,
+      /\bannounced?\b/i,
+      /\bunveiled?\b/i,
+      /\brolled?\s*out\b/i,
+      /\bintroduced?\b/i,
+      /\breleased?\b/i,
+      /\bsaw\s+(the\s+)?(news|launch|announcement)\b/i,
+    ];
+    if (tierBBannedPatterns.some((p) => p.test(hook))) return null;
+  }
+
+  // Date discipline: reject vague date phrases unless they appear in the source evidence
+  const evidenceSnippetForDate = (raw.evidence_snippet || "").trim();
+  for (const pattern of VAGUE_DATE_PATTERNS) {
+    const match = hook.match(pattern);
+    if (match && !evidenceSnippetForDate.toLowerCase().includes(match[0].toLowerCase())) {
+      return null; // Vague date not in source → reject
+    }
+  }
+
   const evidenceSnippet = (raw.evidence_snippet || "").trim();
 
   // MANDATORY: Hook must contain a verbatim quote from evidence (5+ words in double quotes)
@@ -1910,9 +2052,12 @@ export function validateHook(
 
   // No fake stats: numbers outside the verbatim quote must appear in evidence
   // (numbers inside the quote are already validated by quoteExistsInEvidence)
+  // Exempt 4-digit years (2020–2029) and month abbreviations with years — these are date references, not stats.
   const hookWithoutQuote = hook.replace(/["\u201C][^"\u201D]*["\u201D]/g, "");
   const outsideNumbers = hookWithoutQuote.match(/\d[\d,.]*%?/g) || [];
   for (const num of outsideNumbers) {
+    // Skip year references (e.g. "2026", "2025") — these are dates, not fabricated stats
+    if (/^20[2-3]\d$/.test(num)) continue;
     if (!evidenceSnippet.includes(num)) return null;
   }
 
