@@ -180,6 +180,7 @@ export const hookCache = sqliteTable("hook_cache", {
   url: text("url").notNull(),
   hooks: text("hooks", { mode: "json" }).notNull(),
   citations: text("citations", { mode: "json" }),
+  rulesVersion: integer("rules_version"),
   profileUpdatedAt: text("profile_updated_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   expiresAt: text("expires_at").notNull(),

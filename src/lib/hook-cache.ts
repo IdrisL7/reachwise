@@ -1,24 +1,37 @@
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 
-async function hashUrl(url: string): Promise<string> {
+// Bump this whenever tier rules, gating logic, or prompt templates change.
+// Cached entries with a different version will be treated as stale.
+export const RULES_VERSION = 2;
+
+async function hashUrl(url: string, targetRole?: string): Promise<string> {
   const normalized = url
     .replace(/^https?:\/\/(www\.)?/, "")
     .replace(/\/$/, "")
     .toLowerCase();
+  // Include targetRole in the hash so each persona gets its own cache entry
+  const input = targetRole ? `${normalized}::role=${targetRole}` : normalized;
   const encoder = new TextEncoder();
-  const data = encoder.encode(normalized);
+  const data = encoder.encode(input);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hashBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
+export interface CachedHookResult {
+  hooks: unknown;
+  citations: unknown;
+  rulesVersion: number | null;
+}
+
 export async function getCachedHooks(
   url: string,
   currentProfileUpdatedAt?: string | null,
-) {
-  const urlHash = await hashUrl(url);
+  targetRole?: string,
+): Promise<CachedHookResult | null> {
+  const urlHash = await hashUrl(url, targetRole);
   const [cached] = await db
     .select()
     .from(schema.hookCache)
@@ -40,7 +53,10 @@ export async function getCachedHooks(
     }
   }
 
-  return { hooks: cached.hooks, citations: cached.citations };
+  // Parse rulesVersion from the stored payload (column may not exist yet in old rows)
+  const rulesVersion = (cached as Record<string, unknown>).rulesVersion as number | null ?? null;
+
+  return { hooks: cached.hooks, citations: cached.citations, rulesVersion };
 }
 
 export async function setCachedHooks(
@@ -48,8 +64,9 @@ export async function setCachedHooks(
   hooks: unknown,
   citations: unknown,
   profileUpdatedAt?: string | null,
+  targetRole?: string,
 ) {
-  const urlHash = await hashUrl(url);
+  const urlHash = await hashUrl(url, targetRole);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
   await db
@@ -59,6 +76,7 @@ export async function setCachedHooks(
       url,
       hooks,
       citations,
+      rulesVersion: RULES_VERSION,
       profileUpdatedAt: profileUpdatedAt ?? null,
       expiresAt,
     })
@@ -67,6 +85,7 @@ export async function setCachedHooks(
       set: {
         hooks,
         citations,
+        rulesVersion: RULES_VERSION,
         profileUpdatedAt: profileUpdatedAt ?? null,
         expiresAt,
         createdAt: new Date().toISOString(),

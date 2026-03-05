@@ -19,9 +19,26 @@ import {
   TARGET_ROLES,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
-import { getCachedHooks, setCachedHooks } from "@/lib/hook-cache";
+import { getCachedHooks, setCachedHooks, RULES_VERSION } from "@/lib/hook-cache";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
+
+// ---------------------------------------------------------------------------
+// Enforce current tier rules on citations (works on both cached and fresh)
+// ---------------------------------------------------------------------------
+type Citation = { source_title: string; publisher: string; date: string; url: string; tier: string; anchorScore?: number };
+
+function enforceCitationTiers(citations: Citation[], companyDomain: string): Citation[] {
+  return citations.map((c) => {
+    if (c.tier !== "A") return c;
+    const firstParty = isFirstPartySource(c.url, companyDomain);
+    const reputable = isReputablePublisher(c.url);
+    if (!firstParty && !reputable) {
+      return { ...c, tier: "B" };
+    }
+    return c;
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Route handler
@@ -149,19 +166,24 @@ export async function POST(request: Request) {
 
     const companyDomain = getDomain(url);
 
-    // Check cache first
+    // Check cache first (keyed by URL + targetRole)
     let candidateHooks: Hook[] | null = null;
-    let citations: Array<{ source_title: string; publisher: string; date: string; url: string; tier: string; anchorScore?: number }> = [];
+    let citations: Citation[] = [];
     let isLowSignal = false;
     let signalCount = 0;
     let hasAnchored = true;
     let cached = false;
+    let cacheStale = false;
 
     try {
-      const cachedResult = await getCachedHooks(url, profileUpdatedAt);
+      const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole);
       if (cachedResult) {
+        // Check rules_version — if stale, still use hooks but flag for re-caching
+        if (cachedResult.rulesVersion !== RULES_VERSION) {
+          cacheStale = true;
+        }
         candidateHooks = cachedResult.hooks as Hook[];
-        citations = (cachedResult.citations || []) as typeof citations;
+        citations = (cachedResult.citations || []) as Citation[];
         cached = true;
       }
     } catch {
@@ -216,6 +238,26 @@ export async function POST(request: Request) {
         });
       }
     }
+
+    // =========================================================================
+    // ENFORCE TIER RULES ON CITATIONS — always, regardless of cache
+    // Non-first-party + non-reputable Tier A → Tier B
+    // =========================================================================
+    if (companyDomain) {
+      citations = enforceCitationTiers(citations, companyDomain);
+    }
+
+    // Also enforce tiers on hook evidence_tier fields (cached hooks may have stale tiers)
+    candidateHooks = candidateHooks.map((h) => {
+      if (h.evidence_tier !== "A") return h;
+      if (!h.source_url || !companyDomain) return h;
+      const firstParty = isFirstPartySource(h.source_url, companyDomain);
+      const reputable = isReputablePublisher(h.source_url);
+      if (!firstParty && !reputable) {
+        return { ...h, evidence_tier: "B" as const };
+      }
+      return h;
+    });
 
     // =========================================================================
     // PUBLISH GATE FINAL — runs on ALL hooks (cached or fresh) right before return.
@@ -274,9 +316,11 @@ export async function POST(request: Request) {
         }
       : null;
 
-    // Cache ALL gated hooks (before rank+cap) for next time
-    if (!cached && roleGated.length > 0) {
-      setCachedHooks(url, roleGated, citations, profileUpdatedAt).catch(() => {});
+    // Cache hooks for next time:
+    // - Fresh results: always cache
+    // - Stale cached results (wrong rules_version): re-cache with corrected payload
+    if (roleGated.length > 0 && (!cached || cacheStale)) {
+      setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole).catch(() => {});
     }
 
     // Split discovered URLs into first-party and web results
