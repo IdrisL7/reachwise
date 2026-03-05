@@ -314,6 +314,12 @@ export default function HooksPage() {
     e.preventDefault();
     if (!url && !companyName) return;
 
+    // Validate custom role has text
+    if (targetRole === "Custom" && !customRoleInput.trim()) {
+      setError("Enter a role name or pick one from the dropdown.");
+      return;
+    }
+
     // JIT Context Wallet gate: first generation + no profile
     if (shouldGate) {
       pendingGenerate.current = true;
@@ -783,9 +789,19 @@ export default function HooksPage() {
                 )}
                 <p className="text-zinc-200 mb-3">{hook.text}</p>
                 {hook.source_snippet && (
-                  <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
-                    {hook.source_snippet}
-                  </p>
+                  <div className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
+                    <p>{hook.source_snippet}</p>
+                    {hook.source_url && (
+                      <a
+                        href={hook.source_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="not-italic text-zinc-600 hover:text-zinc-400 underline underline-offset-2 transition-colors mt-1 block truncate"
+                      >
+                        {hook.source_title || hook.source_url}
+                      </a>
+                    )}
+                  </div>
                 )}
                 <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
                   <button
