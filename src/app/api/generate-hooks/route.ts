@@ -10,6 +10,8 @@ import {
   rankAndCap,
   resolveCompanyByName,
   getDomain,
+  isFirstPartySource,
+  isReputablePublisher,
   type CompanyResolutionResult,
   type ClassifiedSource,
   type Hook,
@@ -277,11 +279,23 @@ export async function POST(request: Request) {
       setCachedHooks(url, roleGated, citations, profileUpdatedAt).catch(() => {});
     }
 
-    // Collect verified discovered URLs from citations (actual pages we found)
-    const discoveredUrls = citations
+    // Split discovered URLs into first-party and web results
+    const allDiscovered = citations
       .filter((c) => c.tier !== "C" && c.url)
       .map((c) => ({ title: c.source_title, url: c.url, tier: c.tier }))
-      .filter((v, i, arr) => arr.findIndex((a) => a.url === v.url) === i)
+      .filter((v, i, arr) => arr.findIndex((a) => a.url === v.url) === i);
+
+    const firstPartyUrls = allDiscovered
+      .filter((d) => companyDomain && isFirstPartySource(d.url, companyDomain))
+      .slice(0, 6);
+
+    const webUrls = allDiscovered
+      .filter((d) => !companyDomain || !isFirstPartySource(d.url, companyDomain))
+      .map((d) => ({
+        ...d,
+        // Cap non-reputable third-party to Tier B in display
+        tier: d.tier === "A" && !isReputablePublisher(d.url) ? "B" : d.tier,
+      }))
       .slice(0, 6);
 
     return NextResponse.json({
@@ -296,7 +310,8 @@ export async function POST(request: Request) {
       companyName: companyName ?? undefined,
       companyDomain: companyDomain || undefined,
       resolvedCompany,
-      discoveredUrls: finalLowSignal ? discoveredUrls : undefined,
+      firstPartyUrls: finalLowSignal ? firstPartyUrls : undefined,
+      webUrls: finalLowSignal ? webUrls : undefined,
       cached,
       targetRole: targetRole || "General",
     });

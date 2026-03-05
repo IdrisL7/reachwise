@@ -22,6 +22,9 @@ import {
   TARGET_ROLES,
   ROLE_RESPONSIBILITIES,
   ROLE_REQUIRED_TOKENS,
+  isFirstPartySource,
+  isReputablePublisher,
+  hasMarketStatMisframing,
 } from "./hooks";
 import type { EvidenceTier, StructuredHook } from "./types";
 import type { SenderContext } from "./workspace";
@@ -1669,15 +1672,15 @@ describe("Role Token Gate", () => {
     confidence: "high",
   };
 
-  it("passes hook containing VP Sales token 'pipeline'", () => {
+  it("passes hook containing VP Sales token 'forecast' in final question", () => {
     const hit = findRoleTokenHit(baseHook.hook, "VP Sales");
-    expect(hit).toBe("pipeline");
+    expect(hit).toBe("forecast");
   });
 
-  it("passes hook containing RevOps token 'process'", () => {
+  it("passes hook containing RevOps token 'governance' in final question", () => {
     const hook = { ...baseHook, hook: 'Read that you restructured "data validation process" — is that fixing sync issues or governance gaps?' };
     const hit = findRoleTokenHit(hook.hook, "RevOps");
-    expect(hit).toBe("process");
+    expect(hit).toBe("governance");
   });
 
   it("rejects hook missing all VP Sales tokens", () => {
@@ -1698,7 +1701,7 @@ describe("Role Token Gate", () => {
     ];
     const result = roleTokenGate(hooks, "VP Sales");
     expect(result).toHaveLength(1);
-    expect(result[0].role_token_hit).toBe("pipeline");
+    expect(result[0].role_token_hit).toBe("forecast");
   });
 
   it("roleTokenGate passes all hooks for General", () => {
@@ -1862,5 +1865,102 @@ describe("Entity Match Gate", () => {
     // "sales" is generic, so name match in facts doesn't count
     expect(result.entity_hit_score).toBe(0);
     expect(result.reason_code).toBe("ENTITY_MISMATCH");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// First-Party Source Detection
+// ---------------------------------------------------------------------------
+describe("isFirstPartySource", () => {
+  it("matches exact domain", () => {
+    expect(isFirstPartySource("https://acme.com/blog", "acme.com")).toBe(true);
+  });
+
+  it("matches subdomain", () => {
+    expect(isFirstPartySource("https://blog.acme.com/post", "acme.com")).toBe(true);
+  });
+
+  it("rejects different domain", () => {
+    expect(isFirstPartySource("https://techcrunch.com/acme", "acme.com")).toBe(false);
+  });
+
+  it("rejects partial domain match", () => {
+    expect(isFirstPartySource("https://notacme.com/page", "acme.com")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Reputable Publisher Detection
+// ---------------------------------------------------------------------------
+describe("isReputablePublisher", () => {
+  it("recognizes reuters.com", () => {
+    expect(isReputablePublisher("https://reuters.com/article/foo")).toBe(true);
+  });
+
+  it("recognizes subdomain of reputable publisher", () => {
+    expect(isReputablePublisher("https://www.bloomberg.com/news/foo")).toBe(true);
+  });
+
+  it("rejects random blog", () => {
+    expect(isReputablePublisher("https://randomblog.io/post")).toBe(false);
+  });
+
+  it("recognizes wire services", () => {
+    expect(isReputablePublisher("https://prnewswire.com/release/123")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Market-Stat Misframing
+// ---------------------------------------------------------------------------
+describe("hasMarketStatMisframing", () => {
+  it("flags 'your team' framing with market stat evidence", () => {
+    expect(hasMarketStatMisframing(
+      "Saw your team dealing with pipeline leakage — how are you handling it?",
+      "According to Gartner, 67% of sales teams struggle with pipeline leakage.",
+    )).toBe(true);
+  });
+
+  it("allows 'your team' framing with company-specific evidence", () => {
+    expect(hasMarketStatMisframing(
+      "Saw your team added predictive scoring — is that changing forecasting?",
+      "Acme Corp launched predictive scoring for their enterprise customers.",
+    )).toBe(false);
+  });
+
+  it("allows neutral framing with market stat evidence", () => {
+    expect(hasMarketStatMisframing(
+      "Gartner says 67% of teams struggle with pipeline — does that match what you see?",
+      "According to Gartner, 67% of sales teams struggle with pipeline leakage.",
+    )).toBe(false);
+  });
+
+  it("flags 'your reps spend' with generic stat", () => {
+    expect(hasMarketStatMisframing(
+      "Your reps spend 30% of time on admin — how are you tackling that?",
+      "A recent study shows reps spend 30% of their time on admin tasks.",
+    )).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Role Token Gate — Final Question Restriction
+// ---------------------------------------------------------------------------
+describe("Role Token Gate — final question restriction", () => {
+  it("matches token in question part only", () => {
+    // "pipeline" is in the preamble, "forecast" is in the question
+    const hook = 'Read that you added "predictive pipeline scoring" — is that changing how reps forecast?';
+    expect(findRoleTokenHit(hook, "VP Sales")).toBe("forecast");
+  });
+
+  it("ignores token that only appears in preamble", () => {
+    // "pipeline" in preamble, nothing relevant in the question
+    const hook = 'Read that you revamped your pipeline tooling — is that for the enterprise segment or mid-market?';
+    expect(findRoleTokenHit(hook, "VP Sales")).toBeNull();
+  });
+
+  it("matches when no em dash separator (whole hook is question)", () => {
+    const hook = "How is your team handling pipeline coverage right now?";
+    expect(findRoleTokenHit(hook, "VP Sales")).toBe("pipeline");
   });
 });

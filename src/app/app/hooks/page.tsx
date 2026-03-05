@@ -39,7 +39,8 @@ export default function HooksPage() {
   const [overflowHooks, setOverflowHooks] = useState<Hook[]>([]);
   const [showAll, setShowAll] = useState(false);
   const [linkedinSlug, setLinkedinSlug] = useState<string | null>(null);
-  const [discoveredUrls, setDiscoveredUrls] = useState<Array<{ title: string; url: string; tier: string }>>([]);
+  const [firstPartyUrls, setFirstPartyUrls] = useState<Array<{ title: string; url: string; tier: string }>>([]);
+  const [webUrls, setWebUrls] = useState<Array<{ title: string; url: string; tier: string }>>([]);
   const [companyDomain, setCompanyDomain] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
@@ -131,7 +132,8 @@ export default function HooksPage() {
     setSuggestion("");
     setLowSignal(false);
     setLinkedinSlug(null);
-    setDiscoveredUrls([]);
+    setFirstPartyUrls([]);
+    setWebUrls([]);
     setCompanyDomain("");
 
     try {
@@ -194,7 +196,8 @@ export default function HooksPage() {
       if (data.suggestion) setSuggestion(data.suggestion);
       if (data.lowSignal) setLowSignal(true);
       if (data.linkedinSlug) setLinkedinSlug(data.linkedinSlug);
-      if (data.discoveredUrls) setDiscoveredUrls(data.discoveredUrls);
+      if (data.firstPartyUrls) setFirstPartyUrls(data.firstPartyUrls);
+      if (data.webUrls) setWebUrls(data.webUrls);
       if (data.companyDomain) setCompanyDomain(data.companyDomain);
     } catch (err) {
       setError((err as Error).message);
@@ -324,18 +327,39 @@ export default function HooksPage() {
             </div>
           )}
 
-          {/* Found on their site (verified) */}
-          {discoveredUrls.length > 0 && (
+          {/* Found on their site (first-party verified) */}
+          {firstPartyUrls.length > 0 && (
             <div className="px-4 pb-3">
               <p className="text-xs font-medium text-zinc-400 mb-1.5">Found on their site:</p>
               <div className="space-y-1">
-                {discoveredUrls.map((d, i) => (
+                {firstPartyUrls.map((d, i) => (
                   <a
                     key={i}
                     href={d.url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-xs text-emerald-400 hover:text-emerald-300 truncate"
+                  >
+                    {d.title || d.url}
+                    <span className={`ml-1.5 ${d.tier === "A" ? "text-emerald-600" : "text-zinc-600"}`}>Tier {d.tier}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Found on the web (not first-party) */}
+          {webUrls.length > 0 && (
+            <div className="px-4 pb-3">
+              <p className="text-xs font-medium text-zinc-500 mb-1.5">Found on the web <span className="text-zinc-600">(not verified as first-party)</span>:</p>
+              <div className="space-y-1">
+                {webUrls.map((d, i) => (
+                  <a
+                    key={i}
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-zinc-400 hover:text-zinc-300 truncate"
                   >
                     {d.title || d.url}
                     <span className="text-zinc-600 ml-1.5">Tier {d.tier}</span>
@@ -398,7 +422,8 @@ export default function HooksPage() {
                   setSuggestion("");
                   setLowSignal(false);
                   setLinkedinSlug(null);
-                  setDiscoveredUrls([]);
+                  setFirstPartyUrls([]);
+                  setWebUrls([]);
                   // Focus the URL input
                   const input = document.querySelector<HTMLInputElement>("input[type='url']");
                   input?.focus();

@@ -461,6 +461,46 @@ export function computeAnchorScore(
 }
 
 // ---------------------------------------------------------------------------
+// First-party / reputable publisher classification
+// ---------------------------------------------------------------------------
+
+/**
+ * Reputable publisher domains that earn Tier A even as third-party sources.
+ * These are major press outlets, financial filings, and government/official sources.
+ */
+export const REPUTABLE_PUBLISHER_DOMAINS = new Set([
+  // Major press
+  "reuters.com", "apnews.com", "bloomberg.com", "wsj.com",
+  "nytimes.com", "ft.com", "bbc.com", "bbc.co.uk", "cnbc.com",
+  // Tech press
+  "techcrunch.com", "theverge.com", "wired.com", "arstechnica.com",
+  // Financial filings / official
+  "sec.gov", "gov.uk", "europa.eu",
+  // Industry-specific authoritative
+  "prnewswire.com", "businesswire.com", "globenewswire.com",
+]);
+
+/**
+ * Check if a source URL is first-party (on the target's domain or a verified subdomain).
+ */
+export function isFirstPartySource(sourceUrl: string, targetDomain: string): boolean {
+  const sourceHost = getDomain(sourceUrl).toLowerCase();
+  const td = targetDomain.toLowerCase();
+  return sourceHost === td || sourceHost.endsWith("." + td);
+}
+
+/**
+ * Check if a source is from a reputable publisher (earns Tier A as third-party).
+ */
+export function isReputablePublisher(sourceUrl: string): boolean {
+  const sourceHost = getDomain(sourceUrl).toLowerCase();
+  for (const domain of REPUTABLE_PUBLISHER_DOMAINS) {
+    if (sourceHost === domain || sourceHost.endsWith("." + domain)) return true;
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // Evidence tier classification
 // ---------------------------------------------------------------------------
 
@@ -1379,8 +1419,20 @@ export async function fetchSourcesWithGating(
     return { ...source, anchorScore, entity_hit_score: entityMatch.entity_hit_score, entity_matched_term: entityMatch.entity_matched_term };
   });
 
+  // TIER A FIRST-PARTY/REPUTABLE GATE: Tier A requires first-party domain
+  // or reputable publisher. Third-party non-reputable sources cap at Tier B.
+  const tierEnforced = anchored.map((source) => {
+    if (source.tier !== "A") return source;
+    const firstParty = isFirstPartySource(source.url, domain);
+    const reputable = isReputablePublisher(source.url);
+    if (!firstParty && !reputable) {
+      return { ...source, tier: "B" as EvidenceTier };
+    }
+    return source;
+  });
+
   // Rank by score and take top 10
-  const ranked = anchored
+  const ranked = tierEnforced
     .sort((a, b) => scoreSource(b) - scoreSource(a))
     .slice(0, 10);
 
@@ -2097,6 +2149,54 @@ function hasFirstPersonFraming(hook: string): boolean {
 }
 
 /**
+ * Patterns that imply company-specific pain but are only valid when evidence
+ * is actually about the target company (not a generic market stat).
+ */
+const MARKET_STAT_MISFRAMING_PATTERNS = [
+  /\b(saw|noticed|see)\s+(your|you're)\s+(team|reps?|SDRs?|BDRs?|AEs?)\b/i,
+  /\byour\s+team\s+(is|are|has|have|deal|spend|struggle|report)\b/i,
+  /\byou're\s+(dealing|struggling|spending|losing|facing|seeing)\b/i,
+  /\byour\s+(bottleneck|challenge|problem|issue|pain)\b/i,
+  /\byour\s+(reps?|SDRs?|BDRs?|AEs?)\s+(are|spend|lose|waste|report)\b/i,
+];
+
+/**
+ * Detect if evidence is a generic market stat (not company-specific).
+ * Market stats use phrases like "teams report", "sales professionals", "on average" etc.
+ */
+const MARKET_STAT_EVIDENCE_PATTERNS = [
+  /\b(teams|professionals|reps|SDRs|BDRs|AEs|sellers|salespeople|organizations)\s+(report|spend|say|cite|find|average|typically)\b/i,
+  /\bon average\b/i,
+  /\b(industry|market|benchmark|survey|study|research)\s+(data|shows?|finds?|reports?|indicates?)\b/i,
+  /\baccording to\s+(a\s+)?(study|survey|report|research)\b/i,
+  /\b\d+%\s+of\s+(teams|reps|companies|organizations|sales)\b/i,
+];
+
+/**
+ * Returns true if a hook misframes a market stat as company-specific pain.
+ * E.g., evidence says "Sales pros report spending 3-5 min" but hook says
+ * "Saw your team dealing with...". This violates no-assumptions.
+ */
+export function hasMarketStatMisframing(
+  hookText: string,
+  evidenceSnippet: string,
+  source?: ClassifiedSource,
+): boolean {
+  // Check if the hook uses company-specific framing
+  const usesCompanyFraming = MARKET_STAT_MISFRAMING_PATTERNS.some((p) => p.test(hookText));
+  if (!usesCompanyFraming) return false;
+
+  // If the source is first-party (company's own site), company-specific framing is OK
+  if (source && source.anchorScore !== undefined && source.anchorScore >= 6) return false;
+
+  // Check if evidence is a market stat (generic, not company-specific)
+  const isMarketStat = MARKET_STAT_EVIDENCE_PATTERNS.some((p) => p.test(evidenceSnippet));
+  if (isMarketStat) return true; // Market stat + company framing = misframing
+
+  return false;
+}
+
+/**
  * Check whether a source has concrete, quoteable evidence.
  * Returns true if facts contain at least one of: a number, a named tool/integration,
  * a named customer/partner, or a concrete feature/offer term.
@@ -2153,6 +2253,14 @@ export function validateHook(
 
   // You-first framing: reject hooks that use first-person (we/our/us/I)
   if (hasFirstPersonFraming(hook)) return null;
+
+  // Market-stat framing: reject "your team" / "you're dealing with" unless evidence
+  // is company-specific (contains the company name or is from a first-party source).
+  // Market-stat evidence (e.g. "Sales pros report spending 3-5 min...") must use
+  // neutral framing ("Teams report..." not "Saw your team dealing with...").
+  if (hasMarketStatMisframing(hook, raw.evidence_snippet || "", sourceLookup?.get(raw.news_item))) {
+    return null;
+  }
 
   const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
   const validTier = tier === "A" || tier === "B" ? tier : (
@@ -2441,16 +2549,22 @@ export const ROLE_REQUIRED_TOKENS: Record<Exclude<TargetRole, "General">, string
 };
 
 /**
- * Check if a hook's question sentence contains at least one role token.
+ * Check if a hook's FINAL QUESTION sentence contains at least one role token.
+ * Uses the question part (after the last em dash, or the last sentence with "?").
+ * This prevents token stuffing earlier in the hook.
  * Returns the matched token or null.
  */
 export function findRoleTokenHit(hookText: string, role: TargetRole): string | null {
   if (role === "General") return null; // No gate for General
   const tokens = ROLE_REQUIRED_TOKENS[role];
   if (!tokens) return null;
-  const lower = hookText.toLowerCase();
+
+  // Extract the final question: text after the last em dash, or last "?" sentence
+  const parts = hookText.split(/\s*—\s*/);
+  const questionPart = (parts.length > 1 ? parts[parts.length - 1] : hookText).toLowerCase();
+
   for (const token of tokens) {
-    if (lower.includes(token)) return token;
+    if (questionPart.includes(token)) return token;
   }
   return null;
 }
