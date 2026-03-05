@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import { sendEmail } from "@/lib/email/sendgrid";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getOrCreateDefaultWorkspace } from "@/lib/workspace-helpers";
 
 /** POST /api/auth/register — create a new account */
 export async function POST(request: NextRequest) {
@@ -64,6 +65,9 @@ export async function POST(request: NextRequest) {
         name: schema.users.name,
         tierId: schema.users.tierId,
       });
+
+    // Create default workspace for the new user
+    await getOrCreateDefaultWorkspace(user.id);
 
     // Send verification email
     const verifyToken = crypto.randomBytes(32).toString("hex");

@@ -180,8 +180,30 @@ export const hookCache = sqliteTable("hook_cache", {
   url: text("url").notNull(),
   hooks: text("hooks", { mode: "json" }).notNull(),
   citations: text("citations", { mode: "json" }),
+  profileUpdatedAt: text("profile_updated_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   expiresAt: text("expires_at").notNull(),
+});
+
+// ── Workspaces ──
+
+export const workspaces = sqliteTable("workspaces", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  ownerUserId: text("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull().default("My Workspace"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+export const workspaceProfiles = sqliteTable("workspace_profiles", {
+  workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id, { onDelete: "cascade" }),
+  whatYouSell: text("what_you_sell").notNull(),
+  icpIndustry: text("icp_industry").notNull(),
+  icpCompanySize: text("icp_company_size").notNull(),
+  buyerRoles: text("buyer_roles", { mode: "json" }).$type<string[]>().notNull(),
+  primaryOutcome: text("primary_outcome").notNull(),
+  offerCategory: text("offer_category").notNull(),
+  proof: text("proof", { mode: "json" }).$type<string[]>(),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
 
 export const rateLimits = sqliteTable("rate_limits", {

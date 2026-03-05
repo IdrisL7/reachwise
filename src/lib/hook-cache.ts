@@ -14,7 +14,10 @@ async function hashUrl(url: string): Promise<string> {
     .join("");
 }
 
-export async function getCachedHooks(url: string) {
+export async function getCachedHooks(
+  url: string,
+  currentProfileUpdatedAt?: string | null,
+) {
   const urlHash = await hashUrl(url);
   const [cached] = await db
     .select()
@@ -27,6 +30,16 @@ export async function getCachedHooks(url: string) {
     await db.delete(schema.hookCache).where(eq(schema.hookCache.id, cached.id));
     return null;
   }
+
+  // Profile-based cache busting: if profile timestamp differs, treat as cache miss
+  if (currentProfileUpdatedAt !== undefined) {
+    const cachedProfileTs = cached.profileUpdatedAt ?? null;
+    const currentTs = currentProfileUpdatedAt ?? null;
+    if (cachedProfileTs !== currentTs) {
+      return null;
+    }
+  }
+
   return { hooks: cached.hooks, citations: cached.citations };
 }
 
@@ -34,15 +47,29 @@ export async function setCachedHooks(
   url: string,
   hooks: unknown,
   citations: unknown,
+  profileUpdatedAt?: string | null,
 ) {
   const urlHash = await hashUrl(url);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
   await db
     .insert(schema.hookCache)
-    .values({ urlHash, url, hooks, citations, expiresAt })
+    .values({
+      urlHash,
+      url,
+      hooks,
+      citations,
+      profileUpdatedAt: profileUpdatedAt ?? null,
+      expiresAt,
+    })
     .onConflictDoUpdate({
       target: schema.hookCache.urlHash,
-      set: { hooks, citations, expiresAt, createdAt: new Date().toISOString() },
+      set: {
+        hooks,
+        citations,
+        profileUpdatedAt: profileUpdatedAt ?? null,
+        expiresAt,
+        createdAt: new Date().toISOString(),
+      },
     });
 }

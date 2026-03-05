@@ -14,6 +14,8 @@ import {
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks } from "@/lib/hook-cache";
+import { auth } from "@/lib/auth";
+import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
 
 // ---------------------------------------------------------------------------
 // Route handler
@@ -66,6 +68,22 @@ export async function POST(request: Request) {
       );
     }
 
+    // Resolve workspace profile for cache busting (best-effort, non-blocking for unauthenticated requests)
+    let profileUpdatedAt: string | null = null;
+    let _senderContext: Awaited<ReturnType<typeof getWorkspaceProfile>> = null;
+    try {
+      const session = await auth();
+      if (session?.user?.id) {
+        const workspaceId = await resolveWorkspaceId(session.user.id);
+        [_senderContext, profileUpdatedAt] = await Promise.all([
+          getWorkspaceProfile(workspaceId),
+          getProfileUpdatedAt(workspaceId),
+        ]);
+      }
+    } catch {
+      // Non-critical — continue without profile context
+    }
+
     let url = rawUrl;
     let resolution: CompanyResolutionResult | null = null;
 
@@ -112,7 +130,7 @@ export async function POST(request: Request) {
     let cached = false;
 
     try {
-      const cachedResult = await getCachedHooks(url);
+      const cachedResult = await getCachedHooks(url, profileUpdatedAt);
       if (cachedResult) {
         candidateHooks = cachedResult.hooks as Hook[];
         citations = (cachedResult.citations || []) as typeof citations;
@@ -224,7 +242,7 @@ export async function POST(request: Request) {
 
     // Cache gated hooks for next time (fire and forget) — only for fresh (non-cached) results
     if (!cached && finalHooks.length > 0) {
-      setCachedHooks(url, finalHooks, citations).catch(() => {});
+      setCachedHooks(url, finalHooks, citations, profileUpdatedAt).catch(() => {});
     }
 
     return NextResponse.json({
