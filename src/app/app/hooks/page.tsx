@@ -53,7 +53,9 @@ export default function HooksPage() {
   const [discovering, setDiscovering] = useState(false);
   const [hooksUsed, setHooksUsed] = useState<number | null>(null); // null = loading
   const [skippedGate, setSkippedGate] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
   const pendingGenerate = useRef(false);
+  const lowSignalTracked = useRef(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gsh_targetRole") || "General";
@@ -78,6 +80,13 @@ export default function HooksPage() {
   // Whether profile is required (skipped once before, still no profile)
   const profileRequired = !hasProfile && skippedGate;
 
+  function markCopied() {
+    if (!hasCopied) {
+      setHasCopied(true);
+      trackEvent("hook_copied_first");
+    }
+  }
+
   async function copyHook(text: string, index: number) {
     if (profileRequired) {
       setShowGateModal(true);
@@ -85,7 +94,7 @@ export default function HooksPage() {
     }
     await navigator.clipboard.writeText(text);
     setCopied(index);
-    trackEvent("first_hook_copied");
+    markCopied();
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -99,7 +108,7 @@ export default function HooksPage() {
     if (hook.source_url) content += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(content);
     setCopiedEvidence(index);
-    trackEvent("first_hook_copied");
+    markCopied();
     setTimeout(() => setCopiedEvidence(null), 2000);
   }
 
@@ -144,7 +153,7 @@ export default function HooksPage() {
     const content = `Subject: ${email.subject}\n\n${email.body}`;
     await navigator.clipboard.writeText(content);
     setCopiedEmail(index);
-    trackEvent("first_hook_copied");
+    markCopied();
     setTimeout(() => setCopiedEmail(null), 2000);
   }
 
@@ -231,7 +240,13 @@ export default function HooksPage() {
       }
 
       if (data.suggestion) setSuggestion(data.suggestion);
-      if (data.lowSignal) setLowSignal(true);
+      if (data.lowSignal) {
+        setLowSignal(true);
+        if (!lowSignalTracked.current) {
+          lowSignalTracked.current = true;
+          trackEvent("low_signal_shown");
+        }
+      }
       if (data.linkedinSlug) setLinkedinSlug(data.linkedinSlug);
       if (data.firstPartyUrls) setFirstPartyUrls(data.firstPartyUrls);
       if (data.webUrls) setWebUrls(data.webUrls);
@@ -239,7 +254,7 @@ export default function HooksPage() {
 
       // Update hooksUsed locally so the gate doesn't re-trigger
       setHooksUsed((prev) => (prev ?? 0) + 1);
-      trackEvent("first_hooks_generated");
+      trackEvent("hooks_generated_first");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -255,7 +270,7 @@ export default function HooksPage() {
     if (shouldGate) {
       pendingGenerate.current = true;
       setShowProfileModal(true);
-      trackEvent("context_wallet_gate_shown");
+      trackEvent("jit_profile_shown");
       return;
     }
 
@@ -272,7 +287,7 @@ export default function HooksPage() {
   function handleProfileSaved() {
     setShowProfileModal(false);
     setHasProfile(true);
-    trackEvent("context_wallet_saved");
+    trackEvent("jit_profile_saved");
 
     // Auto-continue the pending generation
     if (pendingGenerate.current) {
@@ -284,7 +299,7 @@ export default function HooksPage() {
   function handleGateSkipped() {
     setShowProfileModal(false);
     setSkippedGate(true);
-    trackEvent("context_wallet_skipped");
+    trackEvent("jit_profile_skipped");
 
     // Allow this one generation to proceed
     if (pendingGenerate.current) {
@@ -320,9 +335,57 @@ export default function HooksPage() {
     benefit: "Benefit",
   };
 
+  // Progress bar steps
+  const hasGenerated = (hooksUsed ?? 0) > 0 || hooks.length > 0;
+  const progressSteps = [
+    { label: "Profile", done: hasProfile },
+    { label: "Generate", done: hasGenerated },
+    { label: "Copy", done: hasCopied },
+  ];
+
+  const EXAMPLE_COMPANIES = [
+    { url: "https://gong.io", name: "Gong", role: "VP Sales" },
+    { url: "https://hubspot.com", name: "HubSpot", role: "Marketing" },
+    { url: "https://stripe.com", name: "Stripe", role: "Founder/CEO" },
+  ];
+
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Generate Hooks</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Generate Hooks</h1>
+        {/* 3-step progress bar */}
+        {hooksUsed !== null && (
+          <div className="flex items-center gap-1.5">
+            {progressSteps.map((step, i) => (
+              <div key={step.label} className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1">
+                  <div
+                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
+                      step.done
+                        ? "bg-emerald-600 text-white"
+                        : "bg-zinc-800 text-zinc-500"
+                    }`}
+                  >
+                    {step.done ? (
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      i + 1
+                    )}
+                  </div>
+                  <span className={`text-xs hidden sm:block ${step.done ? "text-zinc-300" : "text-zinc-600"}`}>
+                    {step.label}
+                  </span>
+                </div>
+                {i < progressSteps.length - 1 && (
+                  <div className={`w-6 h-px ${step.done ? "bg-emerald-600" : "bg-zinc-800"}`} />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <form id="hooks-form" onSubmit={generateHooks} className="mb-8">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
@@ -394,10 +457,31 @@ export default function HooksPage() {
           <h2 className="text-lg font-semibold text-zinc-200 mb-2">
             Generate your first hooks
           </h2>
-          <p className="text-sm text-zinc-500 max-w-md mx-auto">
+          <p className="text-sm text-zinc-500 max-w-md mx-auto mb-5">
             Enter a company URL above and we&apos;ll research their public signals — earnings,
             hiring, tech changes — and generate evidence-backed hooks you can drop into any outbound message.
           </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            <span className="text-xs text-zinc-600">Try an example:</span>
+            {EXAMPLE_COMPANIES.map((ex) => (
+              <button
+                key={ex.url}
+                type="button"
+                onClick={() => {
+                  setUrl(ex.url);
+                  setTargetRole(ex.role);
+                  localStorage.setItem("gsh_targetRole", ex.role);
+                  setTimeout(() => {
+                    const form = document.getElementById("hooks-form") as HTMLFormElement;
+                    form?.requestSubmit();
+                  }, 50);
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-emerald-400 transition-colors"
+              >
+                {ex.name} <span className="text-zinc-500">({ex.role})</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -481,7 +565,7 @@ export default function HooksPage() {
                 <button
                   onClick={async () => {
                     setDiscovering(true);
-                    // Re-run with the company domain directly
+                    trackEvent("sources_found_clicked");
                     runWithUrl(`https://${companyDomain}`);
                     setDiscovering(false);
                   }}

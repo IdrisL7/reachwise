@@ -46,6 +46,12 @@ function RegisterForm() {
         setError("Account created but sign-in failed. Try logging in.");
         setLoading(false);
       } else {
+        // Track registration completion
+        fetch("/api/track-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event: "register_completed" }),
+        }).catch(() => {});
         // Redirect to Stripe checkout — trial for starter, direct for others
         setLoading(false);
         setCheckoutMessage(`Account created! Check ${email} to verify your email. Redirecting to checkout...`);
