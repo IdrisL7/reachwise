@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import ContextWalletModal from "@/components/context-wallet-modal";
 
 interface Hook {
@@ -18,6 +18,14 @@ interface Hook {
 interface GeneratedEmail {
   subject: string;
   body: string;
+}
+
+function trackEvent(event: string) {
+  fetch("/api/track-event", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event }),
+  }).catch(() => {});
 }
 
 export default function HooksPage() {
@@ -43,6 +51,9 @@ export default function HooksPage() {
   const [webUrls, setWebUrls] = useState<Array<{ title: string; url: string; tier: string }>>([]);
   const [companyDomain, setCompanyDomain] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
+  const [hooksUsed, setHooksUsed] = useState<number | null>(null); // null = loading
+  const [skippedGate, setSkippedGate] = useState(false);
+  const pendingGenerate = useRef(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gsh_targetRole") || "General";
@@ -51,30 +62,52 @@ export default function HooksPage() {
   });
 
   useEffect(() => {
-    fetch("/api/workspace-profile")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.profile) setHasProfile(true);
-      })
-      .catch(() => {});
+    // Fetch profile status and hooks used count in parallel
+    Promise.all([
+      fetch("/api/workspace-profile").then((r) => r.json()).catch(() => ({})),
+      fetch("/api/user-stats").then((r) => r.json()).catch(() => ({})),
+    ]).then(([profileData, statsData]) => {
+      if (profileData.profile) setHasProfile(true);
+      setHooksUsed(statsData.hooksUsed ?? 0);
+    });
   }, []);
 
+  // Whether the JIT gate should trigger: no profile, first-ever generation, hasn't skipped yet
+  const shouldGate = !hasProfile && hooksUsed === 0 && !skippedGate;
+
+  // Whether profile is required (skipped once before, still no profile)
+  const profileRequired = !hasProfile && skippedGate;
+
   async function copyHook(text: string, index: number) {
+    if (profileRequired) {
+      setShowGateModal(true);
+      return;
+    }
     await navigator.clipboard.writeText(text);
     setCopied(index);
+    trackEvent("first_hook_copied");
     setTimeout(() => setCopied(null), 2000);
   }
 
   async function copyHookWithEvidence(hook: Hook, index: number) {
+    if (profileRequired) {
+      setShowGateModal(true);
+      return;
+    }
     let content = `Hook: ${hook.text}`;
     if (hook.source_snippet) content += `\nEvidence: ${hook.source_snippet}`;
     if (hook.source_url) content += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(content);
     setCopiedEvidence(index);
+    trackEvent("first_hook_copied");
     setTimeout(() => setCopiedEvidence(null), 2000);
   }
 
   async function generateEmail(hook: Hook, index: number) {
+    if (profileRequired) {
+      setShowGateModal(true);
+      return;
+    }
     setGeneratingEmail(index);
     try {
       const res = await fetch("/api/generate-email", {
@@ -104,9 +137,14 @@ export default function HooksPage() {
   }
 
   async function copyEmail(email: GeneratedEmail, index: number) {
+    if (profileRequired) {
+      setShowGateModal(true);
+      return;
+    }
     const content = `Subject: ${email.subject}\n\n${email.body}`;
     await navigator.clipboard.writeText(content);
     setCopiedEmail(index);
+    trackEvent("first_hook_copied");
     setTimeout(() => setCopiedEmail(null), 2000);
   }
 
@@ -119,8 +157,7 @@ export default function HooksPage() {
     }, 50);
   }
 
-  async function generateHooks(e: React.FormEvent) {
-    e.preventDefault();
+  const doGenerate = useCallback(async () => {
     if (!url && !companyName) return;
 
     setLoading(true);
@@ -199,11 +236,67 @@ export default function HooksPage() {
       if (data.firstPartyUrls) setFirstPartyUrls(data.firstPartyUrls);
       if (data.webUrls) setWebUrls(data.webUrls);
       if (data.companyDomain) setCompanyDomain(data.companyDomain);
+
+      // Update hooksUsed locally so the gate doesn't re-trigger
+      setHooksUsed((prev) => (prev ?? 0) + 1);
+      trackEvent("first_hooks_generated");
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
+  }, [url, companyName, targetRole]);
+
+  async function generateHooks(e: React.FormEvent) {
+    e.preventDefault();
+    if (!url && !companyName) return;
+
+    // JIT Context Wallet gate: first generation + no profile
+    if (shouldGate) {
+      pendingGenerate.current = true;
+      setShowProfileModal(true);
+      trackEvent("context_wallet_gate_shown");
+      return;
+    }
+
+    // If profile is required (skipped before), block generate too
+    if (profileRequired) {
+      pendingGenerate.current = true;
+      setShowGateModal(true);
+      return;
+    }
+
+    await doGenerate();
+  }
+
+  function handleProfileSaved() {
+    setShowProfileModal(false);
+    setHasProfile(true);
+    trackEvent("context_wallet_saved");
+
+    // Auto-continue the pending generation
+    if (pendingGenerate.current) {
+      pendingGenerate.current = false;
+      doGenerate();
+    }
+  }
+
+  function handleGateSkipped() {
+    setShowProfileModal(false);
+    setSkippedGate(true);
+    trackEvent("context_wallet_skipped");
+
+    // Allow this one generation to proceed
+    if (pendingGenerate.current) {
+      pendingGenerate.current = false;
+      doGenerate();
+    }
+  }
+
+  function handleGateModalSave() {
+    setShowGateModal(false);
+    setShowProfileModal(true);
+    pendingGenerate.current = true;
   }
 
   const tierColors: Record<string, string> = {
@@ -543,7 +636,7 @@ export default function HooksPage() {
           </div>
         );
       })()}
-      {hooks.length > 0 && !hasProfile && (
+      {hooks.length > 0 && !hasProfile && !shouldGate && (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 mt-6 text-sm text-zinc-400">
           Want hooks that connect to your pitch?{" "}
           <button
@@ -556,22 +649,19 @@ export default function HooksPage() {
         </div>
       )}
 
+      {/* Profile-required gate modal (after skip, on copy/export/generate) */}
       {showGateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
           <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
             <h3 className="text-lg font-semibold text-zinc-100 mb-3">
-              Make these hooks about YOU (not generic)
+              Add your profile to continue
             </h3>
             <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
-              Right now we can see the prospect&apos;s signal, but we don&apos;t know what you sell.
-              Add your 60-second profile to connect the signal to your offer.
+              To copy, export, or generate more hooks, add your 60-second profile so we can connect the signal to your offer.
             </p>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => {
-                  setShowGateModal(false);
-                  setShowProfileModal(true);
-                }}
+                onClick={handleGateModalSave}
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
               >
                 Add profile (60 seconds)
@@ -587,14 +677,18 @@ export default function HooksPage() {
         </div>
       )}
 
+      {/* Context Wallet modal — JIT gate mode or standard settings mode */}
       {showProfileModal && (
         <ContextWalletModal
-          showClose
-          onClose={() => setShowProfileModal(false)}
-          onSave={() => {
+          showClose={!shouldGate}
+          showSkip={shouldGate}
+          gateMode={shouldGate || pendingGenerate.current}
+          onClose={() => {
             setShowProfileModal(false);
-            setHasProfile(true);
+            pendingGenerate.current = false;
           }}
+          onSave={handleProfileSaved}
+          onSkip={handleGateSkipped}
         />
       )}
     </div>

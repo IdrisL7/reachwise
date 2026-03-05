@@ -49,15 +49,22 @@ interface InitialValues {
 interface ContextWalletModalProps {
   onSave: () => void;
   onClose?: () => void;
+  onSkip?: () => void;
   showClose?: boolean;
+  showSkip?: boolean;
   initialValues?: InitialValues;
+  /** JIT gate mode — different copy + CTA text */
+  gateMode?: boolean;
 }
 
 export default function ContextWalletModal({
   onSave,
   onClose,
+  onSkip,
   showClose = false,
+  showSkip = false,
   initialValues,
+  gateMode = false,
 }: ContextWalletModalProps) {
   const [whatYouSell, setWhatYouSell] = useState(initialValues?.whatYouSell ?? "");
   const [icpIndustry, setIcpIndustry] = useState(initialValues?.icpIndustry ?? "");
@@ -172,10 +179,12 @@ export default function ContextWalletModal({
         )}
 
         <h2 className="text-xl font-bold text-zinc-100 mb-1">
-          Add your 60-second profile
+          {gateMode ? "Make these hooks about your offer (60 seconds)" : "Add your 60-second profile"}
         </h2>
         <p className="text-sm text-zinc-400 mb-6">
-          To generate hooks that connect the prospect&apos;s signal to YOUR offer, we need a little context.
+          {gateMode
+            ? "We can see the prospect\u2019s signals. Add your pitch context so the hook connects to what you sell \u2014 with receipts and no made-up claims."
+            : "To generate hooks that connect the prospect\u2019s signal to YOUR offer, we need a little context."}
         </p>
 
         {/* Preset dropdown */}
@@ -357,8 +366,16 @@ export default function ContextWalletModal({
           disabled={saving}
           className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
         >
-          {saving ? "Saving..." : "Save profile"}
+          {saving ? "Saving..." : gateMode ? "Save & generate hooks" : "Save profile"}
         </button>
+        {showSkip && onSkip && (
+          <button
+            onClick={onSkip}
+            className="w-full mt-2 text-sm text-zinc-500 hover:text-zinc-300 py-2 transition-colors"
+          >
+            Skip (generic output)
+          </button>
+        )}
       </div>
     </div>
   );
