@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import ContextWalletModal from "@/components/context-wallet-modal";
 
 interface Hook {
   text: string;
@@ -22,11 +23,41 @@ export default function HooksPage() {
   const [copied, setCopied] = useState<number | null>(null);
   const [suggestion, setSuggestion] = useState("");
   const [lowSignal, setLowSignal] = useState(false);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showGateModal, setShowGateModal] = useState(false);
+  const [copiedEvidence, setCopiedEvidence] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch("/api/workspace-profile")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.profile) setHasProfile(true);
+      })
+      .catch(() => {});
+  }, []);
 
   async function copyHook(text: string, index: number) {
+    if (!hasProfile) {
+      setShowGateModal(true);
+      return;
+    }
     await navigator.clipboard.writeText(text);
     setCopied(index);
     setTimeout(() => setCopied(null), 2000);
+  }
+
+  async function copyHookWithEvidence(hook: Hook, index: number) {
+    if (!hasProfile) {
+      setShowGateModal(true);
+      return;
+    }
+    let content = `Hook: ${hook.text}`;
+    if (hook.source_snippet) content += `\nEvidence: ${hook.source_snippet}`;
+    if (hook.source_url) content += `\nSource: ${hook.source_url}`;
+    await navigator.clipboard.writeText(content);
+    setCopiedEvidence(index);
+    setTimeout(() => setCopiedEvidence(null), 2000);
   }
 
   async function generateHooks(e: React.FormEvent) {
@@ -215,13 +246,22 @@ export default function HooksPage() {
                 <span className="text-xs text-zinc-600">
                   {hook.confidence} confidence
                 </span>
-                <button
-                  onClick={() => copyHook(hook.text, i)}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 ml-auto transition-colors"
-                  title="Copy hook"
-                >
-                  {copied === i ? "Copied!" : "Copy"}
-                </button>
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    onClick={() => copyHookWithEvidence(hook, i)}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    title="Copy hook with evidence"
+                  >
+                    {copiedEvidence === i ? "Copied!" : "Copy + Evidence"}
+                  </button>
+                  <button
+                    onClick={() => copyHook(hook.text, i)}
+                    className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                    title="Copy hook"
+                  >
+                    {copied === i ? "Copied!" : "Copy"}
+                  </button>
+                </div>
               </div>
               <p className="text-zinc-200 mb-2">{hook.text}</p>
               {hook.source_snippet && (
@@ -232,6 +272,60 @@ export default function HooksPage() {
             </div>
           ))}
         </div>
+      )}
+      {hooks.length > 0 && !hasProfile && (
+        <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 mt-6 text-sm text-zinc-400">
+          Want hooks that connect to your pitch?{" "}
+          <button
+            onClick={() => setShowProfileModal(true)}
+            className="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
+          >
+            Add your 60-second profile
+          </button>
+          .
+        </div>
+      )}
+
+      {showGateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl">
+            <h3 className="text-lg font-semibold text-zinc-100 mb-3">
+              Make these hooks about YOU (not generic)
+            </h3>
+            <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
+              Right now we can see the prospect&apos;s signal, but we don&apos;t know what you sell.
+              Add your 60-second profile to connect the signal to your offer.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setShowGateModal(false);
+                  setShowProfileModal(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+              >
+                Add profile (60 seconds)
+              </button>
+              <button
+                onClick={() => setShowGateModal(false)}
+                className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showProfileModal && (
+        <ContextWalletModal
+          showClose
+          onClose={() => setShowProfileModal(false)}
+          onSave={() => {
+            setShowProfileModal(false);
+            setHasProfile(true);
+          }}
+        />
       )}
     </div>
   );
