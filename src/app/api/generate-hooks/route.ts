@@ -6,6 +6,8 @@ import {
   callClaude,
   publishGate,
   publishGateFinal,
+  roleTokenGate,
+  rankAndCap,
   resolveCompanyByName,
   getDomain,
   type CompanyResolutionResult,
@@ -198,15 +200,25 @@ export async function POST(request: Request) {
 
     // =========================================================================
     // PUBLISH GATE FINAL — runs on ALL hooks (cached or fresh) right before return.
-    // This is the LAST step. Nothing bypasses this.
     // Rule A: change verbs without proof → rewrite or drop
     // Rule B: unanchored sources → drop (include_market_context=false)
     // Rule C: forced-choice question → drop if missing
     // Rule D: Tier B cap at 1
+    // Rule E: tradeoff grounding (inside validateHook)
     // =========================================================================
     const gated = publishGateFinal(candidateHooks, companyDomain, {
       includeMarketContext: false,
     });
+
+    // =========================================================================
+    // ROLE TOKEN GATE — enforce persona framing (skip for General)
+    // =========================================================================
+    const roleGated = roleTokenGate(gated, targetRole ?? null);
+
+    // =========================================================================
+    // RANK + CAP — score and return top 3 (overflow available via showAll)
+    // =========================================================================
+    const { top, overflow } = rankAndCap(roleGated, 3);
 
     // Build suggestions
     const noAnchorSuggestion = [
@@ -220,19 +232,22 @@ export async function POST(request: Request) {
     ].join(" ");
 
     // Determine final hook list + metadata
-    let finalHooks = gated;
+    let finalTop = top;
+    let finalOverflow = overflow;
     let suggestion: string | undefined;
     let finalLowSignal = isLowSignal;
 
     if (!hasAnchored) {
-      finalHooks = gated.slice(0, 1);
+      finalTop = top.slice(0, 1);
+      finalOverflow = [];
       suggestion = noAnchorSuggestion;
       finalLowSignal = true;
     } else if (isLowSignal) {
-      finalHooks = gated.slice(0, 1);
+      finalTop = top.slice(0, 1);
+      finalOverflow = [];
       suggestion = lowSignalSuggestion;
       finalLowSignal = true;
-    } else if (gated.length === 0) {
+    } else if (roleGated.length === 0) {
       suggestion = noAnchorSuggestion;
       finalLowSignal = true;
     }
@@ -247,14 +262,15 @@ export async function POST(request: Request) {
         }
       : null;
 
-    // Cache gated hooks for next time (fire and forget) — only for fresh (non-cached) results
-    if (!cached && finalHooks.length > 0) {
-      setCachedHooks(url, finalHooks, citations, profileUpdatedAt).catch(() => {});
+    // Cache ALL gated hooks (before rank+cap) for next time
+    if (!cached && roleGated.length > 0) {
+      setCachedHooks(url, roleGated, citations, profileUpdatedAt).catch(() => {});
     }
 
     return NextResponse.json({
-      hooks: finalHooks.map((h) => h.hook),
-      structured_hooks: finalHooks,
+      hooks: finalTop.map((h) => h.hook),
+      structured_hooks: finalTop,
+      overflow_hooks: finalOverflow,
       citations,
       status: "ok" as CompanyResolutionStatus,
       lowSignal: finalLowSignal,

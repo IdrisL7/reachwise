@@ -8,6 +8,11 @@ import {
   publishGateFinal,
   publishGateValidateHook,
   classifySource,
+  findRoleTokenHit,
+  roleTokenGate,
+  isTradeoffGrounded,
+  scoreHook,
+  rankAndCap,
   type Hook,
   type ClaudeHookPayload,
   type ClassifiedSource,
@@ -15,6 +20,7 @@ import {
   type TargetRole,
   TARGET_ROLES,
   ROLE_RESPONSIBILITIES,
+  ROLE_REQUIRED_TOKENS,
 } from "./hooks";
 import type { EvidenceTier, StructuredHook } from "./types";
 import type { SenderContext } from "./workspace";
@@ -1643,5 +1649,162 @@ describe("Persona-level tailoring", () => {
   it("buildSystemPrompt includes tone humanizer section", () => {
     const prompt = buildSystemPrompt(null, "VP Sales");
     expect(prompt).toContain("TONE");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Role Token Gate
+// ---------------------------------------------------------------------------
+describe("Role Token Gate", () => {
+  const baseHook: Hook = {
+    news_item: 1,
+    angle: "trigger",
+    hook: 'Read that you added "predictive pipeline scoring" — is that changing how reps forecast or just confirming what they already know?',
+    evidence_snippet: "predictive pipeline scoring now available",
+    source_title: "Blog",
+    source_date: "2026-02-15",
+    source_url: "https://example.com/blog",
+    evidence_tier: "A",
+    confidence: "high",
+  };
+
+  it("passes hook containing VP Sales token 'pipeline'", () => {
+    const hit = findRoleTokenHit(baseHook.hook, "VP Sales");
+    expect(hit).toBe("pipeline");
+  });
+
+  it("passes hook containing RevOps token 'process'", () => {
+    const hook = { ...baseHook, hook: 'Read that you restructured "data validation process" — is that fixing sync issues or governance gaps?' };
+    const hit = findRoleTokenHit(hook.hook, "RevOps");
+    expect(hit).toBe("process");
+  });
+
+  it("rejects hook missing all VP Sales tokens", () => {
+    const hook = { ...baseHook, hook: 'Read that you hired "3 new engineers" — is that for the core product or a new vertical?' };
+    const hit = findRoleTokenHit(hook.hook, "VP Sales");
+    expect(hit).toBeNull();
+  });
+
+  it("skips gate for General role", () => {
+    const hit = findRoleTokenHit(baseHook.hook, "General");
+    expect(hit).toBeNull();
+  });
+
+  it("roleTokenGate filters hooks without role tokens", () => {
+    const hooks: Hook[] = [
+      baseHook, // has "pipeline" → VP Sales match
+      { ...baseHook, hook: 'Read that you hired "3 new engineers" — is that for the core product or a new vertical?' }, // no VP Sales token
+    ];
+    const result = roleTokenGate(hooks, "VP Sales");
+    expect(result).toHaveLength(1);
+    expect(result[0].role_token_hit).toBe("pipeline");
+  });
+
+  it("roleTokenGate passes all hooks for General", () => {
+    const hooks: Hook[] = [baseHook, baseHook];
+    const result = roleTokenGate(hooks, "General");
+    expect(result).toHaveLength(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Tradeoff Grounding Gate
+// ---------------------------------------------------------------------------
+describe("Tradeoff Grounding Gate", () => {
+  it("accepts tradeoff when option word appears in evidence", () => {
+    expect(isTradeoffGrounded(
+      'You offer "250+ prebuilt integrations" — is the priority breadth, or depth on core flows?',
+      "250+ prebuilt integrations across payments, billing, and tax.",
+    )).toBe(true);
+  });
+
+  it("accepts tradeoff when hook quotes evidence verbatim", () => {
+    expect(isTradeoffGrounded(
+      'You promise "100% unique email to every prospect" — is that human-written or programmatic personalization?',
+      "100% unique email to every prospect",
+    )).toBe(true);
+  });
+
+  it("rejects ungrounded strategy fork", () => {
+    expect(isTradeoffGrounded(
+      "They serve 500+ orgs — broad market vs vertical specialization?",
+      "The company has 500+ organizations using its platform.",
+    )).toBe(false);
+  });
+
+  it("accepts safe fork for integration evidence", () => {
+    expect(isTradeoffGrounded(
+      "With 50 integration partners — is the priority native connectors or API-based workflows?",
+      "Announced 50 new integration partners this quarter.",
+    )).toBe(true);
+  });
+
+  it("rejects ungrounded tradeoff via isTradeoffGrounded directly", () => {
+    // No quote in hook, no safe fork match, no option words in evidence
+    expect(isTradeoffGrounded(
+      "They serve many customers — holistic strategy or tactical wins, which drives your roadmap?",
+      "The company reported strong quarterly earnings.",
+    )).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rank + Cap
+// ---------------------------------------------------------------------------
+describe("Rank and Cap", () => {
+  function makeHook(overrides: Partial<Hook> = {}): Hook {
+    return {
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Read that you added "predictive scoring" — is that changing forecast accuracy or just confirming what reps already know?',
+      evidence_snippet: "predictive scoring now available",
+      source_title: "Blog",
+      source_date: "2026-02-15",
+      source_url: "https://example.com/blog",
+      evidence_tier: "A",
+      confidence: "high",
+      ...overrides,
+    };
+  }
+
+  it("caps to 3 hooks by default", () => {
+    const hooks = Array.from({ length: 8 }, () => makeHook());
+    const { top, overflow } = rankAndCap(hooks);
+    expect(top).toHaveLength(3);
+    expect(overflow).toHaveLength(5);
+  });
+
+  it("ranks Tier A above Tier B", () => {
+    const hooks = [
+      makeHook({ evidence_tier: "B", source_date: "2026-02-15" }),
+      makeHook({ evidence_tier: "A", source_date: "2026-02-15" }),
+    ];
+    const { top } = rankAndCap(hooks, 2);
+    expect(top[0].evidence_tier).toBe("A");
+  });
+
+  it("ranks newer hooks higher", () => {
+    const hooks = [
+      makeHook({ source_date: "2024-01-01" }),
+      makeHook({ source_date: "2026-03-01" }),
+    ];
+    const { top } = rankAndCap(hooks, 2);
+    expect(top[0].source_date).toBe("2026-03-01");
+  });
+
+  it("gives role match bonus", () => {
+    const hooks = [
+      makeHook({ role_token_hit: undefined }),
+      makeHook({ role_token_hit: "pipeline" }),
+    ];
+    const scores = hooks.map(scoreHook);
+    expect(scores[1]).toBeGreaterThan(scores[0]);
+  });
+
+  it("returns all hooks if fewer than cap", () => {
+    const hooks = [makeHook(), makeHook()];
+    const { top, overflow } = rankAndCap(hooks, 3);
+    expect(top).toHaveLength(2);
+    expect(overflow).toHaveLength(0);
   });
 });

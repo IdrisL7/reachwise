@@ -61,6 +61,7 @@ export type Hook = {
   why_this_works?: string;
   role_used?: TargetRole;
   role_tag?: string;
+  role_token_hit?: string;
   uses_sender_context?: boolean;
 };
 
@@ -2094,6 +2095,11 @@ export function validateHook(
   // Tier B: ONLY trigger angle allowed, no risk/tradeoff
   if (validTier === "B" && angle !== "trigger") return null;
 
+  // Tradeoff grounding gate: reject ungrounded strategy forks
+  if (angle === "tradeoff" && !isTradeoffGrounded(hook, (raw.evidence_snippet || "").trim())) {
+    return null; // Ungrounded tradeoff → drop (caller can regenerate as trigger/risk)
+  }
+
   // Tier B: reject launch/announce language — secondary sources can't confirm launches
   if (validTier === "B") {
     const tierBBannedPatterns = [
@@ -2351,6 +2357,197 @@ export function applyUrlToMockHooks(url: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// 1. ROLE TOKEN GATE — enforce persona-level framing
+// ---------------------------------------------------------------------------
+
+/**
+ * Required token sets per role. A hook must contain ≥1 token (case-insensitive)
+ * from the selected role's set for the gate to pass. Multi-word tokens match
+ * as substrings so "rep productivity" matches "rep productivity drops".
+ */
+export const ROLE_REQUIRED_TOKENS: Record<Exclude<TargetRole, "General">, string[]> = {
+  "Founder/CEO": ["focus", "efficiency", "roi", "cac", "payback", "growth", "constraints", "prioritization", "burn", "unit economics"],
+  "VP Sales": ["pipeline", "quota", "forecast", "conversion", "meeting quality", "coverage", "ramp", "win rate", "deal velocity"],
+  "RevOps": ["process", "tooling", "governance", "attribution", "data quality", "automation", "reliability", "ops", "workflow"],
+  "SDR Manager": ["rep productivity", "reply rate", "coaching", "qa", "coverage", "speed-to-lead", "ramp", "activity"],
+  "Marketing": ["lead quality", "icp", "routing", "conversion", "intent", "mql", "demand", "funnel"],
+};
+
+/**
+ * Check if a hook's question sentence contains at least one role token.
+ * Returns the matched token or null.
+ */
+export function findRoleTokenHit(hookText: string, role: TargetRole): string | null {
+  if (role === "General") return null; // No gate for General
+  const tokens = ROLE_REQUIRED_TOKENS[role];
+  if (!tokens) return null;
+  const lower = hookText.toLowerCase();
+  for (const token of tokens) {
+    if (lower.includes(token)) return token;
+  }
+  return null;
+}
+
+/**
+ * Role Token Gate: filter hooks to those containing a role-relevant token.
+ * Hooks that don't match are dropped (rewrite would need Claude, too expensive here).
+ * Returns hooks with `role_token_hit` set on each.
+ */
+export function roleTokenGate(
+  hooks: Hook[],
+  targetRole: TargetRole | null,
+): Hook[] {
+  if (!targetRole || targetRole === "General") return hooks;
+  return hooks.reduce<Hook[]>((acc, hook) => {
+    const hit = findRoleTokenHit(hook.hook, targetRole);
+    if (hit) {
+      acc.push({ ...hook, role_token_hit: hit });
+    }
+    return acc;
+  }, []);
+}
+
+// ---------------------------------------------------------------------------
+// 2. TRADEOFF GROUNDING GATE — reject ungrounded strategy forks
+// ---------------------------------------------------------------------------
+
+/**
+ * Safe operational fork patterns: if the evidence snippet matches a trigger
+ * pattern, the associated option pairs are considered grounded.
+ */
+const SAFE_TRADEOFF_FORKS: Array<{ trigger: RegExp; options: string[][] }> = [
+  {
+    trigger: /\bintegrat/i,
+    options: [["native", "api"], ["self-serve", "managed"], ["self-serve", "supported"]],
+  },
+  {
+    trigger: /\b24\/7\b|\bsupport\b.*\b(global|worldwide|follow.the.sun)\b/i,
+    options: [["follow-the-sun", "regional"], ["generalist", "specialist"]],
+  },
+  {
+    trigger: /\bpartner|\borg(anization)?s?\b.*\d{2,}/i,
+    options: [["standardized", "bespoke"], ["mid-market", "enterprise"], ["breadth", "depth"]],
+  },
+  {
+    trigger: /\brevenue|\bgrowth|\bloss/i,
+    options: [["efficiency", "market share"], ["roi", "growth"], ["margin", "volume"]],
+  },
+  {
+    trigger: /\bhir(e|ing)\b|\bteam\b.*\b(grow|expand|scale)/i,
+    options: [["internal", "outsource"], ["specialist", "generalist"]],
+  },
+];
+
+/**
+ * Check if a tradeoff hook is grounded in evidence.
+ * Returns true if:
+ *   A) At least one option's key word from the hook's question appears in the evidence, OR
+ *   B) The evidence matches a safe fork trigger whose option concept appears in the hook, OR
+ *   C) The hook's quoted evidence (inside double quotes) directly relates to the tradeoff
+ *      (i.e., a significant word from the quoted portion also appears in the options).
+ */
+export function isTradeoffGrounded(hookText: string, evidenceSnippet: string): boolean {
+  const hookLower = hookText.toLowerCase();
+  const evidenceLower = evidenceSnippet.toLowerCase();
+
+  // Extract the question part (after the last em dash)
+  const questionPart = hookLower.split(/\s*—\s*/).pop() || hookLower;
+
+  // Extract all "X or Y" / "X, or Y" patterns from the question (multi-word options)
+  const orMatches = [...questionPart.matchAll(/\b([\w-]+(?:\s+[\w-]+){0,3}),?\s+(?:or)\s+([\w-]+(?:\s+[\w-]+){0,3})/g)];
+  for (const m of orMatches) {
+    const optionA = m[1].trim();
+    const optionB = m[2].trim();
+    // Rule A: at least one option (or its significant words) appears in evidence
+    if (evidenceLower.includes(optionA) || evidenceLower.includes(optionB)) return true;
+    // Check individual significant words (3+ chars) from each option
+    const wordsA = optionA.split(/\s+/).filter((w) => w.length >= 3);
+    const wordsB = optionB.split(/\s+/).filter((w) => w.length >= 3);
+    if (wordsA.some((w) => evidenceLower.includes(w)) || wordsB.some((w) => evidenceLower.includes(w))) return true;
+  }
+
+  // Rule C: if the hook contains a verbatim quote from evidence, the tradeoff
+  // is grounded — asking about mechanism/approach behind a quoted claim is valid.
+  const quoteMatch = hookLower.match(/["\u201c]([^"\u201d]+)["\u201d]/);
+  if (quoteMatch && evidenceLower.includes(quoteMatch[1].trim().slice(0, 20))) {
+    // The hook quotes evidence AND asks a tradeoff → grounded by definition
+    return true;
+  }
+
+  // Rule B: check safe fork triggers
+  for (const fork of SAFE_TRADEOFF_FORKS) {
+    if (!fork.trigger.test(evidenceLower)) continue;
+    for (const pair of fork.options) {
+      if (pair.some((word) => questionPart.includes(word.toLowerCase()))) return true;
+    }
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// 3. RANK + CAP — score and limit hooks to top N
+// ---------------------------------------------------------------------------
+
+/**
+ * Score a hook for ranking. Higher = better.
+ *   tier_weight:       A=3, B=1
+ *   recency_weight:    0–2 based on source date (newer = higher)
+ *   specificity_weight: 0–2 based on numbers/names/quotes in hook
+ *   role_match_bonus:  +1 if role_token_hit is set
+ */
+export function scoreHook(hook: Hook): number {
+  let score = 0;
+
+  // Tier weight
+  score += hook.evidence_tier === "A" ? 3 : 1;
+
+  // Recency weight (0–2)
+  if (hook.source_date) {
+    const daysAgo = (Date.now() - new Date(hook.source_date).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysAgo <= 30) score += 2;
+    else if (daysAgo <= 90) score += 1.5;
+    else if (daysAgo <= 180) score += 1;
+    else if (daysAgo <= 365) score += 0.5;
+    // older than 1 year: +0
+  }
+
+  // Specificity weight (0–2): numbers, proper nouns, quoted text
+  let specificity = 0;
+  if (/\d/.test(hook.hook)) specificity += 0.5;
+  if (/["\u201C]/.test(hook.hook)) specificity += 1; // Has verbatim quote
+  // Named entities (capitalized words not at sentence start, 2+ chars)
+  const namedEntities = hook.hook.match(/(?<!\. )[A-Z][a-z]{2,}/g) || [];
+  if (namedEntities.length >= 2) specificity += 0.5;
+  score += Math.min(specificity, 2);
+
+  // Role match bonus
+  if (hook.role_token_hit) score += 1;
+
+  // Confidence bonus
+  if (hook.confidence === "high") score += 0.5;
+
+  return score;
+}
+
+/**
+ * Rank hooks by score descending, then cap to maxHooks.
+ * Returns { top, overflow } where top is the default view and overflow is the rest.
+ */
+export function rankAndCap(
+  hooks: Hook[],
+  maxHooks: number = 3,
+): { top: Hook[]; overflow: Hook[] } {
+  const scored = hooks.map((h) => ({ hook: h, score: scoreHook(h) }));
+  scored.sort((a, b) => b.score - a.score);
+  const sorted = scored.map((s) => s.hook);
+  return {
+    top: sorted.slice(0, maxHooks),
+    overflow: sorted.slice(maxHooks),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Role metadata attachment
 // ---------------------------------------------------------------------------
 
@@ -2480,7 +2677,13 @@ export async function generateHooksForUrl(opts: {
     };
   }
 
-  const limit = opts.count ?? gated.length;
-  const withMeta = attachRoleMeta(gated, _targetRole, !!_senderContext);
-  return { hooks: withMeta.slice(0, limit), lowSignal: false };
+  // Apply role token gate
+  const roleGated = roleTokenGate(gated, _targetRole);
+
+  // Rank and cap
+  const limit = opts.count ?? 3;
+  const { top } = rankAndCap(roleGated, limit);
+
+  const withMeta = attachRoleMeta(top, _targetRole, !!_senderContext);
+  return { hooks: withMeta, lowSignal: false };
 }

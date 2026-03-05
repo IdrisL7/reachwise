@@ -36,6 +36,8 @@ export default function HooksPage() {
   const [generatingEmail, setGeneratingEmail] = useState<number | null>(null);
   const [generatedEmails, setGeneratedEmails] = useState<Record<number, GeneratedEmail>>({});
   const [copiedEmail, setCopiedEmail] = useState<number | null>(null);
+  const [overflowHooks, setOverflowHooks] = useState<Hook[]>([]);
+  const [showAll, setShowAll] = useState(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gsh_targetRole") || "General";
@@ -110,6 +112,8 @@ export default function HooksPage() {
     setLoading(true);
     setError("");
     setHooks([]);
+    setOverflowHooks([]);
+    setShowAll(false);
     setGeneratedEmails({});
     setSuggestion("");
     setLowSignal(false);
@@ -129,7 +133,7 @@ export default function HooksPage() {
       if (!res.ok) throw new Error(data.error || data.message || "Failed to generate hooks");
 
       // Map structured_hooks (with .hook field) to display format, fallback to flat hooks
-      const structured = data.structured_hooks as Array<{
+      type RawHook = {
         hook: string;
         angle: string;
         confidence: string;
@@ -139,20 +143,28 @@ export default function HooksPage() {
         source_title?: string;
         psych_mode?: string;
         why_this_works?: string;
-      }> | undefined;
+      };
+
+      const mapHook = (h: RawHook): Hook => ({
+        text: h.hook,
+        angle: h.angle,
+        confidence: h.confidence,
+        evidence_tier: h.evidence_tier,
+        source_snippet: h.evidence_snippet,
+        source_url: h.source_url,
+        source_title: h.source_title,
+        psych_mode: h.psych_mode,
+        why_this_works: h.why_this_works,
+      });
+
+      const structured = data.structured_hooks as RawHook[] | undefined;
+      const overflow = data.overflow_hooks as RawHook[] | undefined;
 
       if (structured && structured.length > 0) {
-        setHooks(structured.map((h) => ({
-          text: h.hook,
-          angle: h.angle,
-          confidence: h.confidence,
-          evidence_tier: h.evidence_tier,
-          source_snippet: h.evidence_snippet,
-          source_url: h.source_url,
-          source_title: h.source_title,
-          psych_mode: h.psych_mode,
-          why_this_works: h.why_this_works,
-        })));
+        setHooks(structured.map(mapHook));
+        if (overflow && overflow.length > 0) {
+          setOverflowHooks(overflow.map(mapHook));
+        }
       } else if (Array.isArray(data.hooks)) {
         // Flat string hooks (legacy/mock)
         setHooks(data.hooks.map((h: string) => ({
@@ -280,87 +292,112 @@ export default function HooksPage() {
         </div>
       )}
 
-      {hooks.length > 0 && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">
-            {hooks.length} hook{hooks.length !== 1 ? "s" : ""} found
-            {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
-          </h2>
-          {hooks.map((hook, i) => (
-            <div
-              key={i}
-              className="bg-zinc-900 border border-zinc-800 rounded-lg p-5"
-            >
-              <div className="flex items-center gap-2 mb-3 flex-wrap">
-                <span
-                  className={`text-xs font-medium px-2 py-0.5 rounded border ${tierColors[hook.evidence_tier] || tierColors.C}`}
-                >
-                  Tier {hook.evidence_tier}
-                </span>
-                <span
-                  className={`text-xs font-medium ${angleColors[hook.angle] || "text-zinc-400"}`}
-                >
-                  {hook.angle}
-                </span>
-                {hook.psych_mode && (
-                  <span
-                    className="text-xs font-medium text-purple-400 bg-purple-900/30 border border-purple-800 px-2 py-0.5 rounded cursor-help"
-                    title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
-                  >
-                    {psychModeLabels[hook.psych_mode] || hook.psych_mode}
-                  </span>
+      {hooks.length > 0 && (() => {
+        const visibleHooks = showAll ? [...hooks, ...overflowHooks] : hooks;
+        const totalCount = hooks.length + overflowHooks.length;
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold">
+                Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
+                {totalCount > hooks.length && !showAll && (
+                  <span className="text-zinc-500 text-sm font-normal ml-1">of {totalCount}</span>
                 )}
-                <span className="text-xs text-zinc-600">
-                  {hook.confidence} confidence
-                </span>
-              </div>
-              <p className="text-zinc-200 mb-3">{hook.text}</p>
-              {hook.source_snippet && (
-                <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
-                  {hook.source_snippet}
-                </p>
-              )}
-              <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
-                <button
-                  onClick={() => copyHook(hook.text, i)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
-                >
-                  {copied === i ? "Copied!" : "Copy Hook"}
-                </button>
-                <button
-                  onClick={() => copyHookWithEvidence(hook, i)}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
-                >
-                  {copiedEvidence === i ? "Copied!" : "Copy + Evidence"}
-                </button>
-                <button
-                  onClick={() => generateEmail(hook, i)}
-                  disabled={generatingEmail === i}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 disabled:opacity-50 transition-colors"
-                >
-                  {generatingEmail === i ? "Writing..." : generatedEmails[i] ? "Regenerate Email" : "Generate Email"}
-                </button>
-                {generatedEmails[i] && (
-                  <button
-                    onClick={() => copyEmail(generatedEmails[i], i)}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 transition-colors"
-                  >
-                    {copiedEmail === i ? "Copied!" : "Copy Email"}
-                  </button>
-                )}
-              </div>
-              {generatedEmails[i] && (
-                <div className="mt-3 bg-black border border-zinc-800 rounded-lg p-4">
-                  <p className="text-xs text-zinc-500 mb-1">Subject:</p>
-                  <p className="text-sm text-zinc-200 font-medium mb-3">{generatedEmails[i].subject}</p>
-                  <p className="text-xs text-zinc-500 mb-1">Body:</p>
-                  <p className="text-sm text-zinc-300 whitespace-pre-line">{generatedEmails[i].body}</p>
-                </div>
-              )}
+                {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
+              </h2>
             </div>
-          ))}
-        </div>
-      )}
+            {visibleHooks.map((hook, i) => (
+              <div
+                key={i}
+                className="bg-zinc-900 border border-zinc-800 rounded-lg p-5"
+              >
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span
+                    className={`text-xs font-medium px-2 py-0.5 rounded border ${tierColors[hook.evidence_tier] || tierColors.C}`}
+                  >
+                    Tier {hook.evidence_tier}
+                  </span>
+                  <span
+                    className={`text-xs font-medium ${angleColors[hook.angle] || "text-zinc-400"}`}
+                  >
+                    {hook.angle}
+                  </span>
+                  {hook.psych_mode && (
+                    <span
+                      className="text-xs font-medium text-purple-400 bg-purple-900/30 border border-purple-800 px-2 py-0.5 rounded cursor-help"
+                      title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                    >
+                      {psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                    </span>
+                  )}
+                  <span className="text-xs text-zinc-600">
+                    {hook.confidence} confidence
+                  </span>
+                </div>
+                <p className="text-zinc-200 mb-3">{hook.text}</p>
+                {hook.source_snippet && (
+                  <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
+                    {hook.source_snippet}
+                  </p>
+                )}
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+                  <button
+                    onClick={() => copyHook(hook.text, i)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+                  >
+                    {copied === i ? "Copied!" : "Copy Hook"}
+                  </button>
+                  <button
+                    onClick={() => copyHookWithEvidence(hook, i)}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+                  >
+                    {copiedEvidence === i ? "Copied!" : "Copy + Evidence"}
+                  </button>
+                  <button
+                    onClick={() => generateEmail(hook, i)}
+                    disabled={generatingEmail === i}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                  >
+                    {generatingEmail === i ? "Writing..." : generatedEmails[i] ? "Regenerate Email" : "Generate Email"}
+                  </button>
+                  {generatedEmails[i] && (
+                    <button
+                      onClick={() => copyEmail(generatedEmails[i], i)}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800 bg-emerald-900/30 text-emerald-400 hover:bg-emerald-900/50 hover:text-emerald-300 transition-colors"
+                    >
+                      {copiedEmail === i ? "Copied!" : "Copy Email"}
+                    </button>
+                  )}
+                </div>
+                {generatedEmails[i] && (
+                  <div className="mt-3 bg-black border border-zinc-800 rounded-lg p-4">
+                    <p className="text-xs text-zinc-500 mb-1">Subject:</p>
+                    <p className="text-sm text-zinc-200 font-medium mb-3">{generatedEmails[i].subject}</p>
+                    <p className="text-xs text-zinc-500 mb-1">Body:</p>
+                    <p className="text-sm text-zinc-300 whitespace-pre-line">{generatedEmails[i].body}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+            {overflowHooks.length > 0 && !showAll && (
+              <button
+                onClick={() => setShowAll(true)}
+                className="w-full py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-lg bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
+              >
+                Show {overflowHooks.length} more hook{overflowHooks.length !== 1 ? "s" : ""}
+              </button>
+            )}
+            {showAll && overflowHooks.length > 0 && (
+              <button
+                onClick={() => setShowAll(false)}
+                className="w-full py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Show less
+              </button>
+            )}
+          </div>
+        );
+      })()}
       {hooks.length > 0 && !hasProfile && (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 mt-6 text-sm text-zinc-400">
           Want hooks that connect to your pitch?{" "}
