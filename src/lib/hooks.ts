@@ -168,6 +168,9 @@ const VAGUE_QUESTION_PATTERNS = [
   /\bwhat are you doing about\b/i,
   /\bare you exploring\b/i,
   /\bare you concerned\b/i,
+  /\bholding up as\b/i,
+  /\bkeeping pace\b/i,
+  /\bcurious if\b/i,
 ];
 
 // No mock/template hooks — every hook must be sourced from real evidence.
@@ -1687,11 +1690,84 @@ function containsUnsupportedChangeVerb(hook: string, evidenceSnippet: string): b
 }
 
 /**
+ * Attempt to rewrite change verbs to present-tense / observation form.
+ * Returns the rewritten hook text, or null if rewrite still implies change.
+ */
+const CHANGE_VERB_REWRITES: Array<[RegExp, string]> = [
+  [/\bYou switched to\b/gi, "You use"],
+  [/\bYou revamped\b/gi, "You offer"],
+  [/\bYou redesigned\b/gi, "You have"],
+  [/\bYou recently changed to\b/gi, "You offer"],
+  [/\bYou recently changed\b/gi, "You have"],
+  [/\bNow charging\b/gi, "You charge"],
+  [/\bNow offering\b/gi, "You offer"],
+  [/\bNow using\b/gi, "You use"],
+  [/\bNow doing\b/gi, "You do"],
+  [/\bNow running\b/gi, "You run"],
+  [/\bNow building\b/gi, "You build"],
+  [/\bNow selling\b/gi, "You sell"],
+  [/\bHiring across\b/gi, "Growing across"],
+  [/\bYou moved to\b/gi, "You use"],
+  [/\bJust launched\b/gi, "You offer"],
+  [/\bJust started\b/gi, "You"],
+  [/\bJust added\b/gi, "You offer"],
+  [/\bRecently launched\b/gi, "You offer"],
+  [/\bRecently started\b/gi, "You"],
+  [/\bRecently added\b/gi, "You offer"],
+  [/\bRecently introduced\b/gi, "You offer"],
+  [/\bRecently adopted\b/gi, "You use"],
+  [/\bRecently moved\b/gi, "You use"],
+  [/\bRecently shifted\b/gi, "You focus on"],
+  [/\bRecently pivoted\b/gi, "You focus on"],
+  [/\bStarted using\b/gi, "You use"],
+  [/\bStarted offering\b/gi, "You offer"],
+  [/\bStarted doing\b/gi, "You do"],
+  [/\bStarted building\b/gi, "You build"],
+  [/\bShifted to\b/gi, "You focus on"],
+  [/\bShifted from\b/gi, "You moved from"],
+  [/\bPivoted to\b/gi, "You focus on"],
+  [/\bPivoted from\b/gi, "You moved from"],
+  [/\bAdopted\b/gi, "You use"],
+  [/\bTransitioned to\b/gi, "You use"],
+  [/\bTransitioned from\b/gi, "You moved from"],
+];
+
+export function rewriteChangeVerbs(hook: string): string | null {
+  let text = hook;
+  let changed = false;
+  for (const [pattern, replacement] of CHANGE_VERB_REWRITES) {
+    const before = text;
+    text = text.replace(pattern, replacement);
+    if (text !== before) changed = true;
+  }
+  if (!changed) return null;
+  // Verify rewrite removed all change verbs
+  if (CHANGE_VERB_PATTERNS.some((p) => p.test(text))) return null;
+  return text;
+}
+
+/**
  * Reject hooks with vague, philosophical, or open-ended questions.
  * Returns true if the question is low-quality (should be rejected).
  */
 function hasVagueQuestion(hook: string): boolean {
   return VAGUE_QUESTION_PATTERNS.some((p) => p.test(hook));
+}
+
+/**
+ * Positive question structure validator: hook must end with a forced-choice,
+ * mechanism, ownership, or timing question containing "or" or "vs".
+ * Returns true if the question structure is valid.
+ */
+export function hasValidQuestionStructure(hook: string): boolean {
+  // Extract question portion (after last em-dash, or the whole hook)
+  const parts = hook.split(/\s*—\s*/);
+  const questionPart = parts.length > 1 ? parts[parts.length - 1] : hook;
+  // Forced choice / mechanism / ownership: contains "or"
+  if (/\bor\b/i.test(questionPart)) return true;
+  // Comparison: contains "vs"
+  if (/\bvs\.?\b/i.test(questionPart)) return true;
+  return false;
 }
 
 /**
@@ -1735,7 +1811,7 @@ export function validateHook(
   const confidence = raw.confidence?.toLowerCase() as Confidence;
   if (!VALID_CONFIDENCES.includes(confidence)) return null;
 
-  const hook = (raw.hook || "").trim();
+  let hook = (raw.hook || "").trim();
   if (hook.length === 0 || hook.length > MAX_HOOK_CHARS) return null;
   if (!hook.endsWith("?")) return null;
   if (containsBannedPhrase(hook) !== null) return null;
@@ -1743,6 +1819,9 @@ export function validateHook(
 
   // Question quality: reject vague/philosophical/open-ended questions
   if (hasVagueQuestion(hook)) return null;
+
+  // Positive question structure: must be forced-choice/mechanism/ownership/timing
+  if (!hasValidQuestionStructure(hook)) return null;
 
   // You-first framing: reject hooks that use first-person (we/our/us/I)
   if (hasFirstPersonFraming(hook)) return null;
@@ -1773,13 +1852,25 @@ export function validateHook(
   // Reject hooks with unsourced claims (redesign, hiring, stats not in evidence)
   if (containsUnsourcedClaim(hook, evidenceSnippet)) return null;
 
-  // Reject hooks using change/transition verbs without evidence of actual change
-  if (containsUnsupportedChangeVerb(hook, evidenceSnippet)) return null;
+  // Change verbs without evidence: attempt rewrite to present tense, then drop if still fails
+  if (containsUnsupportedChangeVerb(hook, evidenceSnippet)) {
+    const rewritten = rewriteChangeVerbs(hook);
+    if (!rewritten) return null; // Can't rewrite → drop
+    hook = rewritten;
+    // Belt-and-suspenders: verify rewrite is clean
+    if (containsUnsupportedChangeVerb(hook, evidenceSnippet)) return null;
+    // Re-validate length after rewrite
+    if (hook.length > MAX_HOOK_CHARS) return null;
+  }
 
   // Reject hooks whose source lacks concrete evidence (number, named tool, feature term)
   if (sourceLookup) {
     const source = sourceLookup.get(raw.news_item);
-    if (source && !sourceHasConcreteEvidence(source.facts)) return null;
+    if (source) {
+      if (!sourceHasConcreteEvidence(source.facts)) return null;
+      // Tier B sources without a concrete anchor → Low Signal, skip
+      if (validTier === "B" && computeSpecificityScore(source.facts) < 2) return null;
+    }
   }
 
   // Validate and normalize psych_mode (optional — gracefully handle missing/invalid)
@@ -1827,6 +1918,7 @@ export async function generateHooksForUrl(opts: {
   url: string;
   pitchContext?: string;
   count?: number;
+  includeMarketContext?: boolean;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
   const braveApiKey = process.env.BRAVE_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
@@ -1835,8 +1927,15 @@ export async function generateHooksForUrl(opts: {
     throw new Error("Missing BRAVE_API_KEY or CLAUDE_API_KEY");
   }
 
-  const { sources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, braveApiKey);
+  const { sources: rawSources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, braveApiKey);
   const domain = getDomain(opts.url);
+  const includeMarketContext = opts.includeMarketContext ?? false;
+
+  // Default mode: exclude unanchored sources entirely (anchorScore < 3)
+  // Market context mode: allow max 1 unanchored source, labeled + capped
+  const sources = includeMarketContext
+    ? rawSources
+    : rawSources.filter((s) => (s.anchorScore ?? 0) >= 3);
 
   const NO_ANCHOR_SUGGESTION = [
     "Low Signal: no company-specific signals found — only market context available.",

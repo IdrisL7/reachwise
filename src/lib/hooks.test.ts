@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   validateHook,
+  rewriteChangeVerbs,
+  hasValidQuestionStructure,
   type ClaudeHookPayload,
   type ClassifiedSource,
   type PsychMode,
@@ -93,12 +95,27 @@ const BESTBUY_SOURCE: ClassifiedSource = {
   anchorScore: 0,
 };
 
+// Vague Tier B source with no concrete anchor
+const VAGUE_TIERB_SOURCE: ClassifiedSource = {
+  title: "Why Outbound Sales Matters",
+  publisher: "example.com",
+  date: "",
+  url: "https://example.com/outbound-sales",
+  facts: [
+    "Outbound sales is important for growth",
+    "Many companies are investing in sales teams",
+  ],
+  tier: "B" as EvidenceTier,
+  anchorScore: 3,
+};
+
 const ALL_SOURCES = [
   SALESCO_HOMEPAGE,
   SALESCO_SWIPEFILES,
   SALESCO_CUSTOMERS,
   SALESCO_BLOG,
   BESTBUY_SOURCE,
+  VAGUE_TIERB_SOURCE,
 ];
 
 const sourceLookup = buildSourceLookup(ALL_SOURCES);
@@ -273,9 +290,9 @@ describe("sales.co regression: expected hooks pass validation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. No change verbs without explicit change evidence
+// 2. Change verb rewrite-or-drop
 // ---------------------------------------------------------------------------
-describe("change verb validator", () => {
+describe("change verb validator: rewrite or drop", () => {
   const basePayload: ClaudeHookPayload = {
     news_item: 2,
     angle: "trigger",
@@ -289,22 +306,55 @@ describe("change verb validator", () => {
     confidence: "high",
   };
 
-  const changeVerbHooks = [
-    `You switched to "$250/reply" pricing — is that to de-risk clients, or to push quality?`,
-    `You revamped your "$250/reply" model — is that driven by cost, or quality positioning?`,
-    `You recently changed to "$250/reply" — are clients buying on cost, or outcomes?`,
-    `Now charging "$250/reply" — is that to de-risk clients, or to push quality?`,
-  ];
+  it("rewrites 'You switched to' → 'You use'", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `You switched to "$250/reply" pricing — is that to de-risk clients, or to push quality?`,
+      },
+      sourceLookup,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.hook).toContain("You use");
+    expect(result!.hook).not.toMatch(/\bswitched\b/i);
+  });
 
-  for (const hookText of changeVerbHooks) {
-    it(`rejects: "${hookText.slice(0, 60)}..."`, () => {
-      const result = validateHook(
-        { ...basePayload, hook: hookText },
-        sourceLookup,
-      );
-      expect(result).toBeNull();
-    });
-  }
+  it("rewrites 'You recently changed to' → 'You offer'", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `You recently changed to "$250/reply" — are clients buying on cost, or outcomes?`,
+      },
+      sourceLookup,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.hook).not.toMatch(/\brecently changed\b/i);
+  });
+
+  it("rewrites 'Now charging' → 'You charge'", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `Now charging "$250/reply" — is that to de-risk clients, or to push quality?`,
+      },
+      sourceLookup,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.hook).toContain("You charge");
+    expect(result!.hook).not.toMatch(/\bNow charging\b/i);
+  });
+
+  it("drops 'You revamped' (unsourced claim pattern)", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `You revamped "$250/reply" model — is that driven by cost, or quality positioning?`,
+      },
+      sourceLookup,
+    );
+    // "revamp" is in UNSOURCED_CLAIM_PATTERNS → rejected before rewrite
+    expect(result).toBeNull();
+  });
 
   it("allows change verb when evidence has time cue", () => {
     const result = validateHook(
@@ -317,11 +367,38 @@ describe("change verb validator", () => {
       sourceLookup,
     );
     expect(result).not.toBeNull();
+    // No rewrite needed — time cue in evidence
+    expect(result!.hook).toContain("recently launched");
   });
 });
 
 // ---------------------------------------------------------------------------
-// 3. Question quality: reject vague/philosophical, require forced-choice
+// 3. rewriteChangeVerbs unit tests
+// ---------------------------------------------------------------------------
+describe("rewriteChangeVerbs", () => {
+  it("rewrites 'You switched to' → 'You use'", () => {
+    const result = rewriteChangeVerbs(`You switched to "$250/reply" pricing`);
+    expect(result).toBe(`You use "$250/reply" pricing`);
+  });
+
+  it("rewrites 'Now charging' → 'You charge'", () => {
+    const result = rewriteChangeVerbs(`Now charging "$250/reply"`);
+    expect(result).toBe(`You charge "$250/reply"`);
+  });
+
+  it("rewrites 'Recently launched' → 'You offer'", () => {
+    const result = rewriteChangeVerbs(`Recently launched "$250/reply" pricing`);
+    expect(result).toBe(`You offer "$250/reply" pricing`);
+  });
+
+  it("returns null for text without change verbs", () => {
+    const result = rewriteChangeVerbs(`You offer "$250/reply" pricing`);
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Question quality: reject vague/philosophical, require forced-choice
 // ---------------------------------------------------------------------------
 describe("question quality validator", () => {
   const basePayload: ClaudeHookPayload = {
@@ -355,6 +432,39 @@ describe("question quality validator", () => {
     });
   }
 
+  it("rejects open-ended question without forced-choice structure", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `Your "3.2X reply rate vs templates" claim is bold — is that sustainable long-term?`,
+      },
+      sourceLookup,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("rejects 'holding up as' pattern", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `Your "3.2X reply rate vs templates" — is that holding up as you scale?`,
+      },
+      sourceLookup,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("rejects 'keeping pace' pattern", () => {
+    const result = validateHook(
+      {
+        ...basePayload,
+        hook: `Your "3.2X reply rate vs templates" — is that keeping pace with demand?`,
+      },
+      sourceLookup,
+    );
+    expect(result).toBeNull();
+  });
+
   it("accepts forced-choice question", () => {
     const result = validateHook(
       {
@@ -379,7 +489,36 @@ describe("question quality validator", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. First-person framing rejection
+// 5. hasValidQuestionStructure unit tests
+// ---------------------------------------------------------------------------
+describe("hasValidQuestionStructure", () => {
+  it("accepts forced choice with 'or'", () => {
+    expect(hasValidQuestionStructure(
+      `Your "3.2X reply rate" — is the lever list quality, or personalization?`,
+    )).toBe(true);
+  });
+
+  it("accepts 'vs' comparison", () => {
+    expect(hasValidQuestionStructure(
+      `Your "3.2X reply rate" — quality vs volume?`,
+    )).toBe(true);
+  });
+
+  it("rejects question without forced-choice structure", () => {
+    expect(hasValidQuestionStructure(
+      `Your "3.2X reply rate" — is that sustainable?`,
+    )).toBe(false);
+  });
+
+  it("rejects yes/no question without alternatives", () => {
+    expect(hasValidQuestionStructure(
+      `Your "3.2X reply rate" — does that hold at scale?`,
+    )).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. First-person framing rejection
 // ---------------------------------------------------------------------------
 describe("first-person framing validator", () => {
   const basePayload: ClaudeHookPayload = {
@@ -419,7 +558,7 @@ describe("first-person framing validator", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. No fake stats
+// 7. No fake stats
 // ---------------------------------------------------------------------------
 describe("no fake stats validator", () => {
   const basePayload: ClaudeHookPayload = {
@@ -459,11 +598,10 @@ describe("no fake stats validator", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Company-anchor filter: unrelated sources rejected
+// 8. Company-anchor filter: unrelated sources rejected
 // ---------------------------------------------------------------------------
 describe("company-anchor filter", () => {
-  it("rejects hooks from unanchored market-context source (Best Buy)", () => {
-    // Best Buy source is index 5 in our lookup
+  it("rejects hooks from unanchored source (Best Buy) — Tier B only", () => {
     const result = validateHook(
       {
         news_item: 5,
@@ -480,17 +618,35 @@ describe("company-anchor filter", () => {
       },
       sourceLookup,
     );
-    // The hook itself may pass basic validation, but Tier B cap (max 1) and
-    // anchor scoring (score=0 → forced Tier B) ensure this gets suppressed
-    // at the route level. Here we verify the tier is correctly set to B.
+    // Tier B with anchorScore=0 + low specificity → rejected
     if (result) {
       expect(result.evidence_tier).toBe("B");
     }
   });
+
+  it("rejects hooks from vague Tier B source without concrete anchor", () => {
+    const result = validateHook(
+      {
+        news_item: 6,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `"Outbound sales is important for growth" — is your focus on volume, or on reply quality?`,
+        evidence_snippet: "Outbound sales is important for growth",
+        source_title: VAGUE_TIERB_SOURCE.title,
+        source_date: "",
+        source_url: VAGUE_TIERB_SOURCE.url,
+        evidence_tier: "B",
+        confidence: "high",
+      },
+      sourceLookup,
+    );
+    // Vague Tier B with no concrete evidence → rejected
+    expect(result).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
-// 7. Psych mode validation
+// 9. Psych mode validation
 // ---------------------------------------------------------------------------
 describe("psych_mode validation", () => {
   const basePayload: ClaudeHookPayload = {
@@ -553,7 +709,7 @@ describe("psych_mode validation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 8. Hard-fail assertions from regression spec
+// 10. Hard-fail assertions from regression spec
 // ---------------------------------------------------------------------------
 describe("hard-fail assertions", () => {
   const FORBIDDEN_CHANGE_VERBS =
@@ -608,6 +764,12 @@ describe("hard-fail assertions", () => {
   it("every expected hook contains a verbatim quote in double quotes", () => {
     for (const text of expectedHookTexts) {
       expect(/"[^"]{5,}"/.test(text)).toBe(true);
+    }
+  });
+
+  it("every expected hook has a forced-choice question structure", () => {
+    for (const text of expectedHookTexts) {
+      expect(hasValidQuestionStructure(text)).toBe(true);
     }
   });
 });
