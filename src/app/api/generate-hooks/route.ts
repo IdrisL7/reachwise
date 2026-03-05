@@ -65,14 +65,8 @@ export async function POST(request: Request) {
             overflow_hooks: [],
             status: "ok" as CompanyResolutionStatus,
             lowSignal: true,
-            suggestion: [
-              "LinkedIn posts feeds are restricted and can't be accessed for evidence extraction.",
-              "For better results, try one of these instead:",
-              slug ? `  • https://www.linkedin.com/company/${slug}/about/` : "  • The company's LinkedIn About page",
-              "  • A specific LinkedIn post URL (not the feed)",
-              "  • The company's website (e.g., benifex.com)",
-              "  • Press/newsroom, blog, or careers page",
-            ].join("\n"),
+            linkedinSlug: slug || undefined,
+            suggestion: "LinkedIn posts feeds are restricted — we can't extract evidence from them.",
           });
         }
       } catch {
@@ -243,26 +237,9 @@ export async function POST(request: Request) {
     // =========================================================================
     const { top, overflow } = rankAndCap(roleGated, 3);
 
-    // Build suggestions — actionable, keeps user inside product
-    const targetDomain = companyDomain || "";
-    const noAnchorSuggestion = [
-      "Needs more sources (company-specific signals not found yet).",
-      "We couldn't find quoteable updates tied directly to this company. Add one of these and we'll generate hooks with receipts:",
-      targetDomain ? `  • Press/Newsroom: ${targetDomain}/press or ${targetDomain}/newsroom` : "  • Press/Newsroom URL",
-      targetDomain ? `  • Blog/Changelog: ${targetDomain}/blog or ${targetDomain}/changelog` : "  • Blog/Changelog URL",
-      targetDomain ? `  • Careers page: ${targetDomain}/careers` : "  • Careers page URL",
-      "  • A specific LinkedIn post or About page",
-      "  • Recent news article mentioning the company by name",
-    ].join("\n");
-
-    const lowSignalSuggestion = [
-      `Needs more sources (only ${signalCount} signal fact${signalCount !== 1 ? "s" : ""} found).`,
-      "We found some basics but not enough for strong, cited hooks. Try adding:",
-      targetDomain ? `  • Press/Newsroom: ${targetDomain}/press or ${targetDomain}/newsroom` : "  • Press/Newsroom URL",
-      targetDomain ? `  • Blog/Changelog: ${targetDomain}/blog or ${targetDomain}/changelog` : "  • Blog/Changelog URL",
-      targetDomain ? `  • Careers page: ${targetDomain}/careers` : "  • Careers page URL",
-      "  • A specific LinkedIn post or About page",
-    ].join("\n");
+    // Build suggestions — short headline, details handled by UI
+    const noAnchorSuggestion = "Need one more source to generate strong hooks.";
+    const lowSignalSuggestion = "Need one more source to generate strong hooks.";
 
     // Determine final hook list + metadata
     let finalTop = top;
@@ -300,6 +277,13 @@ export async function POST(request: Request) {
       setCachedHooks(url, roleGated, citations, profileUpdatedAt).catch(() => {});
     }
 
+    // Collect verified discovered URLs from citations (actual pages we found)
+    const discoveredUrls = citations
+      .filter((c) => c.tier !== "C" && c.url)
+      .map((c) => ({ title: c.source_title, url: c.url, tier: c.tier }))
+      .filter((v, i, arr) => arr.findIndex((a) => a.url === v.url) === i)
+      .slice(0, 6);
+
     return NextResponse.json({
       hooks: finalTop.map((h) => h.hook),
       structured_hooks: finalTop,
@@ -310,7 +294,9 @@ export async function POST(request: Request) {
       signalCount,
       suggestion,
       companyName: companyName ?? undefined,
+      companyDomain: companyDomain || undefined,
       resolvedCompany,
+      discoveredUrls: finalLowSignal ? discoveredUrls : undefined,
       cached,
       targetRole: targetRole || "General",
     });

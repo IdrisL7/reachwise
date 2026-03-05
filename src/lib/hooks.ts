@@ -2662,24 +2662,8 @@ export async function generateHooksForUrl(opts: {
     ? rawSources
     : rawSources.filter((s) => (s.anchorScore ?? 0) >= 3);
 
-  const NO_ANCHOR_SUGGESTION = [
-    "Needs more sources (company-specific signals not found yet).",
-    "We couldn't find quoteable updates tied directly to this company. Add one of these and we'll generate hooks with receipts:",
-    `  • Press/Newsroom: ${domain}/press or ${domain}/newsroom`,
-    `  • Blog/Changelog: ${domain}/blog or ${domain}/changelog`,
-    `  • Careers page: ${domain}/careers`,
-    "  • A specific LinkedIn post or About page",
-    "  • Recent news article mentioning the company by name",
-  ].join("\n");
-
-  const LOW_SIGNAL_SUGGESTION = [
-    `Needs more sources (only ${signalCount} signal fact${signalCount !== 1 ? "s" : ""} found).`,
-    "We found some basics but not enough for strong, cited hooks. Try adding:",
-    `  • Press/Newsroom: ${domain}/press or ${domain}/newsroom`,
-    `  • Blog/Changelog: ${domain}/blog or ${domain}/changelog`,
-    `  • Careers page: ${domain}/careers`,
-    "  • A specific LinkedIn post or About page",
-  ].join("\n");
+  const NO_ANCHOR_SUGGESTION = "Need one more source to generate strong hooks.";
+  const LOW_SIGNAL_SUGGESTION = "Need one more source to generate strong hooks.";
 
   // Check if all sources are Tier C
   const usableSources = sources.filter((s) => s.tier !== "C");

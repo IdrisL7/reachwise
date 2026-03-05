@@ -38,6 +38,10 @@ export default function HooksPage() {
   const [copiedEmail, setCopiedEmail] = useState<number | null>(null);
   const [overflowHooks, setOverflowHooks] = useState<Hook[]>([]);
   const [showAll, setShowAll] = useState(false);
+  const [linkedinSlug, setLinkedinSlug] = useState<string | null>(null);
+  const [discoveredUrls, setDiscoveredUrls] = useState<Array<{ title: string; url: string; tier: string }>>([]);
+  const [companyDomain, setCompanyDomain] = useState<string>("");
+  const [discovering, setDiscovering] = useState(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("gsh_targetRole") || "General";
@@ -105,6 +109,15 @@ export default function HooksPage() {
     setTimeout(() => setCopiedEmail(null), 2000);
   }
 
+  function runWithUrl(newUrl: string) {
+    setUrl(newUrl);
+    // Use setTimeout to ensure state update before submit
+    setTimeout(() => {
+      const form = document.getElementById("hooks-form") as HTMLFormElement;
+      form?.requestSubmit();
+    }, 50);
+  }
+
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
     if (!url && !companyName) return;
@@ -117,6 +130,9 @@ export default function HooksPage() {
     setGeneratedEmails({});
     setSuggestion("");
     setLowSignal(false);
+    setLinkedinSlug(null);
+    setDiscoveredUrls([]);
+    setCompanyDomain("");
 
     try {
       const res = await fetch("/api/generate-hooks", {
@@ -177,6 +193,9 @@ export default function HooksPage() {
 
       if (data.suggestion) setSuggestion(data.suggestion);
       if (data.lowSignal) setLowSignal(true);
+      if (data.linkedinSlug) setLinkedinSlug(data.linkedinSlug);
+      if (data.discoveredUrls) setDiscoveredUrls(data.discoveredUrls);
+      if (data.companyDomain) setCompanyDomain(data.companyDomain);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -209,7 +228,7 @@ export default function HooksPage() {
     <div>
       <h1 className="text-2xl font-bold mb-6">Generate Hooks</h1>
 
-      <form onSubmit={generateHooks} className="mb-8">
+      <form id="hooks-form" onSubmit={generateHooks} className="mb-8">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
@@ -273,7 +292,7 @@ export default function HooksPage() {
         </div>
       )}
 
-      {!loading && hooks.length === 0 && !error && (
+      {!loading && hooks.length === 0 && !error && !suggestion && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-10 text-center">
           <div className="text-4xl mb-4">🎣</div>
           <h2 className="text-lg font-semibold text-zinc-200 mb-2">
@@ -287,8 +306,109 @@ export default function HooksPage() {
       )}
 
       {suggestion && (
-        <div className={`border rounded-lg px-4 py-3 mb-6 text-sm whitespace-pre-line ${lowSignal ? "bg-amber-900/30 border-amber-800 text-amber-300" : "bg-blue-900/30 border-blue-800 text-blue-300"}`}>
-          {suggestion}
+        <div className={`border rounded-lg mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800" : "bg-blue-900/30 border-blue-800"}`}>
+          {/* Headline */}
+          <div className={`px-4 pt-4 pb-2 font-semibold ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
+            {suggestion}
+          </div>
+
+          {/* LinkedIn auto-fix */}
+          {linkedinSlug && (
+            <div className="px-4 pb-3">
+              <button
+                onClick={() => runWithUrl(`https://www.linkedin.com/company/${linkedinSlug}/about/`)}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                Use LinkedIn About page instead
+              </button>
+            </div>
+          )}
+
+          {/* Found on their site (verified) */}
+          {discoveredUrls.length > 0 && (
+            <div className="px-4 pb-3">
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">Found on their site:</p>
+              <div className="space-y-1">
+                {discoveredUrls.map((d, i) => (
+                  <a
+                    key={i}
+                    href={d.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-emerald-400 hover:text-emerald-300 truncate"
+                  >
+                    {d.title || d.url}
+                    <span className="text-zinc-600 ml-1.5">Tier {d.tier}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Common pages to try (unverified patterns) */}
+          {lowSignal && !linkedinSlug && (
+            <div className="px-4 pb-3">
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">Common pages to try:</p>
+              <div className="text-xs text-zinc-500 space-y-0.5">
+                <p>{companyDomain ? `${companyDomain}` : "company"}/press · /newsroom · /news</p>
+                <p>{companyDomain ? `${companyDomain}` : "company"}/blog · /changelog · /resources</p>
+                <p>{companyDomain ? `${companyDomain}` : "company"}/careers · /jobs</p>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          {lowSignal && (
+            <div className="px-4 pb-4 flex flex-wrap gap-2">
+              {companyDomain && (
+                <button
+                  onClick={async () => {
+                    setDiscovering(true);
+                    // Re-run with the company domain directly
+                    runWithUrl(`https://${companyDomain}`);
+                    setDiscovering(false);
+                  }}
+                  disabled={discovering || loading}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                >
+                  {discovering ? "Searching..." : "Find sources on their site"}
+                </button>
+              )}
+              {(companyName || companyDomain) && (
+                <button
+                  onClick={() => {
+                    const name = companyName || companyDomain.split(".")[0];
+                    setCompanyName(name);
+                    setUrl("");
+                    setTimeout(() => {
+                      const form = document.getElementById("hooks-form") as HTMLFormElement;
+                      form?.requestSubmit();
+                    }, 50);
+                  }}
+                  disabled={loading}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                >
+                  Search recent news for &ldquo;{companyName || companyDomain.split(".")[0]}&rdquo;
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setUrl("");
+                  setCompanyName("");
+                  setSuggestion("");
+                  setLowSignal(false);
+                  setLinkedinSlug(null);
+                  setDiscoveredUrls([]);
+                  // Focus the URL input
+                  const input = document.querySelector<HTMLInputElement>("input[type='url']");
+                  input?.focus();
+                }}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
+              >
+                + Add another URL
+              </button>
+            </div>
+          )}
         </div>
       )}
 
