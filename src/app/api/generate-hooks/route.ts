@@ -4,9 +4,8 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
   callClaude,
-  validateHook,
+  publishGate,
   resolveCompanyByName,
-  type Hook,
   type CompanyResolutionResult,
   type ClassifiedSource,
 } from "@/lib/hooks";
@@ -160,25 +159,14 @@ export async function POST(request: Request) {
       const userPrompt = buildUserPrompt(url, sources, context);
       const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-      // 5. Quality gate (includes verbatim quote check + unsourced claim check)
-      const validHooks: Hook[] = [];
-      for (const raw of rawHooks) {
-        const validated = validateHook(raw, sourceLookup);
-        if (validated) validHooks.push(validated);
-      }
+      // 5. PUBLISH GATE — single enforcement layer
+      // Validates → rewrites change verbs → drops failures → caps Tier B
+      // Excludes unanchored sources in default mode (includeMarketContext=false)
+      const cappedHooks = publishGate(rawHooks, sourceLookup, {
+        includeMarketContext: false,
+      });
 
-      // 6. Enforce Tier B cap: max 1 Tier B hook total (market context)
-      let tierBCount = 0;
-      const cappedHooks: Hook[] = [];
-      for (const hook of validHooks) {
-        if (hook.evidence_tier === "B") {
-          if (tierBCount >= 1) continue;
-          tierBCount++;
-        }
-        cappedHooks.push(hook);
-      }
-
-      // 7. No anchored sources → show low signal + max 1 market-context hook
+      // 6. No anchored sources → show low signal + max 1 market-context hook
       if (!hasAnchoredSources) {
         const result = cappedHooks.slice(0, 1);
         return NextResponse.json({
@@ -193,7 +181,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 8. Signal vs Fundamental gate: if low signal, return max 1 verification hook
+      // 7. Signal vs Fundamental gate: if low signal, return max 1 verification hook
       if (lowSignal) {
         const result = cappedHooks.slice(0, 1);
         return NextResponse.json({
@@ -208,7 +196,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 9. If nothing survived validation, return low signal
+      // 8. If nothing survived publish gate, return low signal
       if (cappedHooks.length === 0) {
         return NextResponse.json({
           hooks: [],
@@ -222,7 +210,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 10. Build response
+      // 9. Build response
       const flatHooks = cappedHooks.map((h) => h.hook);
 
       const resolvedCompany = resolution && resolution.candidates[0]

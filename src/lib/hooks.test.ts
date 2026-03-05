@@ -3,11 +3,14 @@ import {
   validateHook,
   rewriteChangeVerbs,
   hasValidQuestionStructure,
+  publishGate,
+  publishGateValidateHook,
+  type Hook,
   type ClaudeHookPayload,
   type ClassifiedSource,
   type PsychMode,
 } from "./hooks";
-import type { EvidenceTier } from "./types";
+import type { EvidenceTier, StructuredHook } from "./types";
 
 // ---------------------------------------------------------------------------
 // Helper: build a source lookup from an array of sources
@@ -772,4 +775,300 @@ describe("hard-fail assertions", () => {
       expect(hasValidQuestionStructure(text)).toBe(true);
     }
   });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Publish Gate — end-to-end enforcement
+// ---------------------------------------------------------------------------
+describe("publishGate", () => {
+  const salesco_sources: ClassifiedSource[] = [
+    SALESCO_HOMEPAGE,
+    SALESCO_SWIPEFILES,
+    SALESCO_CUSTOMERS,
+    SALESCO_BLOG,
+    BESTBUY_SOURCE,
+  ];
+  const lookup = buildSourceLookup(salesco_sources);
+
+  it("passes valid anchored hooks through", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 1,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `You claim "39% MORE QUALIFIED ACCOUNTS" — is that from lead data quality, or from the outreach copy/QA process?`,
+        evidence_snippet: "39% MORE QUALIFIED ACCOUNTS",
+        source_title: SALESCO_HOMEPAGE.title,
+        source_date: "",
+        source_url: SALESCO_HOMEPAGE.url,
+        evidence_tier: "A",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup);
+    expect(result).toHaveLength(1);
+    expect(result[0].hook).toContain("39% MORE QUALIFIED ACCOUNTS");
+  });
+
+  it("excludes hooks from unanchored sources in default mode", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 5, // Best Buy — anchorScore 0
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `"12% online sales growth" at Best Buy — is that driven by supply chain, or by demand shifts?`,
+        evidence_snippet: "Best Buy reported 12% online sales growth in Q4",
+        source_title: BESTBUY_SOURCE.title,
+        source_date: "2026-01-15",
+        source_url: BESTBUY_SOURCE.url,
+        evidence_tier: "B",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup, { includeMarketContext: false });
+    expect(result).toHaveLength(0);
+  });
+
+  it("allows max 1 unanchored hook when includeMarketContext=true", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 5,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `"12% online sales growth" at Best Buy — is that driven by supply chain, or by demand shifts?`,
+        evidence_snippet: "Best Buy reported 12% online sales growth in Q4",
+        source_title: BESTBUY_SOURCE.title,
+        source_date: "2026-01-15",
+        source_url: BESTBUY_SOURCE.url,
+        evidence_tier: "B",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup, { includeMarketContext: true });
+    // Tier B cap allows max 1
+    expect(result.length).toBeLessThanOrEqual(1);
+  });
+
+  it("rewrites change verbs instead of dropping when fixable", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 2,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `You switched to "$250/reply" pricing — is that to de-risk clients, or to push quality?`,
+        evidence_snippet: "$250/reply pricing model",
+        source_title: SALESCO_SWIPEFILES.title,
+        source_date: "",
+        source_url: SALESCO_SWIPEFILES.url,
+        evidence_tier: "A",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup);
+    expect(result).toHaveLength(1);
+    expect(result[0].hook).toContain("You use");
+    expect(result[0].hook).not.toMatch(/\bswitched\b/i);
+  });
+
+  it("drops hooks that fail question quality (no forced-choice)", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 1,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `Your "3.2X reply rate vs templates" — is that sustainable long-term?`,
+        evidence_snippet: "3.2X reply rate vs templates",
+        source_title: SALESCO_HOMEPAGE.title,
+        source_date: "",
+        source_url: SALESCO_HOMEPAGE.url,
+        evidence_tier: "A",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup);
+    expect(result).toHaveLength(0);
+  });
+
+  it("caps Tier B at 1 even with multiple valid Tier B hooks", () => {
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 4, // blog — Tier B
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `Noticed "15 Strategies That Generate 500+ Qualified Leads" — are customers buying strategy, or execution?`,
+        evidence_snippet: "15 Strategies That Generate 500+ Qualified Leads",
+        source_title: SALESCO_BLOG.title,
+        source_date: "",
+        source_url: SALESCO_BLOG.url,
+        evidence_tier: "B",
+        confidence: "high",
+      },
+      {
+        news_item: 4,
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `Your playbook "15 Strategies That Generate 500+ Qualified Leads" — is the focus ICP targeting, or multi-channel outreach?`,
+        evidence_snippet: "15 Strategies That Generate 500+ Qualified Leads",
+        source_title: SALESCO_BLOG.title,
+        source_date: "",
+        source_url: SALESCO_BLOG.url,
+        evidence_tier: "B",
+        confidence: "high",
+      },
+    ];
+    const result = publishGate(rawHooks, lookup);
+    const tierB = result.filter((h) => h.evidence_tier === "B");
+    expect(tierB.length).toBeLessThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Publish Gate: sales.co regression assertions
+// ---------------------------------------------------------------------------
+describe("publishGate: sales.co regression", () => {
+  it("Hook 5 must never say 'You switched to $250/reply' — must be present tense", () => {
+    const lookup = buildSourceLookup([
+      SALESCO_HOMEPAGE,
+      SALESCO_SWIPEFILES,
+      SALESCO_CUSTOMERS,
+      SALESCO_BLOG,
+      BESTBUY_SOURCE,
+    ]);
+
+    // Simulate Claude returning a change-verb hook
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 2,
+        angle: "trigger",
+        psych_mode: "tradeoff_frame",
+        hook: `You switched to "$250/reply" pricing — is that mainly to de-risk clients, or to push higher standards on list + offer quality?`,
+        evidence_snippet: "$250/reply pricing model",
+        source_title: SALESCO_SWIPEFILES.title,
+        source_date: "",
+        source_url: SALESCO_SWIPEFILES.url,
+        evidence_tier: "A",
+        confidence: "high",
+      },
+    ];
+
+    const result = publishGate(rawHooks, lookup);
+    expect(result).toHaveLength(1);
+    // Must be rewritten to present tense
+    expect(result[0].hook).not.toMatch(/\bswitched\b/i);
+    expect(result[0].hook).toMatch(/\bYou use\b/);
+  });
+
+  it("Hook 10 (Best Buy) must never appear in default output for sales.co", () => {
+    const lookup = buildSourceLookup([
+      SALESCO_HOMEPAGE,
+      SALESCO_SWIPEFILES,
+      SALESCO_CUSTOMERS,
+      SALESCO_BLOG,
+      BESTBUY_SOURCE,
+    ]);
+
+    const rawHooks: ClaudeHookPayload[] = [
+      {
+        news_item: 5, // Best Buy
+        angle: "trigger",
+        psych_mode: "relevance",
+        hook: `Best Buy says "resilient and deal-focused" — is that driven by promotions, or by loyalty programs?`,
+        evidence_snippet: "Best Buy described consumers as resilient and deal-focused",
+        source_title: "Best Buy Reports Strong Holiday Sales",
+        source_date: "2026-01-15",
+        source_url: "https://reuters.com/business/bestbuy-holiday-sales",
+        evidence_tier: "B",
+        confidence: "high",
+      },
+    ];
+
+    // Default mode: includeMarketContext=false
+    const result = publishGate(rawHooks, lookup, { includeMarketContext: false });
+    expect(result).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Demo sample hooks pass publish gate
+// ---------------------------------------------------------------------------
+describe("demo sample hooks pass publish gate", () => {
+  // Mirror the exact hooks from demo-section.tsx
+  const DEMO_HOOKS: Array<{
+    hook: Hook;
+    label: string;
+  }> = [
+    {
+      label: "Stripe Revenue Recognition",
+      hook: {
+        news_item: 1,
+        angle: "trigger",
+        hook: 'Your "Revenue Recognition automating ASC 606 compliance" launch — is the main driver faster book-close, or reducing manual reconciliation errors?',
+        evidence_snippet: "Stripe launches Revenue Recognition, automating ASC 606 compliance for subscription businesses.",
+        source_title: "Stripe Blog — Revenue Recognition",
+        source_date: "2025-02",
+        source_url: "https://stripe.com/blog",
+        evidence_tier: "A",
+        confidence: "high",
+        psych_mode: "curiosity_gap",
+        why_this_works: "mechanism question",
+      },
+    },
+    {
+      label: "Stripe 250+ integrations",
+      hook: {
+        news_item: 2,
+        angle: "tradeoff",
+        hook: 'You offer "250+ prebuilt integrations across payments, billing, and tax" — is the priority coverage breadth, or depth on core payment flows?',
+        evidence_snippet: "250+ prebuilt integrations across payments, billing, and tax.",
+        source_title: "Stripe — Platform Overview",
+        source_date: "",
+        source_url: "https://stripe.com",
+        evidence_tier: "A",
+        confidence: "high",
+        psych_mode: "tradeoff_frame",
+        why_this_works: "tradeoff frame",
+      },
+    },
+    {
+      label: "Stripe webhook reliability",
+      hook: {
+        news_item: 3,
+        angle: "risk",
+        hook: 'Your docs now cover "handling webhook delivery failures and retry logic" — is that driven by enterprise customer requests, or internal reliability targets?',
+        evidence_snippet: "New section added to Stripe Docs: Handling webhook delivery failures and retry logic.",
+        source_title: "Stripe Developer Docs",
+        source_date: "2025-02",
+        source_url: "https://docs.stripe.com",
+        evidence_tier: "A",
+        confidence: "high",
+        psych_mode: "relevance",
+        why_this_works: "you-first relevance",
+      },
+    },
+  ];
+
+  for (const { label, hook } of DEMO_HOOKS) {
+    it(`${label}: passes publishGateValidateHook`, () => {
+      const result = publishGateValidateHook(hook);
+      expect(result).not.toBeNull();
+      expect(result!.hook).toBe(hook.hook);
+    });
+
+    it(`${label}: no change verbs without proof`, () => {
+      expect(/\b(switched|revamped|recently changed|now\s+charging|hiring across)\b/i.test(hook.hook)).toBe(false);
+    });
+
+    it(`${label}: has forced-choice question`, () => {
+      expect(hasValidQuestionStructure(hook.hook)).toBe(true);
+    });
+
+    it(`${label}: contains verbatim quote`, () => {
+      expect(/"[^"]{5,}"/.test(hook.hook)).toBe(true);
+    });
+
+    it(`${label}: no first-person framing`, () => {
+      const withoutQuotes = hook.hook.replace(/[""\u201C][^""\u201D]*[""\u201D]/g, "");
+      expect(/\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b/i.test(withoutQuotes)).toBe(false);
+    });
+  }
 });

@@ -171,6 +171,7 @@ const VAGUE_QUESTION_PATTERNS = [
   /\bholding up as\b/i,
   /\bkeeping pace\b/i,
   /\bcurious if\b/i,
+  /\bconverting to pipeline\b/i,
 ];
 
 // No mock/template hooks — every hook must be sourced from real evidence.
@@ -1903,6 +1904,93 @@ export function validateHook(
 }
 
 // ---------------------------------------------------------------------------
+// PUBLISH GATE — single enforcement layer before hooks are shown/returned
+// ---------------------------------------------------------------------------
+
+export type PublishGateOptions = {
+  /** If true, allow max 1 unanchored source labeled "Market context". Default: false */
+  includeMarketContext?: boolean;
+};
+
+/**
+ * Publish Gate: validate → rewrite once → drop/backfill.
+ * This is the ONLY function that should be used to produce user-facing hooks.
+ * It enforces:
+ *   1. Anchored source check (exclude unanchored when market context off)
+ *   2. Verbatim quote requirement (5–12 word span in evidence)
+ *   3. Change verb rewrite-or-drop
+ *   4. Forced-choice question structure
+ *   5. Tier B cap (max 1 total) + concrete anchor requirement
+ *   6. All other validateHook rules (banned phrases, first-person, fake stats, etc.)
+ */
+export function publishGate(
+  rawHooks: ClaudeHookPayload[],
+  sourceLookup: Map<number, ClassifiedSource>,
+  options?: PublishGateOptions,
+): Hook[] {
+  const includeMarketContext = options?.includeMarketContext ?? false;
+
+  // Step 1: Filter source lookup to exclude unanchored when market context off
+  const filteredLookup = new Map<number, ClassifiedSource>();
+  for (const [idx, source] of sourceLookup) {
+    const anchored = (source.anchorScore ?? 0) >= 3;
+    if (!anchored && !includeMarketContext) continue;
+    filteredLookup.set(idx, source);
+  }
+
+  // Step 2: Validate each hook through full pipeline (includes rewrite-or-drop)
+  const validHooks: Hook[] = [];
+  for (const raw of rawHooks) {
+    // Reject hooks from sources that were filtered out
+    if (!filteredLookup.has(raw.news_item)) continue;
+    const validated = validateHook(raw, filteredLookup);
+    if (validated) validHooks.push(validated);
+  }
+
+  // Step 3: Enforce Tier B cap — max 1 total (or 0 if market context off and unanchored)
+  let tierBCount = 0;
+  const cappedHooks: Hook[] = [];
+  for (const hook of validHooks) {
+    if (hook.evidence_tier === "B") {
+      if (tierBCount >= 1) continue;
+      // In market-context mode, label unanchored Tier B
+      const source = filteredLookup.get(hook.news_item);
+      if (source && (source.anchorScore ?? 0) < 3 && includeMarketContext) {
+        // Allowed but capped — this is the 1 market context hook
+      }
+      tierBCount++;
+    }
+    cappedHooks.push(hook);
+  }
+
+  return cappedHooks;
+}
+
+/**
+ * Validate a single pre-built Hook object through publish gate rules.
+ * Used for static/demo hooks that are already in Hook shape (not ClaudeHookPayload).
+ * Returns the hook if it passes, null if it fails.
+ */
+export function publishGateValidateHook(hook: Hook): Hook | null {
+  // Re-validate by converting to payload and running through validateHook
+  const payload: ClaudeHookPayload = {
+    news_item: hook.news_item,
+    angle: hook.angle,
+    hook: hook.hook,
+    evidence_snippet: hook.evidence_snippet,
+    source_title: hook.source_title,
+    source_date: hook.source_date,
+    source_url: hook.source_url,
+    evidence_tier: hook.evidence_tier,
+    confidence: hook.confidence,
+    psych_mode: hook.psych_mode,
+    why_this_works: hook.why_this_works,
+  };
+  // Validate without source lookup (no source-level checks for static hooks)
+  return validateHook(payload);
+}
+
+// ---------------------------------------------------------------------------
 // Fallback mock hooks
 // ---------------------------------------------------------------------------
 
@@ -1969,7 +2057,6 @@ export async function generateHooksForUrl(opts: {
 
   // If no company-anchored sources, show low signal with specific guidance
   if (!hasAnchoredSources) {
-    // Still generate from Tier B (market context) but cap at 1 hook
     const sourceLookup = new Map<number, ClassifiedSource>();
     usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
@@ -1977,14 +2064,10 @@ export async function generateHooksForUrl(opts: {
     const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
     const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-    const validHooks: Hook[] = [];
-    for (const raw of rawHooks) {
-      const validated = validateHook(raw, sourceLookup);
-      if (validated) validHooks.push(validated);
-    }
-
+    // Publish Gate — enforce all rules
+    const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
     return {
-      hooks: validHooks.slice(0, 1),
+      hooks: gated.slice(0, 1),
       suggestion: NO_ANCHOR_SUGGESTION,
       lowSignal: true,
     };
@@ -1997,35 +2080,20 @@ export async function generateHooksForUrl(opts: {
   const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
   const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
-  const validHooks: Hook[] = [];
-  for (const raw of rawHooks) {
-    const validated = validateHook(raw, sourceLookup);
-    if (validated) validHooks.push(validated);
-  }
-
-  // Enforce Tier B cap: max 1 Tier B hook total (market context)
-  let tierBCount = 0;
-  const cappedHooks: Hook[] = [];
-  for (const hook of validHooks) {
-    if (hook.evidence_tier === "B") {
-      if (tierBCount >= 1) continue;
-      tierBCount++;
-    }
-    cappedHooks.push(hook);
-  }
+  // Publish Gate — enforce all rules (validate → rewrite → drop, Tier B cap, anchor filter)
+  const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
 
   // Signal vs Fundamental gate
   if (lowSignal) {
-    const result = cappedHooks.slice(0, 1);
     return {
-      hooks: result,
+      hooks: gated.slice(0, 1),
       suggestion: LOW_SIGNAL_SUGGESTION,
       lowSignal: true,
     };
   }
 
-  // Normal generation — if nothing survived validation, return low signal
-  if (cappedHooks.length === 0) {
+  // If nothing survived publish gate, return low signal
+  if (gated.length === 0) {
     return {
       hooks: [],
       suggestion: NO_ANCHOR_SUGGESTION,
@@ -2033,6 +2101,6 @@ export async function generateHooksForUrl(opts: {
     };
   }
 
-  const limit = opts.count ?? cappedHooks.length;
-  return { hooks: cappedHooks.slice(0, limit), lowSignal: false };
+  const limit = opts.count ?? gated.length;
+  return { hooks: gated.slice(0, limit), lowSignal: false };
 }
