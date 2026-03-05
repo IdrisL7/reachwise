@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import ContextWalletModal from "@/components/context-wallet-modal";
 
 interface Hook {
@@ -56,11 +57,18 @@ export default function HooksPage() {
   const [hasCopied, setHasCopied] = useState(false);
   const pendingGenerate = useRef(false);
   const lowSignalTracked = useRef(false);
+  const [customRoleInput, setCustomRoleInput] = useState("");
+  const [showCustomRole, setShowCustomRole] = useState(false);
+  const [upgradePrompt, setUpgradePrompt] = useState<{
+    title: string; message: string; cta: string; href: string;
+  } | null>(null);
+  const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      return localStorage.getItem("gsh_targetRole") || "General";
+      const saved = localStorage.getItem("gsh_targetRole");
+      return saved === "General" ? "Not sure / Any role" : saved || "Not sure / Any role";
     }
-    return "General";
+    return "Not sure / Any role";
   });
 
   useEffect(() => {
@@ -70,7 +78,12 @@ export default function HooksPage() {
       fetch("/api/user-stats").then((r) => r.json()).catch(() => ({})),
     ]).then(([profileData, statsData]) => {
       if (profileData.profile) setHasProfile(true);
-      setHooksUsed(statsData.hooksUsed ?? 0);
+      const used = statsData.hooksUsed ?? 0;
+      setHooksUsed(used);
+      // Show onboarding tips for brand-new users who haven't dismissed them
+      if (used === 0 && !localStorage.getItem("gsh_onboarding_done")) {
+        setOnboardingStep(0);
+      }
     });
   }, []);
 
@@ -171,6 +184,7 @@ export default function HooksPage() {
 
     setLoading(true);
     setError("");
+    setUpgradePrompt(null);
     setHooks([]);
     setOverflowHooks([]);
     setShowAll(false);
@@ -189,12 +203,43 @@ export default function HooksPage() {
         body: JSON.stringify({
           url: url || undefined,
           companyName: companyName || undefined,
-          targetRole: targetRole !== "General" ? targetRole : undefined,
+          targetRole: targetRole !== "Not sure / Any role" && targetRole !== "General"
+            ? (targetRole === "Custom" ? customRoleInput.trim() || undefined : targetRole)
+            : undefined,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || data.message || "Failed to generate hooks");
+      if (!res.ok) {
+        // Surface structured error codes with specific CTAs
+        const code = data.code as string | undefined;
+        if (code === "TRIAL_EXPIRED") {
+          setUpgradePrompt({
+            title: "Your free trial has ended",
+            message: "Subscribe to keep generating hooks.",
+            cta: "View plans",
+            href: "/#pricing",
+          });
+          setLoading(false);
+          return;
+        }
+        if (code === "TIER_LIMIT") {
+          setUpgradePrompt({
+            title: "Monthly hook limit reached",
+            message: data.message || "Upgrade your plan for more hooks.",
+            cta: "Upgrade",
+            href: "/#pricing",
+          });
+          setLoading(false);
+          return;
+        }
+        if (code === "RATE_LIMITED") {
+          setError(`Slow down — ${data.message || "too many requests. Try again in a moment."}`);
+          setLoading(false);
+          return;
+        }
+        throw new Error(data.error || data.message || "Failed to generate hooks");
+      }
 
       // Map structured_hooks (with .hook field) to display format, fallback to flat hooks
       type RawHook = {
@@ -253,14 +298,17 @@ export default function HooksPage() {
       if (data.companyDomain) setCompanyDomain(data.companyDomain);
 
       // Update hooksUsed locally so the gate doesn't re-trigger
-      setHooksUsed((prev) => (prev ?? 0) + 1);
-      trackEvent("hooks_generated_first");
+      setHooksUsed((prev) => {
+        const next = (prev ?? 0) + 1;
+        if (next === 1) trackEvent("hooks_generated_first");
+        return next;
+      });
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [url, companyName, targetRole]);
+  }, [url, companyName, targetRole, customRoleInput]);
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -312,6 +360,27 @@ export default function HooksPage() {
     setShowGateModal(false);
     setShowProfileModal(true);
     pendingGenerate.current = true;
+  }
+
+  const REPUTABLE_DOMAINS = [
+    "reuters.com", "bloomberg.com", "wsj.com", "ft.com", "cnbc.com",
+    "techcrunch.com", "theverge.com", "wired.com", "arstechnica.com",
+    "forbes.com", "inc.com", "hbr.org", "businessinsider.com",
+    "sec.gov", "crunchbase.com", "glassdoor.com", "g2.com",
+    "linkedin.com", "github.com", "pitchbook.com",
+  ];
+
+  function getSourceType(sourceUrl: string): "First-party" | "Reputable" | "Web" {
+    if (companyDomain && sourceUrl.toLowerCase().includes(companyDomain.toLowerCase())) {
+      return "First-party";
+    }
+    try {
+      const hostname = new URL(sourceUrl).hostname.replace(/^www\./, "");
+      if (REPUTABLE_DOMAINS.some((d) => hostname === d || hostname.endsWith(`.${d}`))) {
+        return "Reputable";
+      }
+    } catch { /* ignore */ }
+    return "Web";
   }
 
   const tierColors: Record<string, string> = {
@@ -416,25 +485,43 @@ export default function HooksPage() {
             </div>
             <div>
               <label className="block text-sm text-zinc-400 mb-1.5">
-                Target Role
+                Who are you emailing?
               </label>
               <select
-                value={targetRole}
+                value={targetRole === "Custom" ? "Custom" : targetRole}
                 onChange={(e) => {
-                  setTargetRole(e.target.value);
-                  localStorage.setItem("gsh_targetRole", e.target.value);
+                  const val = e.target.value;
+                  setTargetRole(val);
+                  setShowCustomRole(val === "Custom");
+                  if (val !== "Custom") {
+                    setCustomRoleInput("");
+                    localStorage.setItem("gsh_targetRole", val);
+                  }
                 }}
                 className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-emerald-600 appearance-none"
               >
-                <option value="General">General</option>
+                <option value="Not sure / Any role">Not sure / Any role</option>
                 <option value="VP Sales">VP Sales</option>
                 <option value="RevOps">RevOps</option>
                 <option value="SDR Manager">SDR Manager</option>
                 <option value="Marketing">Marketing</option>
                 <option value="Founder/CEO">Founder/CEO</option>
+                <option value="Custom">Custom...</option>
               </select>
+              {showCustomRole && (
+                <input
+                  type="text"
+                  value={customRoleInput}
+                  onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
+                  placeholder="e.g. Head of Partnerships"
+                  className="w-full mt-2 bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600 text-sm"
+                />
+              )}
             </div>
           </div>
+          <p className="text-xs text-zinc-500 mb-4">
+            Best results: paste the company homepage + pick who you&apos;re emailing. Every hook includes receipts (quote + source + date).
+          </p>
           <button
             type="submit"
             disabled={loading || (!url && !companyName)}
@@ -451,15 +538,27 @@ export default function HooksPage() {
         </div>
       )}
 
-      {!loading && hooks.length === 0 && !error && !suggestion && (
+      {upgradePrompt && (
+        <div className="bg-violet-900/30 border border-violet-800 rounded-lg px-5 py-4 mb-6">
+          <h3 className="text-sm font-semibold text-violet-200 mb-1">{upgradePrompt.title}</h3>
+          <p className="text-sm text-violet-300/80 mb-3">{upgradePrompt.message}</p>
+          <Link
+            href={upgradePrompt.href}
+            className="inline-block bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          >
+            {upgradePrompt.cta}
+          </Link>
+        </div>
+      )}
+
+      {!loading && hooks.length === 0 && !error && !upgradePrompt && !suggestion && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-10 text-center">
           <div className="text-4xl mb-4">🎣</div>
           <h2 className="text-lg font-semibold text-zinc-200 mb-2">
             Generate your first hooks
           </h2>
           <p className="text-sm text-zinc-500 max-w-md mx-auto mb-5">
-            Enter a company URL above and we&apos;ll research their public signals — earnings,
-            hiring, tech changes — and generate evidence-backed hooks you can drop into any outbound message.
+            Paste a company URL, pick a role, and we&apos;ll turn public signals into evidence-backed hooks you can copy into outbound.
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             <span className="text-xs text-zinc-600">Try an example:</span>
@@ -639,6 +738,20 @@ export default function HooksPage() {
                   >
                     Tier {hook.evidence_tier}
                   </span>
+                  {/* Trust badge: source type */}
+                  {hook.source_url && (() => {
+                    const srcType = getSourceType(hook.source_url);
+                    const cls = srcType === "First-party"
+                      ? "text-emerald-400 bg-emerald-900/20 border-emerald-800/50"
+                      : srcType === "Reputable"
+                        ? "text-blue-400 bg-blue-900/20 border-blue-800/50"
+                        : "text-zinc-400 bg-zinc-800/50 border-zinc-700/50";
+                    return (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cls}`}>
+                        {srcType}
+                      </span>
+                    );
+                  })()}
                   <span
                     className={`text-xs font-medium ${angleColors[hook.angle] || "text-zinc-400"}`}
                   >
@@ -655,7 +768,19 @@ export default function HooksPage() {
                   <span className="text-xs text-zinc-600">
                     {hook.confidence} confidence
                   </span>
+                  {/* Role badge */}
+                  {targetRole && targetRole !== "Not sure / Any role" && targetRole !== "General" && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-sky-400 bg-sky-900/20 border-sky-800/50">
+                      {targetRole === "Custom" ? customRoleInput || "Custom" : targetRole}
+                    </span>
+                  )}
                 </div>
+                {/* Role sharpening prompt */}
+                {(targetRole === "Not sure / Any role" || targetRole === "General") && (
+                  <p className="text-[11px] text-zinc-600 mb-2 -mt-1">
+                    Pick a role above to sharpen the question for a specific buyer.
+                  </p>
+                )}
                 <p className="text-zinc-200 mb-3">{hook.text}</p>
                 {hook.source_snippet && (
                   <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
@@ -775,6 +900,131 @@ export default function HooksPage() {
           onSkip={handleGateSkipped}
         />
       )}
+
+      {/* Onboarding tour */}
+      {onboardingStep !== null && <OnboardingTooltip step={onboardingStep} onNext={() => {
+        if (onboardingStep >= ONBOARDING_STEPS.length - 1) {
+          setOnboardingStep(null);
+          localStorage.setItem("gsh_onboarding_done", "1");
+        } else {
+          setOnboardingStep(onboardingStep + 1);
+        }
+      }} onDismiss={() => {
+        setOnboardingStep(null);
+        localStorage.setItem("gsh_onboarding_done", "1");
+      }} />}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding tour
+// ---------------------------------------------------------------------------
+
+const ONBOARDING_STEPS = [
+  {
+    target: "input[type='url']",
+    title: "Start here",
+    body: "Paste any company URL — their homepage works best. We'll scan public signals like earnings, hiring, and tech changes.",
+    position: "bottom" as const,
+  },
+  {
+    target: "select",
+    title: "Pick who you're emailing",
+    body: "Choose the buyer's role to get hooks with questions tailored to their priorities. 'VP Sales' gets different hooks than 'Marketing'.",
+    position: "bottom" as const,
+  },
+  {
+    target: "button[type='submit']",
+    title: "Generate hooks",
+    body: "Hit this to research the company and generate 3-5 evidence-backed hooks. Each one includes a real quote, source, and date.",
+    position: "top" as const,
+  },
+];
+
+function OnboardingTooltip({
+  step,
+  onNext,
+  onDismiss,
+}: {
+  step: number;
+  onNext: () => void;
+  onDismiss: () => void;
+}) {
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+  const current = ONBOARDING_STEPS[step];
+  const isLast = step >= ONBOARDING_STEPS.length - 1;
+
+  useEffect(() => {
+    function measure() {
+      const el = document.querySelector(current.target);
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      setPos({ top: rect.top + window.scrollY, left: rect.left + window.scrollX, width: rect.width });
+    }
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [current.target]);
+
+  if (!pos) return null;
+
+  const tooltipTop = current.position === "bottom"
+    ? pos.top + 52
+    : pos.top - 12;
+
+  return (
+    <div className="fixed inset-0 z-[60]" onClick={onDismiss}>
+      {/* Spotlight cutout highlight */}
+      <div
+        className="absolute border-2 border-emerald-500 rounded-lg pointer-events-none transition-all duration-300"
+        style={{
+          top: pos.top - 4,
+          left: pos.left - 4,
+          width: pos.width + 8,
+          height: 48,
+        }}
+      />
+      {/* Tooltip card */}
+      <div
+        className="absolute w-72 bg-zinc-900 border border-emerald-800 rounded-xl p-4 shadow-2xl shadow-emerald-900/20"
+        style={{
+          top: tooltipTop,
+          left: Math.min(pos.left, window.innerWidth - 304),
+          transform: current.position === "top" ? "translateY(-100%)" : undefined,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Arrow */}
+        <div
+          className={`absolute w-3 h-3 bg-zinc-900 border-emerald-800 rotate-45 ${
+            current.position === "bottom"
+              ? "-top-1.5 left-6 border-l border-t"
+              : "-bottom-1.5 left-6 border-r border-b"
+          }`}
+        />
+        <p className="text-xs font-semibold text-emerald-400 mb-1">
+          Step {step + 1} of {ONBOARDING_STEPS.length}
+        </p>
+        <p className="text-sm font-medium text-zinc-100 mb-1">{current.title}</p>
+        <p className="text-xs text-zinc-400 leading-relaxed mb-3">{current.body}</p>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onNext}
+            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+          >
+            {isLast ? "Got it" : "Next"}
+          </button>
+          {!isLast && (
+            <button
+              onClick={onDismiss}
+              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+            >
+              Skip tour
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
