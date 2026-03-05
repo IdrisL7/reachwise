@@ -123,7 +123,8 @@ const UNSOURCED_CLAIM_PATTERNS = [
 // if the evidence contains an explicit time marker or change statement.
 const CHANGE_VERB_PATTERNS = [
   /\bswitched\b/i, /\brevamped\b/i, /\brecently changed\b/i,
-  /\bnow doing\b/i, /\bhiring across\b/i, /\bmoved to\b/i,
+  /\bnow (doing|charging|offering|using|running|building|selling)\b/i,
+  /\bhiring across\b/i, /\bmoved to\b/i,
   /\bjust launched\b/i, /\bjust started\b/i, /\bjust added\b/i,
   /\brecently (launched|started|added|introduced|adopted|moved|shifted|pivoted)\b/i,
   /\bstarted (using|offering|doing|building)\b/i,

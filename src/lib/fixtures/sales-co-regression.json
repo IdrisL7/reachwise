@@ -1,0 +1,198 @@
+{
+  "test_name": "sales_co_regression_expected_hooks_v1",
+  "input": {
+    "company_url": "https://sales.co/",
+    "mode": "default",
+    "include_market_context": false
+  },
+  "expected": {
+    "hooks": [
+      {
+        "hook_id": "salesco_01",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "trigger",
+        "hook_text": "Noticed you publish playbooks like \"15 Strategies… 500+ Qualified Leads\" — are customers buying you for strategy, or for execution + deliverability?",
+        "evidence": {
+          "quote": "15 Strategies That Generate 500+ Qualified Leads",
+          "source_title": "B2B Lead Generation: 15 Strategies That Generate 500+ Qualified Leads",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_02",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "trigger",
+        "hook_text": "You claim \"39% MORE QUALIFIED ACCOUNTS\" — is that improvement coming more from lead data quality, or from the outreach copy/QA process?",
+        "evidence": {
+          "quote": "39% MORE QUALIFIED ACCOUNTS",
+          "source_title": "Sales.co - Automated Customer Acquisition for B2B",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "mechanism_forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_03",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "risk",
+        "hook_text": "Your \"3.2X reply rate vs templates\" claim is bold — are you optimizing for booked meetings, or for qualified reply volume?",
+        "evidence": {
+          "quote": "3.2X reply rate vs templates",
+          "source_title": "Sales.co - Automated Customer Acquisition for B2B",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_04",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "tradeoff",
+        "hook_text": "You promise \"100% unique email to every prospect\" — is that human-written end-to-end, or programmatic personalization with human QA?",
+        "evidence": {
+          "quote": "100% unique email to every prospect",
+          "source_title": "Sales.co - Automated Customer Acquisition for B2B",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "mechanism_forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_05",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "trigger",
+        "hook_text": "You price at \"$250/reply\" — is that mainly to de-risk clients, or to push higher standards on list + offer quality?",
+        "evidence": {
+          "quote": "$250/reply",
+          "source_title": "Cold Email Swipe Files | Sales.co - Proven Templates & Examples",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice",
+          "forbidden_phrases_not_present": ["switched", "recently", "revamped"]
+        }
+      },
+      {
+        "hook_id": "salesco_06",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "risk",
+        "hook_text": "You offer \"24/7 deliverability management\" — do you run dedicated infrastructure per client, or shared pools with throttling/warmup?",
+        "evidence": {
+          "quote": "24/7 deliverability management",
+          "source_title": "Cold Email Swipe Files | Sales.co - Proven Templates & Examples",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_07",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "tradeoff",
+        "hook_text": "You say \"99% of cold email is… digital spam\" — do you fix that first with list hygiene, or with offer/messaging changes?",
+        "evidence": {
+          "quote": "99% of cold email is just digital spam",
+          "source_title": "Cold Email Swipe Files | Sales.co - Proven Templates & Examples",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_08",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "risk",
+        "hook_text": "Noticed \"820 interested replies from ~94,000 emails\" — are you optimizing more for booked meetings, or for qualified replies at scale?",
+        "evidence": {
+          "quote": "820 interested replies from ~94,000 emails",
+          "source_title": "Sales.co Case Studies",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      },
+      {
+        "hook_id": "salesco_09",
+        "tier": "A",
+        "confidence": "high",
+        "angle": "tradeoff",
+        "hook_text": "On your case study, \"demo-focused CTAs\" worked — do you push demos early, or qualify first then drive to demo?",
+        "evidence": {
+          "quote": "demo-focused CTAs",
+          "source_title": "Sales.co Case Studies",
+          "source_url_contains": "sales.co",
+          "source_type": "company_site"
+        },
+        "validators": {
+          "must_include_quote": true,
+          "no_change_verbs_without_proof": true,
+          "question_type": "forced_choice"
+        }
+      }
+    ],
+    "excluded_sources": [
+      {
+        "reason": "unanchored_market_context",
+        "rule": "If include_market_context=false, exclude any source where neither company name nor company domain appears in title/snippet AND url is not on company domain.",
+        "example_source_title_contains": "Best Buy",
+        "expected_action": "exclude_entirely"
+      }
+    ],
+    "hard_fail_assertions": [
+      {
+        "assertion": "no_unrelated_sources_in_default_mode",
+        "must_not_include_source_title_regex": "Best Buy|holiday sales|retailer",
+        "must_not_include_source_domain_regex": "bestbuy\\.|(?!.*sales\\.co).*"
+      },
+      {
+        "assertion": "no_change_verbs_without_explicit_change_evidence",
+        "forbidden_terms_regex": "\\b(switched|revamped|recently changed|now\\s+charging|hiring across)\\b"
+      },
+      {
+        "assertion": "question_must_be_non_philosophical",
+        "forbidden_question_starters_regex": "\\b(are you seeing|how are you thinking|what are your thoughts|curious if)\\b"
+      }
+    ]
+  }
+}
