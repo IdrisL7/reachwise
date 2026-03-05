@@ -11,6 +11,8 @@ import {
   type CompanyResolutionResult,
   type ClassifiedSource,
   type Hook,
+  type TargetRole,
+  TARGET_ROLES,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks } from "@/lib/hook-cache";
@@ -27,11 +29,16 @@ export async function POST(request: Request) {
       url?: string;
       companyName?: string;
       context?: string;
+      targetRole?: string;
     } | null;
 
     const rawUrl = body?.url?.trim();
     const companyName = body?.companyName?.trim();
     const context = body?.context?.trim();
+    const targetRole: TargetRole | undefined =
+      body?.targetRole && TARGET_ROLES.includes(body.targetRole as TargetRole)
+        ? (body.targetRole as TargetRole)
+        : undefined;
 
     // Validate URL format
     if (rawUrl) {
@@ -168,7 +175,7 @@ export async function POST(request: Request) {
           usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
           // 4. Build prompts and call Claude
-          const systemPrompt = buildSystemPrompt(_senderContext);
+          const systemPrompt = buildSystemPrompt(_senderContext, targetRole);
           const userPrompt = buildUserPrompt(url, sources, context);
           const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
@@ -256,6 +263,7 @@ export async function POST(request: Request) {
       companyName: companyName ?? undefined,
       resolvedCompany,
       cached,
+      targetRole: targetRole || "General",
     });
   } catch (error) {
     console.error("Unexpected error in /api/generate-hooks", error);

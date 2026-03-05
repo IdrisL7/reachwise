@@ -12,6 +12,9 @@ import {
   type ClaudeHookPayload,
   type ClassifiedSource,
   type PsychMode,
+  type TargetRole,
+  TARGET_ROLES,
+  ROLE_RESPONSIBILITIES,
 } from "./hooks";
 import type { EvidenceTier, StructuredHook } from "./types";
 import type { SenderContext } from "./workspace";
@@ -1588,5 +1591,57 @@ describe("validateHook — date discipline", () => {
       confidence: "med",
     });
     expect(result).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Persona-level tailoring
+// ---------------------------------------------------------------------------
+describe("Persona-level tailoring", () => {
+  it("TARGET_ROLES includes all 6 roles", () => {
+    expect(TARGET_ROLES).toHaveLength(6);
+    expect(TARGET_ROLES).toContain("VP Sales");
+    expect(TARGET_ROLES).toContain("RevOps");
+    expect(TARGET_ROLES).toContain("SDR Manager");
+    expect(TARGET_ROLES).toContain("Marketing");
+    expect(TARGET_ROLES).toContain("Founder/CEO");
+    expect(TARGET_ROLES).toContain("General");
+  });
+
+  it("ROLE_RESPONSIBILITIES has entry for each role", () => {
+    for (const role of TARGET_ROLES) {
+      const entry = ROLE_RESPONSIBILITIES[role];
+      expect(entry).toBeDefined();
+      expect(entry.kpis.length).toBeGreaterThan(0);
+      expect(entry.tag).toBeTruthy();
+    }
+  });
+
+  it("buildSystemPrompt includes role framing for VP Sales", () => {
+    const prompt = buildSystemPrompt(null, "VP Sales");
+    expect(prompt).toContain("TARGET ROLE: VP Sales");
+    expect(prompt).toContain("pipeline coverage");
+  });
+
+  it("buildSystemPrompt includes role framing for RevOps", () => {
+    const prompt = buildSystemPrompt(null, "RevOps");
+    expect(prompt).toContain("TARGET ROLE: RevOps");
+    expect(prompt).toContain("data quality");
+  });
+
+  it("buildSystemPrompt includes General framing for General role", () => {
+    const prompt = buildSystemPrompt(null, "General");
+    expect(prompt).toContain("TARGET ROLE: General");
+    expect(prompt).not.toContain("ROLE RESPONSIBILITIES");
+  });
+
+  it("buildSystemPrompt omits role framing when no role passed", () => {
+    const prompt = buildSystemPrompt(null);
+    expect(prompt).not.toContain("TARGET ROLE:");
+  });
+
+  it("buildSystemPrompt includes tone humanizer section", () => {
+    const prompt = buildSystemPrompt(null, "VP Sales");
+    expect(prompt).toContain("TONE");
   });
 });

@@ -9,6 +9,44 @@ export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
 export type PsychMode = "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit";
 
+export type TargetRole = "VP Sales" | "RevOps" | "SDR Manager" | "Marketing" | "Founder/CEO" | "General";
+
+export const TARGET_ROLES: TargetRole[] = [
+  "VP Sales", "RevOps", "SDR Manager", "Marketing", "Founder/CEO", "General",
+];
+
+/**
+ * Static responsibility map per role. Used in prompting to frame the question
+ * around what this persona owns. Never used to assert pain — only to focus
+ * the question on their KPIs/decisions.
+ */
+export const ROLE_RESPONSIBILITIES: Record<TargetRole, { kpis: string[]; tag: string }> = {
+  "VP Sales": {
+    kpis: ["pipeline coverage", "meeting quality", "conversion rate", "ramp time", "forecast risk"],
+    tag: "pipeline",
+  },
+  "RevOps": {
+    kpis: ["tooling/process", "data quality", "attribution", "automation reliability", "governance"],
+    tag: "data_quality",
+  },
+  "SDR Manager": {
+    kpis: ["rep productivity", "QA/coaching", "reply rates", "speed-to-lead", "territory/coverage"],
+    tag: "productivity",
+  },
+  "Marketing": {
+    kpis: ["lead quality", "ICP fit", "routing", "conversion", "intent signals"],
+    tag: "conversion",
+  },
+  "Founder/CEO": {
+    kpis: ["focus", "efficiency", "CAC/payback", "growth constraints", "prioritization"],
+    tag: "governance",
+  },
+  "General": {
+    kpis: ["process", "priority", "decision tradeoff"],
+    tag: "general",
+  },
+};
+
 export type Hook = {
   news_item: number;
   angle: Angle;
@@ -21,6 +59,9 @@ export type Hook = {
   confidence: Confidence;
   psych_mode?: PsychMode;
   why_this_works?: string;
+  role_used?: TargetRole;
+  role_tag?: string;
+  uses_sender_context?: boolean;
 };
 
 export type Source = {
@@ -1397,7 +1438,7 @@ export async function resolveCompanyByName(
 // Build the Claude prompt
 // ---------------------------------------------------------------------------
 
-export function buildSystemPrompt(senderContext?: SenderContext | null): string {
+export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null): string {
   return [
     "You are an elite SDR copywriter who uses sales psychology to craft cold email opening hooks.",
     "Your hooks earn attention fast, center the prospect (never 'we/us'), create productive tension,",
@@ -1576,6 +1617,39 @@ export function buildSystemPrompt(senderContext?: SenderContext | null): string 
           "Hooks should verify the prospect's signal and ask a narrow operational question.",
           "",
         ]),
+    // Role-aware framing section
+    ...(targetRole && targetRole !== "General"
+      ? [
+          `## TARGET ROLE: ${targetRole}`,
+          "",
+          "## ROLE RESPONSIBILITIES",
+          `This person's KPIs/decisions: ${ROLE_RESPONSIBILITIES[targetRole].kpis.join(", ")}.`,
+          "",
+          "## ROLE-FRAMING CONSTRAINT",
+          "- Frame the final question around what this role owns (from the KPIs above).",
+          "- The question should feel relevant to their day-to-day decisions, not generic strategy.",
+          "- Do NOT invent pains or assert problems. Only use evidence for claims.",
+          "- If the evidence doesn't naturally connect to this role's KPIs, ask a verification question instead.",
+          `- Example for ${targetRole}: frame around ${ROLE_RESPONSIBILITIES[targetRole].kpis.slice(0, 2).join(" or ")} — but only if the signal supports it.`,
+          "",
+        ]
+      : targetRole === "General"
+        ? [
+            "## TARGET ROLE: General",
+            "Frame questions around process, priority, or decision tradeoffs.",
+            "Use neutral framing that works for any buyer role.",
+            "",
+          ]
+        : []),
+
+    // Humanizer instruction for high-confidence Tier A hooks
+    "## TONE (human, not robotic)",
+    "- Write like a sharp colleague, not a template engine.",
+    "- Shorten sentences. Cut formal connectors (therefore, as a result, consequently).",
+    "- Do not echo marketing taglines from the source. Paraphrase in your own words outside the quote.",
+    "- Keep the question tight, specific, and answerable in under 5 seconds.",
+    "- The hook should sound like something a well-prepared human would say after reading the source.",
+    "",
     "## Output format",
     "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
     '{  "news_item": <1-indexed source number>,',
@@ -2277,6 +2351,25 @@ export function applyUrlToMockHooks(url: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
+// Role metadata attachment
+// ---------------------------------------------------------------------------
+
+function attachRoleMeta(
+  hooks: Hook[],
+  targetRole: TargetRole | null,
+  usesSenderContext: boolean,
+): Hook[] {
+  if (!targetRole) return hooks.map((h) => ({ ...h, uses_sender_context: usesSenderContext }));
+  const roleInfo = ROLE_RESPONSIBILITIES[targetRole];
+  return hooks.map((h) => ({
+    ...h,
+    role_used: targetRole,
+    role_tag: roleInfo?.tag ?? "general",
+    uses_sender_context: usesSenderContext,
+  }));
+}
+
+// ---------------------------------------------------------------------------
 // High-level: generate hooks for a single URL (used by batch route)
 // ---------------------------------------------------------------------------
 
@@ -2285,6 +2378,8 @@ export async function generateHooksForUrl(opts: {
   pitchContext?: string;
   count?: number;
   includeMarketContext?: boolean;
+  senderContext?: SenderContext | null;
+  targetRole?: TargetRole | null;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
   const braveApiKey = process.env.BRAVE_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
@@ -2333,19 +2428,24 @@ export async function generateHooksForUrl(opts: {
     };
   }
 
+  const _senderContext = opts.senderContext ?? null;
+  const _targetRole = opts.targetRole ?? null;
+
   // If no company-anchored sources, show low signal with specific guidance
   if (!hasAnchoredSources) {
     const sourceLookup = new Map<number, ClassifiedSource>();
     usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-    const systemPrompt = buildSystemPrompt();
+    const systemPrompt = buildSystemPrompt(_senderContext, _targetRole);
     const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
     const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
     // Publish Gate — enforce all rules
     const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
+    // Attach role metadata
+    const withMeta = attachRoleMeta(gated, _targetRole, !!_senderContext);
     return {
-      hooks: gated.slice(0, 1),
+      hooks: withMeta.slice(0, 1),
       suggestion: NO_ANCHOR_SUGGESTION,
       lowSignal: true,
     };
@@ -2354,7 +2454,7 @@ export async function generateHooksForUrl(opts: {
   const sourceLookup = new Map<number, ClassifiedSource>();
   usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-  const systemPrompt = buildSystemPrompt();
+  const systemPrompt = buildSystemPrompt(_senderContext, _targetRole);
   const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
   const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
@@ -2363,8 +2463,9 @@ export async function generateHooksForUrl(opts: {
 
   // Signal vs Fundamental gate
   if (lowSignal) {
+    const withMeta = attachRoleMeta(gated, _targetRole, !!_senderContext);
     return {
-      hooks: gated.slice(0, 1),
+      hooks: withMeta.slice(0, 1),
       suggestion: LOW_SIGNAL_SUGGESTION,
       lowSignal: true,
     };
@@ -2380,5 +2481,6 @@ export async function generateHooksForUrl(opts: {
   }
 
   const limit = opts.count ?? gated.length;
-  return { hooks: gated.slice(0, limit), lowSignal: false };
+  const withMeta = attachRoleMeta(gated, _targetRole, !!_senderContext);
+  return { hooks: withMeta.slice(0, limit), lowSignal: false };
 }

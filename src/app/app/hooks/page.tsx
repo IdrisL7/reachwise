@@ -36,6 +36,12 @@ export default function HooksPage() {
   const [generatingEmail, setGeneratingEmail] = useState<number | null>(null);
   const [generatedEmails, setGeneratedEmails] = useState<Record<number, GeneratedEmail>>({});
   const [copiedEmail, setCopiedEmail] = useState<number | null>(null);
+  const [targetRole, setTargetRole] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gsh_targetRole") || "General";
+    }
+    return "General";
+  });
 
   useEffect(() => {
     fetch("/api/workspace-profile")
@@ -115,6 +121,7 @@ export default function HooksPage() {
         body: JSON.stringify({
           url: url || undefined,
           companyName: companyName || undefined,
+          targetRole: targetRole !== "General" ? targetRole : undefined,
         }),
       });
 
@@ -192,7 +199,7 @@ export default function HooksPage() {
 
       <form onSubmit={generateHooks} className="mb-8">
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
             <div>
               <label className="block text-sm text-zinc-400 mb-1.5">
                 Company URL
@@ -216,6 +223,26 @@ export default function HooksPage() {
                 placeholder="Acme Inc"
                 className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600"
               />
+            </div>
+            <div>
+              <label className="block text-sm text-zinc-400 mb-1.5">
+                Target Role
+              </label>
+              <select
+                value={targetRole}
+                onChange={(e) => {
+                  setTargetRole(e.target.value);
+                  localStorage.setItem("gsh_targetRole", e.target.value);
+                }}
+                className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:border-emerald-600 appearance-none"
+              >
+                <option value="General">General</option>
+                <option value="VP Sales">VP Sales</option>
+                <option value="RevOps">RevOps</option>
+                <option value="SDR Manager">SDR Manager</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Founder/CEO">Founder/CEO</option>
+              </select>
             </div>
           </div>
           <button
