@@ -6,6 +6,7 @@ import type { EvidenceTier } from "./types";
 
 export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
+export type PsychMode = "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit";
 
 export type Hook = {
   news_item: number;
@@ -17,6 +18,8 @@ export type Hook = {
   source_url: string;
   evidence_tier: EvidenceTier;
   confidence: Confidence;
+  psych_mode?: PsychMode;
+  why_this_works?: string;
 };
 
 export type Source = {
@@ -59,6 +62,8 @@ export type ClaudeHookPayload = {
   source_url: string;
   evidence_tier: string;
   confidence: string;
+  psych_mode?: string;
+  why_this_works?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -114,9 +119,55 @@ const UNSOURCED_CLAIM_PATTERNS = [
   /outperform/i,
 ];
 
+// Change verbs that imply a company action/transition. These are ONLY allowed
+// if the evidence contains an explicit time marker or change statement.
+const CHANGE_VERB_PATTERNS = [
+  /\bswitched\b/i, /\brevamped\b/i, /\brecently changed\b/i,
+  /\bnow doing\b/i, /\bhiring across\b/i, /\bmoved to\b/i,
+  /\bjust launched\b/i, /\bjust started\b/i, /\bjust added\b/i,
+  /\brecently (launched|started|added|introduced|adopted|moved|shifted|pivoted)\b/i,
+  /\bstarted (using|offering|doing|building)\b/i,
+  /\bshifted (to|from|toward)\b/i, /\bpivoted (to|from|toward)\b/i,
+  /\badopted\b/i, /\btransitioned (to|from)\b/i,
+];
+
+// Time/change cues that justify using a change verb.
+const CHANGE_TIME_CUES = [
+  /\b(Q[1-4])\s*\d{4}/i, /\b20\d{2}\b/, /\blast (month|quarter|year|week)\b/i,
+  /\brecently\b/i, /\bjust\b/i, /\bnew(ly)?\b/i,
+  /\bannounced\b/i, /\blaunched\b/i, /\bintroduced\b/i,
+  /\breleased\b/i, /\bmigrat/i, /\bupgrad/i, /\bswitch/i,
+  /\bpivot/i, /\btransition/i, /\bshift/i, /\badopt/i,
+  /\bJanuary|February|March|April|May|June|July|August|September|October|November|December\b/i,
+];
+
 export const VALID_ANGLES: Angle[] = ["trigger", "risk", "tradeoff"];
 export const VALID_CONFIDENCES: Confidence[] = ["high", "med"];
+export const VALID_PSYCH_MODES: PsychMode[] = [
+  "relevance", "curiosity_gap", "symptom", "tradeoff_frame", "contrarian", "benefit",
+];
 export const MAX_HOOK_CHARS = 240;
+
+// Vague/philosophical question patterns that get rejected.
+// Hooks must ask forced-choice, ownership, timing, or mechanism questions.
+const VAGUE_QUESTION_PATTERNS = [
+  /\bare you seeing\b/i,
+  /\bhow are you thinking about\b/i,
+  /\bhow do you think about\b/i,
+  /\bwhat are your thoughts\b/i,
+  /\bwhat do you think\b/i,
+  /\bhow does that (feel|land|sit)\b/i,
+  /\bhave you considered\b/i,
+  /\bis (this|that) something\b/i,
+  /\bis (this|that) on your radar\b/i,
+  /\bare you looking (at|into)\b/i,
+  /\bhow are you (handling|managing|approaching|dealing)\b/i,
+  /\bhow does your team (feel|think) about\b/i,
+  /\bwhat's your (take|view|stance|perspective)\b/i,
+  /\bwhat are you doing about\b/i,
+  /\bare you exploring\b/i,
+  /\bare you concerned\b/i,
+];
 
 // No mock/template hooks — every hook must be sourced from real evidence.
 const MOCK_HOOKS: string[] = [];
@@ -373,6 +424,17 @@ export function classifySource(source: Source, isCompanySite = false): EvidenceT
     const hasSignalContent = factsContainSignals(source.facts);
     if (hasDate && hasSignalContent && factsHaveSpecifics(source.facts)) return "A";
     return "B";
+  }
+
+  // Generic SEO blog post guard: listicle/guide titles like "15 strategies to..."
+  // only qualify for Tier A if on company domain AND have concrete quoteable claims
+  const isGenericBlogPost = /\b\d+\s+(strategies|tips|ways|steps|tools|tactics|ideas|methods|techniques|examples|templates)\b/i.test(source.title)
+    || /\bhow to\b.*\b(generate|get|build|create|increase|boost|grow|improve)\b/i.test(source.title)
+    || /\b(ultimate|complete|definitive)\s+guide\b/i.test(source.title);
+  if (isGenericBlogPost) {
+    // Only usable if on company domain with concrete claims; otherwise force B
+    if (sourceHasConcreteEvidence(source.facts)) return "B"; // B, not A — capped at 1 hook
+    return "C";
   }
 
   // Tier A: URL pattern match
@@ -1200,90 +1262,156 @@ export async function resolveCompanyByName(
 
 export function buildSystemPrompt(): string {
   return [
-    "You are an elite SDR copywriter. You turn structured company research into cold email opening hooks.",
+    "You are an elite SDR copywriter who uses sales psychology to craft cold email opening hooks.",
+    "Your hooks earn attention fast, center the prospect (never 'we/us'), create productive tension,",
+    "and ask questions that are easy to answer — all backed by real evidence.",
     "",
     "## MANDATORY: Verbatim Evidence Quote Rule",
     "Every hook MUST include a verbatim quote of 5–12 words copied directly from the source facts.",
-    'Wrap the quote in double quotes inside the hook text. Example: Saw you "launched a new API gateway in Q1" — is the migration on track?',
+    'Wrap the quote in double quotes inside the hook text.',
     "If you cannot find a quoteable phrase of 5–12 words in the source facts, do NOT generate a hook for that source.",
     'The "evidence_snippet" field must contain the EXACT full sentence/fact from which you pulled the quote.',
     "",
-    "## Hook structure",
-    "Every hook MUST follow: Verbatim Quote → Implication → Question",
-    '1. Quote: a verbatim 5–12 word phrase from the source facts, in double quotes.',
-    "2. Implication: what that signal means for the prospect (1 short clause).",
-    "3. Question: end with a binary (yes/no) or highly specific question.",
+    "## Psychology Mode Framework",
+    "For each Tier A source, generate exactly 3 hooks using 3 DIFFERENT psychology modes from the 6 below.",
+    "Rotate modes across sources so the output set has variety. Each hook uses ONE mode.",
+    "",
+    "### Mode A — relevance (you-first framing)",
+    "Center the prospect with second-person framing. No self-references (we/our/us).",
+    'Pattern: Saw your "{QUOTE}" — is your team optimizing for [A] or [B]?',
+    'Example: Saw your "3.2X reply rate vs templates" claim — is the main lever list quality, or the 1:1 personalization layer?',
+    "",
+    "### Mode B — curiosity_gap (credible knowledge gap)",
+    "Create a gap between a claim and the underlying mechanism. Make them want to explain.",
+    'Pattern: "{QUOTE}" is a bold claim — is that driven by [lever1] or [lever2]?',
+    'Example: "100% unique email to every prospect" is a bold claim — is that human-written end-to-end, or programmatic personalization with human QA?',
+    "",
+    "### Mode C — symptom (buyer self-diagnosis)",
+    "Ask about a symptom tied to the signal. Make it fast to answer (binary or specific).",
+    'Pattern: When "{QUOTE}" shows up, the usual bottleneck is [X]. Is that true for you, or is it [Y]?',
+    'Example: When "820 interested replies from ~94,000 emails" shows up, the usual bottleneck is booking rate. Are you optimizing for booked meetings, or qualified reply volume?',
+    "",
+    "### Mode D — tradeoff_frame (decision, not discussion)",
+    "Force a real operational choice. Speed vs quality, breadth vs accuracy, automation vs control.",
+    'Pattern: With "{QUOTE}" — do you prioritize [A], or [B]?',
+    'Example: You price at "$250/reply" — is that mainly to de-risk clients, or to push higher standards on list + offer quality?',
+    "",
+    "### Mode E — contrarian (pattern interrupt)",
+    "Go against the grain, but must be defensible from the evidence. No unsourced claims.",
+    'Pattern: Most teams assume [common belief]. "{QUOTE}" suggests the opposite — is that how you approach it?',
+    `Example: Most outreach tools optimize for volume. You say "99% of cold email is digital spam" — do you fix that first with list hygiene, or with offer/messaging changes?`,
+    "CONSTRAINT: The contrarian statement must be derivable from the evidence. If not, use a different mode.",
+    "",
+    "### Mode F — benefit (what's in it for them)",
+    "Tie the signal to a concrete business benefit. Make the upside specific.",
+    'Pattern: If "{QUOTE}" holds, the upside is [benefit]. Is your priority [benefit1] or [benefit2] this quarter?',
+    'Example: If "24/7 deliverability management" holds, the upside is inbox-rate stability. Is infra dedicated per client, or shared pools with strict throttling?',
     "",
     "## Evidence tier rules",
-    "Each source is classified into a tier based on company-specific anchoring. Follow strictly:",
+    "Each source is classified into a tier. Follow strictly:",
     "",
     "### Tier A sources (company-anchored, strong evidence)",
-    "These sources mention the company BY NAME and describe a specific company action or change.",
-    "Generate exactly 3 hooks per source, one for each angle:",
-    "- trigger: a SPECIFIC company action/change (launch, acquisition, hire, funding, partnership).",
-    "  HARD RULE: If no company action exists in the source, do NOT use the trigger angle.",
-    "  A market trend or industry report is NOT a trigger.",
-    "- risk: what breaks if the change is ignored → binary question.",
-    "- tradeoff: two valid paths the company could take → specific question about direction.",
+    "Generate exactly 3 hooks per source using 3 DIFFERENT psychology modes (A–F).",
+    "Each hook must also specify one of these angles:",
+    "- trigger: a SPECIFIC company action/change. HARD RULE: if no action exists in evidence, skip this angle.",
+    "- risk: what breaks if something is ignored → forced-choice question.",
+    "- tradeoff: two valid paths → specific question about direction.",
     "Each hook MUST contain a verbatim quote from the source.",
     "",
     "### Tier B sources (market context / unanchored)",
-    "These sources do NOT specifically mention the company, or describe general market trends.",
-    "Generate exactly 1 market-context hook per source. Rules:",
-    "- Angle MUST be 'trigger'. No risk or tradeoff hooks for Tier B.",
+    "Generate exactly 1 hook per source. Rules:",
+    "- Angle MUST be 'trigger'. Psychology mode MUST be 'relevance' (mode A).",
     '- Format: "It sounds like [verbatim quote from source]. Did I get that right?"',
-    "- Do NOT assert pain, problems, or implications. ONLY verify what the source says.",
-    "- MUST contain a verbatim quote from the source facts.",
-    "- If no quoteable phrase exists, output NOTHING for this source.",
+    "- Do NOT assert pain or implications. ONLY verify.",
+    "- If no quoteable phrase exists, skip this source entirely.",
     "",
     "### Tier C sources",
-    "Do NOT generate any hooks. Skip entirely.",
+    "Skip entirely. Generate nothing.",
+    "",
+    "## Question quality (HARD constraint — hooks rejected if violated)",
+    "Every hook must end with an ANSWERABLE question. Acceptable types:",
+    "- Forced choice: [A] or [B]? (two specific, operational, mutually exclusive alternatives)",
+    "- Ownership: is this owned by [team X] or [team Y]?",
+    "- Timing: is this a priority now, or next quarter?",
+    "- Mechanism: is that driven by [X] or [Y]?",
+    "",
+    "REJECTED question types (hook will be filtered out):",
+    "- Vague: 'Are you seeing this shift?', 'Is this on your radar?'",
+    "- Philosophical: 'How are you thinking about…?', 'What's your take on…?'",
+    "- Open-ended: 'What are you doing about…?', 'How are you handling…?'",
+    "- Yes/no without specificity: 'Have you considered…?', 'Are you concerned?'",
+    "",
+    "## Emotion modifiers (safe, evidence-gated)",
+    "Apply these ONLY when evidence supports them:",
+    "- Curiosity: use mechanism questions (driven by X or Y?) — always safe",
+    "- Urgency: ONLY when evidence includes a time-bound trigger (launch date, deadline, Q1 target)",
+    "- Social proof: ONLY when evidence names specific customers, partners, or case studies",
+    "- Humor: OFF — do not use humor in hooks",
+    "",
+    "## Newsjacking (gated)",
+    "When a source is dated within 90 days AND the company is named in the source:",
+    'Pattern: Saw the news on "{QUOTE}" — does this change your priority between [A] and [B]?',
+    "Only use for actual news events (launches, funding, partnerships, hires). Not for marketing pages.",
     "",
     "## Unsourced Claims Blocklist (HARD constraint)",
     "NEVER include these claims unless the EXACT words appear in the source facts:",
-    "- redesign / revamp",
-    "- hiring / job postings",
-    "- performance lift / conversion lift",
-    "- pipeline strength / strong pipeline",
+    "- redesign / revamp / hiring / job postings",
+    "- performance lift / conversion lift / pipeline strength",
     "- any percentage stat (X% better/faster/more)",
     "- any benchmark or industry comparison",
-    "If the model generates these without source backing, rewrite as verification:",
-    '  "Did I get it right that [quote from source]?"',
-    "Or drop the hook entirely.",
+    "If generated without source backing, drop the hook entirely.",
+    "",
+    "## No implied-change verbs (HARD constraint)",
+    "NEVER use verbs that imply a company change/transition (switched, revamped, recently changed,",
+    "moved to, pivoted, adopted, shifted, transitioned, started using) UNLESS the source evidence",
+    "contains an explicit time marker or change statement (a date, 'announced', 'launched', etc.).",
+    "If the source describes a CURRENT state, use present-tense neutral framing:",
+    "  BAD: 'You switched to $250/reply pricing'",
+    "  GOOD: 'You price at $250/reply'",
     "",
     "## No-assumptions rule (HARD constraint)",
-    "- NEVER assert internal problems ('disconnected systems', 'fragmented touchpoints',",
-    "  'your team struggles with...') unless the source EXPLICITLY says so.",
+    "- NEVER assert internal problems unless the source EXPLICITLY says so.",
     "- NEVER use generic benchmarks ('teams lose 20–30%...', 'X% of companies...').",
-    "- If a claim is not in the evidence, either convert to verification question or remove.",
+    "- If a claim is not in the evidence, drop the hook.",
+    "",
+    "## No fake stats (HARD constraint)",
+    "Numbers in hooks are ONLY allowed if they appear in the evidence snippet.",
+    "Do NOT invent, round, or extrapolate statistics. If the evidence says '820 replies',",
+    "you may say '820 replies' — not '~800 replies' or 'hundreds of replies'.",
     "",
     "## Quality rules (violating any one = hook rejected)",
     "- Max 240 characters per hook. 1–2 sentences.",
     "- Must end with a question mark.",
     "- No raw URLs in hook text.",
+    "- Always use second-person (you/your). Never first-person (we/our/us/I).",
     "- BANNED phrases: curious, worth a quick, just checking in, hope you're well, touching base,",
     "  I'd love to, quick question, quick chat, I came across, I noticed your company,",
     "  game-changing, innovative solution, disrupting the space, cutting-edge,",
     "  interested in, teams like you, on your radar, teams lose, usually lose,",
     "  industry average, industry benchmark, compared to peers.",
     "",
+    "## Skip vague sources (HARD constraint)",
+    "If a source's facts do NOT contain at least one of: a number, a named tool/integration,",
+    "a named customer/partner, or a concrete feature/offer term, skip it entirely.",
+    "",
     "## Confidence scoring",
     "- high: source fact is specific and recent (named event, metric, date within 6 months).",
     "- med: fact is real but generic or older.",
-    "- low: you are inferring beyond what the facts state.",
     "Only output hooks where confidence is high or med.",
     "",
     "## Output format",
     "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
     '{  "news_item": <1-indexed source number>,',
     '   "angle": "trigger" | "risk" | "tradeoff",',
+    '   "psych_mode": "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit",',
     '   "hook": "<the hook text — MUST contain a verbatim quote in double quotes>",',
     '   "evidence_snippet": "<the EXACT full fact/sentence you quoted from>",',
     '   "source_title": "<title of the source>",',
     '   "source_date": "<date of the source, or empty string>",',
     '   "source_url": "<URL of the source>",',
     '   "evidence_tier": "A" | "B",',
-    '   "confidence": "high" | "med"',
+    '   "confidence": "high" | "med",',
+    '   "why_this_works": "<1 short phrase: e.g. curiosity gap, tradeoff frame, symptom self-diagnosis>"',
     "}",
   ].join("\n");
 }
@@ -1300,8 +1428,9 @@ export function buildUserPrompt(
     .map(
       (s, i) => {
         const anchorLabel = (s.anchorScore ?? 0) >= 3 ? "COMPANY-ANCHORED" : "MARKET-CONTEXT";
+        const vagueLabel = sourceHasConcreteEvidence(s.facts) ? "" : " [LOW-SIGNAL — SKIP]";
         return [
-          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}] [${anchorLabel}]${s.stale ? " [STALE]" : ""}`,
+          `### Source ${i + 1}: ${s.title} [Tier ${s.tier}] [${anchorLabel}]${s.stale ? " [STALE]" : ""}${vagueLabel}`,
           `Publisher: ${s.publisher}`,
           s.date ? `Date: ${s.date}` : "Date: unknown",
           `URL: ${s.url}`,
@@ -1543,6 +1672,58 @@ function containsUnsourcedClaim(hook: string, evidenceSnippet: string): boolean 
   return false;
 }
 
+/**
+ * Check if hook uses change/transition verbs without evidence containing a
+ * matching time marker or explicit change statement.
+ */
+function containsUnsupportedChangeVerb(hook: string, evidenceSnippet: string): boolean {
+  const hookLower = hook.toLowerCase();
+  const evidenceLower = (evidenceSnippet || "").toLowerCase();
+  const hasChangeVerb = CHANGE_VERB_PATTERNS.some((p) => p.test(hookLower));
+  if (!hasChangeVerb) return false;
+  // Evidence must contain at least one time/change cue to justify the verb
+  return !CHANGE_TIME_CUES.some((p) => p.test(evidenceLower));
+}
+
+/**
+ * Reject hooks with vague, philosophical, or open-ended questions.
+ * Returns true if the question is low-quality (should be rejected).
+ */
+function hasVagueQuestion(hook: string): boolean {
+  return VAGUE_QUESTION_PATTERNS.some((p) => p.test(hook));
+}
+
+/**
+ * Reject hooks that use first-person framing (we/our/us/I).
+ * Hooks should always center the prospect with second-person framing.
+ */
+function hasFirstPersonFraming(hook: string): boolean {
+  // Match standalone first-person words, not inside quotes
+  // Remove quoted sections first to avoid false positives on evidence quotes
+  const withoutQuotes = hook.replace(/[""\u201C][^""\u201D]*[""\u201D]/g, "");
+  return /\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b|(?:^|\.\s+)I\s/i.test(withoutQuotes);
+}
+
+/**
+ * Check whether a source has concrete, quoteable evidence.
+ * Returns true if facts contain at least one of: a number, a named tool/integration,
+ * a named customer/partner, or a concrete feature/offer term.
+ * Sources that fail this check are Low Signal and should not produce hooks.
+ */
+function sourceHasConcreteEvidence(facts: string[]): boolean {
+  const joined = facts.join(" ");
+  // Number (quantified claim)
+  if (/\d/.test(joined)) return true;
+  // Named tool/integration/product
+  if (/\b(Salesforce|HubSpot|Slack|Zapier|Gong|Outreach|Marketo|Pardot|Segment|Snowflake|Stripe|Shopify|Zendesk|Intercom|Drift|LinkedIn|Gmail|Outlook|API|SDK|webhook|CRM|ERP)\b/i.test(joined)) return true;
+  // Named customer/partner (capitalized proper nouns following "with" or "for" or standalone)
+  if (/\b(partnered with|working with|trusted by|used by|chosen by|powering|for companies like)\b/i.test(joined)) return true;
+  // Concrete feature/offer term (pricing, deliverability, specific product terms)
+  if (/\$[\d,.]+|\d+\s*\/\s*(mo|month|reply|lead|email)|\bfree\s+tier\b|\bpricing\b/i.test(joined)) return true;
+  if (/\b(deliverability|personalization|warmup|throttling|list hygiene|unique emails?|cold email)\b/i.test(joined)) return true;
+  return false;
+}
+
 export function validateHook(
   raw: ClaudeHookPayload,
   sourceLookup?: Map<number, ClassifiedSource>,
@@ -1559,6 +1740,12 @@ export function validateHook(
   if (containsBannedPhrase(hook) !== null) return null;
   if (!hasSpecificityToken(hook)) return null;
 
+  // Question quality: reject vague/philosophical/open-ended questions
+  if (hasVagueQuestion(hook)) return null;
+
+  // You-first framing: reject hooks that use first-person (we/our/us/I)
+  if (hasFirstPersonFraming(hook)) return null;
+
   const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
   const validTier = tier === "A" || tier === "B" ? tier : (
     sourceLookup?.get(raw.news_item)?.tier ?? "B"
@@ -1574,8 +1761,39 @@ export function validateHook(
   if (!quote) return null; // No quote found → reject
   if (!quoteExistsInEvidence(quote, evidenceSnippet)) return null; // Quote not in evidence → reject
 
+  // No fake stats: numbers outside the verbatim quote must appear in evidence
+  // (numbers inside the quote are already validated by quoteExistsInEvidence)
+  const hookWithoutQuote = hook.replace(/["\u201C][^"\u201D]*["\u201D]/g, "");
+  const outsideNumbers = hookWithoutQuote.match(/\d[\d,.]*%?/g) || [];
+  for (const num of outsideNumbers) {
+    if (!evidenceSnippet.includes(num)) return null;
+  }
+
   // Reject hooks with unsourced claims (redesign, hiring, stats not in evidence)
   if (containsUnsourcedClaim(hook, evidenceSnippet)) return null;
+
+  // Reject hooks using change/transition verbs without evidence of actual change
+  if (containsUnsupportedChangeVerb(hook, evidenceSnippet)) return null;
+
+  // Reject hooks whose source lacks concrete evidence (number, named tool, feature term)
+  if (sourceLookup) {
+    const source = sourceLookup.get(raw.news_item);
+    if (source && !sourceHasConcreteEvidence(source.facts)) return null;
+  }
+
+  // Validate and normalize psych_mode (optional — gracefully handle missing/invalid)
+  const rawMode = (raw.psych_mode || "").toLowerCase().replace(/-/g, "_") as PsychMode;
+  const psychMode = VALID_PSYCH_MODES.includes(rawMode) ? rawMode : undefined;
+
+  // Mode E (contrarian) gate: require company-anchored + recent source
+  if (psychMode === "contrarian" && sourceLookup) {
+    const source = sourceLookup.get(raw.news_item);
+    if (source) {
+      const isAnchored = (source.anchorScore ?? 0) >= 3;
+      const isRecent = source.date && !source.stale;
+      if (!isAnchored || !isRecent) return null;
+    }
+  }
 
   return {
     news_item: typeof raw.news_item === "number" ? raw.news_item : 1,
@@ -1587,6 +1805,8 @@ export function validateHook(
     source_url: (raw.source_url || "").trim(),
     evidence_tier: validTier,
     confidence,
+    psych_mode: psychMode,
+    why_this_works: (raw.why_this_works || "").trim() || undefined,
   };
 }
 

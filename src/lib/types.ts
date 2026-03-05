@@ -1,4 +1,5 @@
 export type EvidenceTier = "A" | "B" | "C";
+export type PsychMode = "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit";
 
 export type StructuredHook = {
   news_item: number;
@@ -10,6 +11,8 @@ export type StructuredHook = {
   source_url: string;
   evidence_tier: EvidenceTier;
   confidence: "high" | "med" | "low";
+  psych_mode?: PsychMode;
+  why_this_works?: string;
 };
 
 export type CompanyResolutionStatus = "ok" | "needs_disambiguation" | "no_match";

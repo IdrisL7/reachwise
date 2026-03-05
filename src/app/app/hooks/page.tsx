@@ -9,6 +9,8 @@ interface Hook {
   evidence_tier: string;
   source_snippet?: string;
   source_url?: string;
+  psych_mode?: string;
+  why_this_works?: string;
 }
 
 export default function HooksPage() {
@@ -58,6 +60,8 @@ export default function HooksPage() {
         evidence_tier: string;
         evidence_snippet?: string;
         source_url?: string;
+        psych_mode?: string;
+        why_this_works?: string;
       }> | undefined;
 
       if (structured && structured.length > 0) {
@@ -68,6 +72,8 @@ export default function HooksPage() {
           evidence_tier: h.evidence_tier,
           source_snippet: h.evidence_snippet,
           source_url: h.source_url,
+          psych_mode: h.psych_mode,
+          why_this_works: h.why_this_works,
         })));
       } else if (Array.isArray(data.hooks)) {
         // Flat string hooks (legacy/mock)
@@ -98,6 +104,15 @@ export default function HooksPage() {
     trigger: "text-blue-400",
     risk: "text-red-400",
     tradeoff: "text-amber-400",
+  };
+
+  const psychModeLabels: Record<string, string> = {
+    relevance: "You-first",
+    curiosity_gap: "Curiosity gap",
+    symptom: "Symptom",
+    tradeoff_frame: "Tradeoff",
+    contrarian: "Contrarian",
+    benefit: "Benefit",
   };
 
   return (
@@ -189,6 +204,14 @@ export default function HooksPage() {
                 >
                   {hook.angle}
                 </span>
+                {hook.psych_mode && (
+                  <span
+                    className="text-xs font-medium text-purple-400 bg-purple-900/30 border border-purple-800 px-2 py-0.5 rounded cursor-help"
+                    title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                  >
+                    {psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                  </span>
+                )}
                 <span className="text-xs text-zinc-600">
                   {hook.confidence} confidence
                 </span>
