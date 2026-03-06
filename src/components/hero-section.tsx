@@ -10,17 +10,22 @@ export function HeroSection() {
         <div className="max-w-2xl">
           <span className="mb-8 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-4 py-1.5 text-[0.8125rem] font-medium text-violet-400">
             <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-            Autonomous outbound platform
+            Evidence-backed outbound
           </span>
 
           <h1 className="text-[clamp(3rem,5.5vw,5.5rem)] font-bold leading-[1.02] tracking-[-0.02em] text-white">
-            Evidence-backed outbound that runs itself.
+            Evidence-backed outbound that executes with guardrails.
           </h1>
 
-          <p className="mt-8 max-w-lg text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-            Research-backed hooks, multi-channel sequences, intent scoring,
-            and reply intelligence — so your outbound runs on autopilot
-            with evidence SDRs can actually defend.
+          <p className="mt-8 max-w-xl text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
+            Paste a company URL and get role-tailored hooks with receipts
+            (quote&nbsp;+ source&nbsp;+ date). Turn them into multi-channel
+            sequences, prioritize leads with intent scoring, and run follow-ups
+            safely with approvals, caps, and stop-on-reply.
+          </p>
+
+          <p className="mt-4 text-[0.8125rem] font-medium text-zinc-500">
+            Every message cites a source. Execution pauses on reply/OOO/bounce and respects daily caps.
           </p>
 
           <div className="mt-12 flex flex-wrap items-center gap-4">
@@ -28,7 +33,7 @@ export function HeroSection() {
               href="#demo"
               className="group inline-flex h-[3.5rem] items-center gap-2 rounded-lg bg-violet-600 px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_24px_rgba(139,92,246,0.25)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_36px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
             >
-              Generate hooks from a URL
+              Generate hooks
               <svg
                 className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
                 fill="none"
@@ -45,10 +50,10 @@ export function HeroSection() {
             </a>
 
             <a
-              href="/contact"
+              href="#how-it-works"
               className="group inline-flex h-[3.5rem] items-center gap-2 rounded-lg border border-zinc-700/50 bg-transparent px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-zinc-200 transition-all duration-200 hover:border-violet-500/40 hover:text-white hover:scale-[1.02] active:scale-[0.97]"
             >
-              Get full access
+              See how it works
               <svg
                 className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
                 fill="none"
@@ -67,7 +72,7 @@ export function HeroSection() {
 
           <div className="mt-16 border-t border-white/[0.06] pt-8">
             <p className="text-[0.8125rem] font-medium text-zinc-500">
-              Built for outbound teams who are done sending generic openers.
+              Works on top of Apollo, Clay, Instantly, and any CRM.
             </p>
             <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
               {["Lattice", "Ramp", "Clay", "Instantly", "Apollo"].map(

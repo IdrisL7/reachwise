@@ -14,22 +14,27 @@ export function HowItWorksSection() {
           </h2>
         </div>
 
-        <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-3 lg:mt-20">
+        <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-2 lg:mt-20">
           {[
             {
               step: "1",
-              title: "Paste a URL or import leads",
-              desc: "Drop in a single domain for instant hooks, or upload your lead list from Apollo, Clay, or any CRM to run full sequences.",
+              title: "Find real signals (with freshness)",
+              desc: "We pull company-specific evidence from first-party sources and reputable coverage. Each signal includes a quote, source, date, and freshness badge.",
             },
             {
               step: "2",
-              title: "We research signals & score intent",
-              desc: "We scan public sources for evidence you can cite, plus detect buying signals (hiring, funding, tech changes) to score each lead as hot, warm, or cold.",
+              title: "Draft outreach that matches the buyer\u2019s job",
+              desc: "Pick who you\u2019re emailing (VP Sales, RevOps, Founder, etc.). We generate Trigger / Risk / Tradeoff hooks and draft messages that stay grounded in evidence\u2014no invented claims.",
             },
             {
               step: "3",
-              title: "Multi-channel outreach, evidence-backed",
-              desc: "Get Trigger / Risk / Tradeoff hooks for email, LinkedIn, cold calls, and video scripts. Each angle includes a quote + source title/date.",
+              title: "Build multi-channel sequences (optional)",
+              desc: "Turn hooks into sequences across email, LinkedIn, calls, and video. Start from templates (Email-only, Multi-channel, LinkedIn-first) or build your own in the sequence builder.",
+            },
+            {
+              step: "4",
+              title: "Prioritize + execute safely",
+              desc: "Intent scoring highlights which accounts are heating up. Then your follow-ups run with guardrails: draft approval (optional), daily caps, quiet hours, stop-on-reply, auto-pause on OOO, and full audit logs.",
             },
           ].map((item) => (
             <div
@@ -49,22 +54,16 @@ export function HowItWorksSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-8 grid max-w-5xl gap-5 lg:grid-cols-2">
+        <div className="mx-auto mt-8 max-w-5xl">
           <div className="group rounded-xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 shadow-[0_2px_16px_rgba(0,0,0,0.2)] transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_4px_24px_rgba(139,92,246,0.06)] hover:-translate-y-0.5">
-            <h3 className="text-[1.1875rem] font-bold text-white mb-3">
-              Sequences run autonomously
+            <div className="mb-5 flex h-10 w-10 items-center justify-center rounded-lg bg-violet-600/10 text-[0.875rem] font-bold text-violet-400">
+              5
+            </div>
+            <h3 className="text-[clamp(1.125rem,1.5vw,1.3125rem)] font-bold leading-[1.2] text-white">
+              Learn what works
             </h3>
-            <p className="text-[0.9375rem] leading-[1.6] text-zinc-400">
-              Assign a multi-step sequence and the engine handles execution — sending emails, drafting LinkedIn messages for your approval, and auto-pausing on replies or OOO.
-            </p>
-          </div>
-
-          <div className="group rounded-xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 shadow-[0_2px_16px_rgba(0,0,0,0.2)] transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_4px_24px_rgba(139,92,246,0.06)] hover:-translate-y-0.5">
-            <h3 className="text-[1.1875rem] font-bold text-white mb-3">
-              Replies classified, next steps suggested
-            </h3>
-            <p className="text-[0.9375rem] leading-[1.6] text-zinc-400">
-              Inbound replies are auto-classified (interested, objection, OOO, wrong person) and a suggested response is drafted in your inbox — so you can respond in seconds.
+            <p className="mt-2 text-[0.9375rem] leading-[1.6] text-zinc-400">
+              Reply classification and analytics show what hooks, angles, and sequences drive replies — so teams improve without guessing.
             </p>
           </div>
         </div>

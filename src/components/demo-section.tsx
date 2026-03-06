@@ -414,10 +414,10 @@ export function DemoSection() {
             Live demo
           </p>
           <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-            Try it on any company
+            Try it now (3 generations/day)
           </h2>
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Paste a company URL or type the company name. Nothing you enter is stored.
+            Paste a URL, pick a role, and get hooks with receipts you can copy into outbound.
           </p>
         </div>
 

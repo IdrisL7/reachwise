@@ -156,28 +156,10 @@ export function PricingSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-8 max-w-5xl rounded-xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
-          <h3 className="text-[1.0625rem] font-bold text-white mb-3">
-            All plans include
-          </h3>
-          <ul className="grid gap-2 sm:grid-cols-2 text-[0.9375rem] leading-[1.6] text-zinc-400">
-            <li className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Evidence-first hooks anchored on real public signals
-            </li>
-            <li className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Trigger / Risk / Tradeoff angles with confidence levels
-            </li>
-            <li className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Custom sequence builder with multi-step workflows
-            </li>
-            <li className="flex items-start gap-2.5">
-              <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Lead management with CSV import and API access
-            </li>
-          </ul>
+        <div className="mx-auto mt-8 max-w-5xl text-center">
+          <p className="text-[0.8125rem] leading-[1.5] text-zinc-500">
+            We don&apos;t store submitted URLs. We don&apos;t invent facts. If evidence is weak, we label it or don&apos;t generate.
+          </p>
         </div>
       </div>
     </section>
