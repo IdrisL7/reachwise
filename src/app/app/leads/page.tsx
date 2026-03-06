@@ -21,9 +21,14 @@ export default function LeadsPage() {
   const [showUpload, setShowUpload] = useState(false);
   const [message, setMessage] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sequences, setSequences] = useState<Array<{ id: string; name: string }>>([]);
+  const [assigning, setAssigning] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLeads();
+    fetch("/api/sequences").then((r) => r.json()).then((data) => {
+      setSequences(data.sequences || []);
+    }).catch(() => {});
   }, []);
 
   async function fetchLeads() {
@@ -116,6 +121,27 @@ export default function LeadsPage() {
     }
   }
 
+  async function assignSequence(leadId: string, sequenceId: string) {
+    setAssigning(leadId);
+    try {
+      const res = await fetch("/api/lead-sequences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leadId, sequenceId }),
+      });
+      if (res.ok) {
+        setMessage("Sequence assigned.");
+      } else {
+        const data = await res.json();
+        setMessage(data.error || "Failed to assign sequence.");
+      }
+    } catch {
+      setMessage("Failed to assign sequence.");
+    } finally {
+      setAssigning(null);
+    }
+  }
+
   const statusColors: Record<string, string> = {
     cold: "bg-blue-900/30 text-blue-400 border-blue-800",
     in_conversation: "bg-amber-900/30 text-amber-400 border-amber-800",
@@ -204,6 +230,7 @@ export default function LeadsPage() {
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Step</th>
                 <th className="px-4 py-3 w-16"></th>
+                <th className="px-4 py-3 w-32">Sequence</th>
               </tr>
             </thead>
             <tbody>
@@ -239,6 +266,26 @@ export default function LeadsPage() {
                     >
                       {deleting === lead.id ? "..." : "Delete"}
                     </button>
+                  </td>
+                  <td className="px-4 py-3">
+                    {sequences.length > 0 ? (
+                      <select
+                        onChange={(e) => {
+                          if (e.target.value) assignSequence(lead.id, e.target.value);
+                          e.target.value = "";
+                        }}
+                        disabled={assigning === lead.id}
+                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>Assign...</option>
+                        {sequences.map((seq) => (
+                          <option key={seq.id} value={seq.id}>{seq.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-[10px] text-zinc-600">-</span>
+                    )}
                   </td>
                 </tr>
               ))}
