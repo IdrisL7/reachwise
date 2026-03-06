@@ -12,6 +12,7 @@ const navItems = [
   { href: "/app/hooks", label: "Hooks" },
   { href: "/app/batch", label: "Batch" },
   { href: "/app/leads", label: "Leads" },
+  { href: "/app/sequences", label: "Sequences" },
   { href: "/app/templates", label: "Templates" },
   { href: "/app/analytics", label: "Analytics" },
   { href: "/app/settings", label: "Settings" },
