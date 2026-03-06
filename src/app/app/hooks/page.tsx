@@ -12,6 +12,7 @@ interface Hook {
   source_snippet?: string;
   source_url?: string;
   source_title?: string;
+  source_date?: string;
   psych_mode?: string;
   why_this_works?: string;
 }
@@ -290,6 +291,7 @@ export default function HooksPage() {
         evidence_snippet?: string;
         source_url?: string;
         source_title?: string;
+        source_date?: string;
         psych_mode?: string;
         why_this_works?: string;
       };
@@ -302,6 +304,7 @@ export default function HooksPage() {
         source_snippet: h.evidence_snippet,
         source_url: h.source_url,
         source_title: h.source_title,
+        source_date: h.source_date,
         psych_mode: h.psych_mode,
         why_this_works: h.why_this_works,
       });
@@ -421,6 +424,12 @@ export default function HooksPage() {
     "sec.gov", "crunchbase.com", "glassdoor.com", "g2.com",
     "linkedin.com", "github.com", "pitchbook.com",
   ];
+
+  function daysSince(dateStr: string): number {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 999;
+    return Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24));
+  }
 
   function getSourceType(sourceUrl: string): "First-party" | "Reputable" | "Web" {
     if (companyDomain && sourceUrl.toLowerCase().includes(companyDomain.toLowerCase())) {
@@ -810,6 +819,23 @@ export default function HooksPage() {
                     return (
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${cls}`}>
                         {srcType}
+                      </span>
+                    );
+                  })()}
+                  {/* Freshness badge */}
+                  {hook.source_date && (() => {
+                    const age = daysSince(hook.source_date);
+                    const freshness = age <= 7 ? "Fresh" : age <= 30 ? "Recent" : age <= 90 ? "Older" : "Stale";
+                    const color = age <= 7
+                      ? "text-emerald-400 bg-emerald-900/30 border-emerald-800"
+                      : age <= 30
+                        ? "text-blue-400 bg-blue-900/30 border-blue-800"
+                        : age <= 90
+                          ? "text-amber-400 bg-amber-900/30 border-amber-800"
+                          : "text-zinc-500 bg-zinc-800 border-zinc-700";
+                    return (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${color}`}>
+                        {freshness}
                       </span>
                     );
                   })()}
