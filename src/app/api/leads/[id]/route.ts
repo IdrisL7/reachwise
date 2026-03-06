@@ -29,3 +29,26 @@ export async function GET(
 
   return NextResponse.json({ lead, messages });
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  if (!validateBearerToken(request)) return unauthorized();
+
+  const { id } = await params;
+
+  const deleted = await db
+    .delete(schema.leads)
+    .where(eq(schema.leads.id, id))
+    .returning({ id: schema.leads.id });
+
+  if (deleted.length === 0) {
+    return NextResponse.json(
+      { status: "error", code: "LEAD_NOT_FOUND", message: `Lead with id ${id} was not found.` },
+      { status: 404 },
+    );
+  }
+
+  return NextResponse.json({ status: "ok" });
+}

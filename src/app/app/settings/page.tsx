@@ -764,19 +764,6 @@ export default function SettingsPage() {
               </a>
             )}
           </div>
-
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-blue-600/20 rounded-lg flex items-center justify-center text-blue-400 font-bold text-sm">
-                S
-              </div>
-              <div>
-                <p className="text-sm font-medium">Salesforce</p>
-                <p className="text-xs text-zinc-500">Sync leads bidirectionally with Salesforce</p>
-              </div>
-            </div>
-            <span className="text-xs text-zinc-500 bg-zinc-800 px-2.5 py-1 rounded-full">Coming soon</span>
-          </div>
         </div>
       </section>
 

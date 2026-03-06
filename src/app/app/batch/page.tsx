@@ -27,6 +27,7 @@ export default function BatchPage() {
   const [error, setError] = useState("");
   const [results, setResults] = useState<BatchResult[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
   } | null>(null);
@@ -44,8 +45,19 @@ export default function BatchPage() {
     setError("");
     setUpgradePrompt(null);
     setResults([]);
+    setProgress(0);
+
+    let progressInterval: ReturnType<typeof setInterval> | undefined;
 
     try {
+      progressInterval = setInterval(() => {
+        setProgress((prev) => {
+          const target = 95;
+          const step = (target - prev) * 0.08;
+          return prev + Math.max(step, 0.5);
+        });
+      }, 500);
+
       const res = await fetch("/api/generate-hooks-batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,7 +93,10 @@ export default function BatchPage() {
     } catch (err) {
       setError((err as Error).message);
     } finally {
+      if (progressInterval) clearInterval(progressInterval);
       setLoading(false);
+      setProgress(100);
+      setTimeout(() => setProgress(0), 500);
     }
   }
 
@@ -186,6 +201,21 @@ export default function BatchPage() {
           </div>
         </div>
       </form>
+
+      {loading && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-1.5">
+            <p className="text-sm text-zinc-400">Processing {urls.length} companies...</p>
+            <span className="text-xs text-zinc-500">{Math.round(progress)}%</span>
+          </div>
+          <div className="w-full bg-zinc-800 rounded-full h-1.5">
+            <div
+              className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
@@ -298,7 +328,7 @@ export default function BatchPage() {
                             onClick={() => copySingleHook(hook, `${idx}-${hi}`)}
                             className="text-[10px] font-medium px-2 py-1 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 ml-auto"
                           >
-                            {copiedIdx === `${idx}-${hi}` ? "Copied!" : "Copy"}
+                            {copiedIdx === `${idx}-${hi}` ? "Copied!" : hook.evidence_snippet ? "Copy + Evidence" : "Copy"}
                           </button>
                         </div>
                       </div>

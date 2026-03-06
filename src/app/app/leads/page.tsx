@@ -20,6 +20,7 @@ export default function LeadsPage() {
   const [uploading, setUploading] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [message, setMessage] = useState("");
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLeads();
@@ -104,6 +105,27 @@ export default function LeadsPage() {
       setMessage("Upload failed.");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function deleteLead(id: string) {
+    if (!confirm("Delete this lead? This cannot be undone.")) return;
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      if (res.ok) {
+        setLeads((prev) => prev.filter((l) => l.id !== id));
+        setMessage("Lead deleted.");
+      } else {
+        setMessage("Failed to delete lead.");
+      }
+    } catch {
+      setMessage("Failed to delete lead.");
+    } finally {
+      setDeleting(null);
     }
   }
 
@@ -194,6 +216,7 @@ export default function LeadsPage() {
                 <th className="px-4 py-3">Company</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3">Step</th>
+                <th className="px-4 py-3 w-16"></th>
               </tr>
             </thead>
             <tbody>
@@ -220,6 +243,15 @@ export default function LeadsPage() {
                   </td>
                   <td className="px-4 py-3 text-zinc-500">
                     {lead.sequenceStep}
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => deleteLead(lead.id)}
+                      disabled={deleting === lead.id}
+                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                    >
+                      {deleting === lead.id ? "..." : "Delete"}
+                    </button>
                   </td>
                 </tr>
               ))}
