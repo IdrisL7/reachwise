@@ -27,6 +27,7 @@ export interface Tier {
     sequences: boolean;
     intentScoring: boolean;
     agenticExecution: boolean;
+    replyAnalysis: boolean;
   };
   cta: string;
   highlighted?: boolean;
@@ -57,6 +58,7 @@ export const TIERS: Tier[] = [
       sequences: true,
       intentScoring: false,
       agenticExecution: false,
+      replyAnalysis: false,
     },
     cta: "Start 7-day free trial",
   },
@@ -89,6 +91,7 @@ export const TIERS: Tier[] = [
       sequences: true,
       intentScoring: true,
       agenticExecution: true,
+      replyAnalysis: true,
     },
     cta: "Get started",
     highlighted: true,
@@ -122,6 +125,7 @@ export const TIERS: Tier[] = [
       sequences: true,
       intentScoring: true,
       agenticExecution: true,
+      replyAnalysis: true,
     },
     cta: "Get started",
   },
