@@ -11,6 +11,9 @@ interface Lead {
   status: string;
   sequenceStep: number;
   createdAt: string;
+  intentScore: number | null;
+  temperature: string | null;
+  signalsCount: number;
 }
 
 export default function LeadsPage() {
@@ -23,6 +26,7 @@ export default function LeadsPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [sequences, setSequences] = useState<Array<{ id: string; name: string }>>([]);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const [scoring, setScoring] = useState<string | null>(null);
 
   useEffect(() => {
     fetchLeads();
@@ -142,6 +146,20 @@ export default function LeadsPage() {
     }
   }
 
+  async function scoreLead(leadId: string) {
+    setScoring(leadId);
+    try {
+      const res = await fetch(`/api/leads/${leadId}/intent`, { method: "POST" });
+      if (res.ok) {
+        await fetchLeads(); // Refresh to show new score
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setScoring(null);
+    }
+  }
+
   const statusColors: Record<string, string> = {
     cold: "bg-blue-900/30 text-blue-400 border-blue-800",
     in_conversation: "bg-amber-900/30 text-amber-400 border-amber-800",
@@ -228,6 +246,7 @@ export default function LeadsPage() {
                 <th className="px-4 py-3">Name</th>
                 <th className="px-4 py-3">Company</th>
                 <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Score</th>
                 <th className="px-4 py-3">Step</th>
                 <th className="px-4 py-3 w-16"></th>
                 <th className="px-4 py-3 w-32">Sequence</th>
@@ -254,6 +273,27 @@ export default function LeadsPage() {
                     >
                       {lead.status}
                     </span>
+                  </td>
+                  <td className="px-4 py-3 text-xs">
+                    {lead.intentScore !== null ? (
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${
+                        lead.temperature === "hot"
+                          ? "bg-red-900/30 text-red-400 border-red-800"
+                          : lead.temperature === "warm"
+                            ? "bg-amber-900/30 text-amber-400 border-amber-800"
+                            : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                      }`}>
+                        {lead.intentScore} {lead.temperature === "hot" ? "Hot" : lead.temperature === "warm" ? "Warm" : "Cold"}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => scoreLead(lead.id)}
+                        disabled={scoring === lead.id}
+                        className="text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors disabled:opacity-50"
+                      >
+                        {scoring === lead.id ? "Scoring..." : "Score"}
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-zinc-500">
                     {lead.sequenceStep}

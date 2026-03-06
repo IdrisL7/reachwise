@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -74,11 +74,27 @@ export async function GET(request: NextRequest) {
       conditions.push(eq(schema.leads.status, status as any));
     }
 
-    const leads = await db
-      .select()
+    const rows = await db
+      .select({
+        lead: schema.leads,
+        score: schema.leadScores.score,
+        temperature: schema.leadScores.temperature,
+        signalsCount: schema.leadScores.signalsCount,
+        lastScoredAt: schema.leadScores.lastScoredAt,
+      })
       .from(schema.leads)
+      .leftJoin(schema.leadScores, eq(schema.leads.id, schema.leadScores.leadId))
       .where(and(...conditions))
+      .orderBy(desc(schema.leadScores.score))
       .limit(limit);
+
+    const leads = rows.map((r) => ({
+      ...r.lead,
+      intentScore: r.score ?? null,
+      temperature: r.temperature ?? null,
+      signalsCount: r.signalsCount ?? 0,
+      lastScoredAt: r.lastScoredAt ?? null,
+    }));
 
     return NextResponse.json({ leads });
   } catch (error) {
