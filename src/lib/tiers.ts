@@ -23,6 +23,8 @@ export interface Tier {
     n8nTemplate: boolean;
     doneForYouSetup: boolean;
     prioritySupport: boolean;
+    multiChannel: boolean;
+    sequences: boolean;
   };
   cta: string;
   highlighted?: boolean;
@@ -49,6 +51,8 @@ export const TIERS: Tier[] = [
       n8nTemplate: false,
       doneForYouSetup: false,
       prioritySupport: false,
+      multiChannel: false,
+      sequences: true,
     },
     cta: "Start 7-day free trial",
   },
@@ -77,6 +81,8 @@ export const TIERS: Tier[] = [
       n8nTemplate: true,
       doneForYouSetup: false,
       prioritySupport: false,
+      multiChannel: true,
+      sequences: true,
     },
     cta: "Get started",
     highlighted: true,
@@ -106,6 +112,8 @@ export const TIERS: Tier[] = [
       n8nTemplate: true,
       doneForYouSetup: true,
       prioritySupport: true,
+      multiChannel: true,
+      sequences: true,
     },
     cta: "Get started",
   },
