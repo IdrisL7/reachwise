@@ -103,37 +103,42 @@ export async function checkHookQuota(userId: string): Promise<NextResponse | nul
   const tierId = (user.tierId as TierId) || "starter";
   const limits = getLimits(tierId);
 
-  // Reset counter if new month
-  const resetDate = new Date(user.hooksResetAt);
   const now = new Date();
-  if (
+  const resetDate = new Date(user.hooksResetAt);
+  const isNewMonth =
     resetDate.getMonth() !== now.getMonth() ||
-    resetDate.getFullYear() !== now.getFullYear()
-  ) {
+    resetDate.getFullYear() !== now.getFullYear();
+
+  if (isNewMonth) {
+    // New month — reset counter to 1 (this request)
     await db
       .update(schema.users)
       .set({
-        hooksUsedThisMonth: 0,
+        hooksUsedThisMonth: 1,
         hooksResetAt: now.toISOString(),
       })
       .where(eq(schema.users.id, userId));
-
-    user.hooksUsedThisMonth = 0;
+    return null;
   }
 
-  if (user.hooksUsedThisMonth >= limits.hooksPerMonth) {
-    return tierError(
-      `Monthly hook limit reached (${limits.hooksPerMonth}). Upgrade your plan for more.`,
-    );
-  }
-
-  // Increment counter
-  await db
+  // Same month — atomic increment with WHERE guard against exceeding limit
+  const result = await db
     .update(schema.users)
     .set({
       hooksUsedThisMonth: sql`${schema.users.hooksUsedThisMonth} + 1`,
     })
-    .where(eq(schema.users.id, userId));
+    .where(
+      sql`${schema.users.id} = ${userId} AND ${schema.users.hooksUsedThisMonth} < ${limits.hooksPerMonth}`,
+    );
+
+  // If no rows were updated, the WHERE guard blocked it (quota exceeded)
+  // Drizzle returns { rowsAffected } or similar — check if update affected 0 rows
+  // For libsql/Turso, check result.rowsAffected
+  if ((result as any).rowsAffected === 0) {
+    return tierError(
+      `Monthly hook limit reached (${limits.hooksPerMonth}). Upgrade your plan for more.`,
+    );
+  }
 
   return null;
 }

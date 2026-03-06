@@ -213,3 +213,9 @@ export const rateLimits = sqliteTable("rate_limits", {
   count: integer("count").notNull().default(1),
   resetAt: text("reset_at").notNull(),
 });
+
+export const stripeEvents = sqliteTable("stripe_events", {
+  eventId: text("event_id").primaryKey(),
+  type: text("type").notNull(),
+  processedAt: text("processed_at").notNull().default(sql`(datetime('now'))`),
+});

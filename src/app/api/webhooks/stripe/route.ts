@@ -25,6 +25,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
+  // Idempotency: skip already-processed events
+  const [existing] = await db
+    .select()
+    .from(schema.stripeEvents)
+    .where(eq(schema.stripeEvents.eventId, event.id))
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json({ received: true, duplicate: true });
+  }
+
+  // Record this event as processed
+  await db.insert(schema.stripeEvents).values({
+    eventId: event.id,
+    type: event.type,
+  });
+
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object;

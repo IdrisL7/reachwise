@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { stripe } from "@/lib/stripe";
 import { logAudit } from "@/lib/audit";
 
@@ -49,17 +49,16 @@ export async function DELETE() {
     // Usage events
     await db.delete(schema.usageEvents).where(eq(schema.usageEvents.userId, userId));
 
-    // Leads and related data (messages, audit logs, claim locks)
-    const userLeads = await db
-      .select({ id: schema.leads.id })
-      .from(schema.leads)
-      .where(eq(schema.leads.userId, userId));
-
-    for (const lead of userLeads) {
-      await db.delete(schema.outboundMessages).where(eq(schema.outboundMessages.leadId, lead.id));
-      await db.delete(schema.auditLog).where(eq(schema.auditLog.leadId, lead.id));
-      await db.delete(schema.claimLocks).where(eq(schema.claimLocks.leadId, lead.id));
-    }
+    // Leads and related data — bulk delete via subquery
+    await db.delete(schema.outboundMessages).where(
+      sql`${schema.outboundMessages.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+    );
+    await db.delete(schema.auditLog).where(
+      sql`${schema.auditLog.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+    );
+    await db.delete(schema.claimLocks).where(
+      sql`${schema.claimLocks.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+    );
     await db.delete(schema.leads).where(eq(schema.leads.userId, userId));
 
     // Auth tables
