@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { generateHooksForUrl, type Hook } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
@@ -128,6 +129,7 @@ export async function POST(request: Request) {
     const response: BatchResponse = { results };
     return NextResponse.json(response);
   } catch (error) {
+    Sentry.captureException(error);
     console.error("Unexpected error in /api/generate-hooks-batch", error);
     return NextResponse.json(
       { error: "Unexpected server error while generating hooks batch." },

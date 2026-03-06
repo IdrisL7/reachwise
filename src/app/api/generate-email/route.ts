@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import {
   callClaudeText,
@@ -277,6 +278,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
+    Sentry.captureException(error);
     console.error("Unexpected error in /api/generate-email", error);
     return NextResponse.json(
       { error: "Unexpected server error while generating email." },

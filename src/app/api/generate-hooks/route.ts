@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import {
   fetchSourcesWithGating,
@@ -373,6 +374,7 @@ export async function POST(request: Request) {
       targetRole: targetRole || "General",
     });
   } catch (error) {
+    Sentry.captureException(error);
     console.error("Unexpected error in /api/generate-hooks", error);
     return NextResponse.json(
       { error: "Unexpected server error while generating hooks." },

@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
@@ -70,6 +71,7 @@ export async function DELETE() {
 
     return NextResponse.json({ message: "Account deleted successfully." });
   } catch (error) {
+    Sentry.captureException(error);
     console.error("Account deletion error:", error);
     return NextResponse.json(
       { error: "Failed to delete account. Please contact support." },

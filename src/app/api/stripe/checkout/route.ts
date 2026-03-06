@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { auth } from "@/lib/auth";
 import { stripe, getOrCreateStripeCustomer, getPriceId } from "@/lib/stripe";
 import type { TierId } from "@/lib/tiers";
@@ -45,10 +46,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Unknown error";
-    console.error("Stripe checkout error:", message, err);
+    Sentry.captureException(err);
+    console.error("Stripe checkout error:", err);
     return NextResponse.json(
-      { error: `Checkout failed: ${message}` },
+      { error: "Something went wrong creating your checkout session. Please try again." },
       { status: 500 },
     );
   }
