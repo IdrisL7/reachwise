@@ -70,9 +70,19 @@ function TierBadge({ tier }: { tier: string }) {
     C: "bg-zinc-500/10 text-zinc-500 border-zinc-700/20",
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-bold ${styles[tier] || styles["C"]}`}>
-      Tier {tier}
-    </span>
+    <>
+      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-bold ${styles[tier] || styles["C"]}`}>
+        Tier {tier}
+      </span>
+      {tier === "B" && (
+        <span
+          className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[0.6875rem] font-medium text-amber-400 cursor-help"
+          title="This hook is based on weaker/secondary evidence. We phrase it as a verification question rather than making claims."
+        >
+          Verification hook
+        </span>
+      )}
+    </>
   );
 }
 

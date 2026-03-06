@@ -112,6 +112,14 @@ export function HeroHookPreview() {
                   }`}>
                     Tier {hook.tier}
                   </span>
+                  {hook.tier === "B" && (
+                    <span
+                      className="inline-flex items-center rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[0.5rem] font-medium text-amber-400 cursor-help"
+                      title="This hook is based on weaker/secondary evidence. We phrase it as a verification question rather than making claims."
+                    >
+                      Verification hook
+                    </span>
+                  )}
                   <span className="inline-flex items-center rounded-full border border-zinc-600/30 bg-zinc-800/40 px-2 py-0.5 text-[0.5rem] font-medium text-zinc-500">
                     Role: VP Sales
                   </span>
