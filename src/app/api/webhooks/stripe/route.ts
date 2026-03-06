@@ -158,6 +158,43 @@ export async function POST(req: NextRequest) {
       }
       break;
     }
+
+    case "charge.refunded": {
+      const charge = event.data.object;
+      const customerId = charge.customer as string;
+      if (customerId) {
+        const [refundedUser] = await db
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .where(eq(schema.users.stripeCustomerId, customerId))
+          .limit(1);
+
+        if (refundedUser) {
+          await db
+            .update(schema.users)
+            .set({ tierId: "starter", stripeSubscriptionId: null })
+            .where(eq(schema.users.id, refundedUser.id));
+
+          logAudit({
+            userId: refundedUser.id,
+            event: "subscription_downgraded_refund",
+            metadata: { chargeId: charge.id, amountRefunded: charge.amount_refunded },
+          }).catch(() => {});
+        }
+      }
+      break;
+    }
+
+    case "customer.subscription.created": {
+      const subscription = event.data.object;
+      await syncSubscriptionToUser(subscription);
+      logAudit({
+        userId: subscription.metadata.userId,
+        event: "subscription_created_webhook",
+        metadata: { subscriptionId: subscription.id },
+      }).catch(() => {});
+      break;
+    }
   }
 
   return NextResponse.json({ received: true });
