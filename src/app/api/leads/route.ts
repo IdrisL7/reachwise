@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateBearerToken, unauthorized } from "@/lib/followup/auth";
+import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
-  if (!validateBearerToken(request)) return unauthorized();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const body = await request.json();
@@ -22,6 +25,7 @@ export async function POST(request: NextRequest) {
       if (!item.email?.trim()) continue;
 
       const values = {
+        userId: session.user.id,
         email: item.email.trim().toLowerCase(),
         name: item.name || null,
         title: item.title || null,
@@ -54,7 +58,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  if (!validateBearerToken(request)) return unauthorized();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const url = new URL(request.url);
@@ -62,13 +69,16 @@ export async function GET(request: NextRequest) {
     const limitParam = url.searchParams.get("limit");
     const limit = limitParam ? Math.min(parseInt(limitParam, 10), 500) : 100;
 
-    let query = db.select().from(schema.leads);
-
+    const conditions = [eq(schema.leads.userId, session.user.id)];
     if (status) {
-      query = query.where(eq(schema.leads.status, status as any)) as any;
+      conditions.push(eq(schema.leads.status, status as any));
     }
 
-    const leads = await (query as any).limit(limit);
+    const leads = await db
+      .select()
+      .from(schema.leads)
+      .where(and(...conditions))
+      .limit(limit);
 
     return NextResponse.json({ leads });
   } catch (error) {

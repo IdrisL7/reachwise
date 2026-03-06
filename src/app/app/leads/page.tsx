@@ -28,9 +28,7 @@ export default function LeadsPage() {
 
   async function fetchLeads() {
     try {
-      const res = await fetch("/api/leads", {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetch("/api/leads");
       if (res.ok) {
         const data = await res.json();
         setLeads(data.leads || []);
@@ -40,11 +38,6 @@ export default function LeadsPage() {
     } finally {
       setLoading(false);
     }
-  }
-
-  function getToken(): string {
-    // Will be replaced with session-based auth
-    return localStorage.getItem("gsh_token") || "";
   }
 
   async function handleCsvUpload() {
@@ -85,10 +78,7 @@ export default function LeadsPage() {
 
       const res = await fetch("/api/leads", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leads: leadsData }),
       });
 
@@ -112,10 +102,7 @@ export default function LeadsPage() {
     if (!confirm("Delete this lead? This cannot be undone.")) return;
     setDeleting(id);
     try {
-      const res = await fetch(`/api/leads/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
+      const res = await fetch(`/api/leads/${id}`, { method: "DELETE" });
       if (res.ok) {
         setLeads((prev) => prev.filter((l) => l.id !== id));
         setMessage("Lead deleted.");

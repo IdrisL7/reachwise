@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { validateBearerToken, unauthorized } from "@/lib/followup/auth";
+import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!validateBearerToken(request)) return unauthorized();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { id } = await params;
 
   const lead = await db.query.leads.findFirst({
-    where: eq(schema.leads.id, id),
+    where: and(eq(schema.leads.id, id), eq(schema.leads.userId, session.user.id)),
   });
 
   if (!lead) {
@@ -34,13 +37,16 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!validateBearerToken(request)) return unauthorized();
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
   const { id } = await params;
 
   const deleted = await db
     .delete(schema.leads)
-    .where(eq(schema.leads.id, id))
+    .where(and(eq(schema.leads.id, id), eq(schema.leads.userId, session.user.id)))
     .returning({ id: schema.leads.id });
 
   if (deleted.length === 0) {
