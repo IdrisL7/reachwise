@@ -14,10 +14,13 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "auth:hooks-batch": { limit: 20, windowSeconds: 60 },
   "auth:leads": { limit: 100, windowSeconds: 60 },
   "auth:followups": { limit: 30, windowSeconds: 60 },
+  "public:sales-chat": { limit: 10, windowSeconds: 60 },
   "auth:login": { limit: 5, windowSeconds: 300 },
   "auth:register": { limit: 3, windowSeconds: 600 },
   "auth:forgot-password": { limit: 3, windowSeconds: 600 },
   "auth:reset-password": { limit: 5, windowSeconds: 600 },
+  "public:email": { limit: 5, windowSeconds: 60 },
+  "auth:email": { limit: 20, windowSeconds: 60 },
 };
 
 /**
@@ -79,9 +82,12 @@ export async function checkRateLimit(
       .where(eq(schema.rateLimits.key, key));
     return null;
   } catch (err) {
-    // Fail open — if DB is down, allow the request
+    // Fail closed — if DB is down, reject the request
     console.error("Rate limit check failed:", err);
-    return null;
+    return NextResponse.json(
+      { status: "error", code: "SERVICE_UNAVAILABLE", message: "Service temporarily unavailable. Please try again." },
+      { status: 503 },
+    );
   }
 }
 

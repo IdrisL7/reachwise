@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SALES_AGENT_SYSTEM_PROMPT } from "@/lib/sales-agent";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -50,6 +51,9 @@ async function runDemo(url: string): Promise<DemoResult | null> {
 }
 
 export async function POST(request: Request) {
+  const rateLimited = await checkRateLimit(getClientIp(request), "public:sales-chat");
+  if (rateLimited) return rateLimited;
+
   try {
     const body = (await request.json()) as ChatRequest | null;
     if (!body?.messages || !Array.isArray(body.messages)) {

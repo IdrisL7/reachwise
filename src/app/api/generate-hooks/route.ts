@@ -22,6 +22,8 @@ import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks, RULES_VERSION } from "@/lib/hook-cache";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
+import { checkHookQuota } from "@/lib/tier-guard";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // Enforce current tier rules on citations (works on both cached and fresh)
@@ -113,18 +115,29 @@ export async function POST(request: Request) {
       );
     }
 
-    // Resolve workspace profile for cache busting (best-effort, non-blocking for unauthenticated requests)
+    // Auth required
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Rate limiting
+    const rateLimited = await checkRateLimit(getClientIp(request), "auth:hooks");
+    if (rateLimited) return rateLimited;
+
+    // Quota check (trial + monthly limit + increment)
+    const quotaError = await checkHookQuota(session.user.id);
+    if (quotaError) return quotaError;
+
+    // Resolve workspace profile for cache busting
     let profileUpdatedAt: string | null = null;
     let _senderContext: Awaited<ReturnType<typeof getWorkspaceProfile>> = null;
     try {
-      const session = await auth();
-      if (session?.user?.id) {
-        const workspaceId = await resolveWorkspaceId(session.user.id);
-        [_senderContext, profileUpdatedAt] = await Promise.all([
-          getWorkspaceProfile(workspaceId),
-          getProfileUpdatedAt(workspaceId),
-        ]);
-      }
+      const workspaceId = await resolveWorkspaceId(session.user.id);
+      [_senderContext, profileUpdatedAt] = await Promise.all([
+        getWorkspaceProfile(workspaceId),
+        getProfileUpdatedAt(workspaceId),
+      ]);
     } catch {
       // Non-critical — continue without profile context
     }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { db, schema } from "@/lib/db";
 import { eq, and, isNull, lte, gte, sql } from "drizzle-orm";
 import { sendEmail, brandedHtml } from "@/lib/email/sendgrid";
@@ -41,11 +42,16 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
-  if (!cronSecret) {
-    return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 500 });
+  if (!cronSecret || !authHeader) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  const expected = `Bearer ${cronSecret}`;
+  const isValid =
+    authHeader.length === expected.length &&
+    timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+
+  if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

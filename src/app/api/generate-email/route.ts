@@ -4,6 +4,8 @@ import {
   containsBannedPhrase,
   type Hook,
 } from "@/lib/hooks";
+import { auth } from "@/lib/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -192,6 +194,14 @@ function buildEmailUserPrompt(
 // ---------------------------------------------------------------------------
 
 export async function POST(request: Request) {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rateLimited = await checkRateLimit(getClientIp(request), "auth:email");
+  if (rateLimited) return rateLimited;
+
   try {
     const body = (await request.json().catch(() => null)) as GenerateEmailRequest | null;
 
