@@ -262,6 +262,7 @@ export const leadSequences = sqliteTable("lead_sequences", {
   approvalMode: integer("approval_mode").notNull().default(0),
   startedAt: text("started_at").notNull().default(sql`(datetime('now'))`),
   pausedAt: text("paused_at"),
+  resumeAt: text("resume_at"),
   completedAt: text("completed_at"),
 }, (table) => [
   index("lead_sequences_lead_id_idx").on(table.leadId),
@@ -304,4 +305,23 @@ export const leadScores = sqliteTable("lead_scores", {
 }, (table) => [
   index("lead_scores_score_idx").on(table.score),
   index("lead_scores_temperature_idx").on(table.temperature),
+]);
+
+// ── Notifications ──
+
+export const notifications = sqliteTable("notifications", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id),
+  type: text("type", {
+    enum: ["draft_pending", "sequence_completed", "lead_replied", "auto_paused"],
+  }).notNull(),
+  title: text("title").notNull(),
+  body: text("body"),
+  leadId: text("lead_id").references(() => leads.id),
+  messageId: text("message_id").references(() => outboundMessages.id),
+  read: integer("read").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("notifications_user_id_idx").on(table.userId),
+  index("notifications_read_idx").on(table.read),
 ]);
