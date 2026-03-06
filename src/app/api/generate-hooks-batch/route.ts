@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { generateHooksForUrl, type Hook } from "@/lib/hooks";
+import { auth } from "@/lib/auth";
+import { checkTrialActive, checkBatchSize, getLimits } from "@/lib/tier-guard";
+import { db, schema } from "@/lib/db";
+import { eq, sql } from "drizzle-orm";
+import type { TierId } from "@/lib/tiers";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,12 +38,49 @@ type BatchResponse = {
 
 export async function POST(request: Request) {
   try {
+    // Auth check
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Trial check
+    const trialCheck = await checkTrialActive(session.user.id);
+    if (trialCheck) return trialCheck;
+
     const body = (await request.json().catch(() => null)) as BatchRequest | null;
 
-    if (!body || !Array.isArray(body.items)) {
+    if (!body || !Array.isArray(body.items) || body.items.length === 0) {
       return NextResponse.json(
         { error: "Missing 'items' array in request body." },
         { status: 400 },
+      );
+    }
+
+    // Get user tier
+    const [user] = await db
+      .select({ tierId: schema.users.tierId, hooksUsedThisMonth: schema.users.hooksUsedThisMonth })
+      .from(schema.users)
+      .where(eq(schema.users.id, session.user.id))
+      .limit(1);
+
+    const tierId = (user?.tierId as TierId) || "starter";
+    const limits = getLimits(tierId);
+
+    // Check batch size against tier limit
+    const batchCheck = checkBatchSize(tierId, body.items.length);
+    if (batchCheck) return batchCheck;
+
+    // Check remaining hook quota
+    const remaining = limits.hooksPerMonth - (user?.hooksUsedThisMonth ?? 0);
+    if (remaining < body.items.length) {
+      return NextResponse.json(
+        {
+          status: "error",
+          code: "TIER_LIMIT",
+          message: `You have ${remaining} hook generation${remaining !== 1 ? "s" : ""} remaining this month, but requested ${body.items.length}. Upgrade for more.`,
+        },
+        { status: 402 },
       );
     }
 
@@ -71,6 +113,17 @@ export async function POST(request: Request) {
         }
       }),
     );
+
+    // Increment hook usage by the number of successful results
+    const successCount = results.filter((r) => !r.error).length;
+    if (successCount > 0) {
+      await db
+        .update(schema.users)
+        .set({
+          hooksUsedThisMonth: sql`${schema.users.hooksUsedThisMonth} + ${successCount}`,
+        })
+        .where(eq(schema.users.id, session.user.id));
+    }
 
     const response: BatchResponse = { results };
     return NextResponse.json(response);

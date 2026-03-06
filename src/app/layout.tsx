@@ -35,6 +35,9 @@ export const metadata: Metadata = {
     description:
       "AI-powered hook generation anchored on real public signals. 7-day free trial.",
   },
+  alternates: {
+    canonical: "https://www.getsignalhooks.com",
+  },
   robots: {
     index: true,
     follow: true,

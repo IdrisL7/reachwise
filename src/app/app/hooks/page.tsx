@@ -57,6 +57,7 @@ export default function HooksPage() {
   const [hasCopied, setHasCopied] = useState(false);
   const pendingGenerate = useRef(false);
   const lowSignalTracked = useRef(false);
+  const hooksGeneratedFirstTracked = useRef(false);
   const [customRoleInput, setCustomRoleInput] = useState("");
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [upgradePrompt, setUpgradePrompt] = useState<{
@@ -298,11 +299,11 @@ export default function HooksPage() {
       if (data.companyDomain) setCompanyDomain(data.companyDomain);
 
       // Update hooksUsed locally so the gate doesn't re-trigger
-      setHooksUsed((prev) => {
-        const next = (prev ?? 0) + 1;
-        if (next === 1) trackEvent("hooks_generated_first");
-        return next;
-      });
+      setHooksUsed((prev) => (prev ?? 0) + 1);
+      if (!hooksGeneratedFirstTracked.current && (hooksUsed ?? 0) === 0) {
+        hooksGeneratedFirstTracked.current = true;
+        trackEvent("hooks_generated_first");
+      }
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -515,13 +516,22 @@ export default function HooksPage() {
                 <option value="Custom">Custom...</option>
               </select>
               {showCustomRole && (
-                <input
-                  type="text"
-                  value={customRoleInput}
-                  onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
-                  placeholder="e.g. Head of Partnerships"
-                  className="w-full mt-2 bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600 text-sm"
-                />
+                <div className="mt-2">
+                  <input
+                    type="text"
+                    value={customRoleInput}
+                    onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
+                    placeholder="e.g. Head of Partnerships"
+                    className={`w-full bg-black border rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none text-sm ${
+                      error && targetRole === "Custom" && !customRoleInput.trim()
+                        ? "border-red-600 focus:border-red-500"
+                        : "border-zinc-700 focus:border-emerald-600"
+                    }`}
+                  />
+                  {error && targetRole === "Custom" && !customRoleInput.trim() && (
+                    <p className="text-[11px] text-red-400 mt-1">Enter a role name to continue</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
