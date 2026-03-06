@@ -113,6 +113,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check 6: Cold intent score
+    const [leadScore] = await db
+      .select()
+      .from(schema.leadScores)
+      .where(eq(schema.leadScores.leadId, body.lead_id))
+      .limit(1);
+
+    if (leadScore && leadScore.score < 20 && leadScore.temperature === "cold") {
+      return NextResponse.json({
+        safe_to_send: false,
+        reason: "cold_score_drop",
+        details: `Intent score dropped to ${leadScore.score} (cold). Pausing to avoid low-value sends.`,
+      });
+    }
+
     return NextResponse.json({
       safe_to_send: true,
       reason: null,

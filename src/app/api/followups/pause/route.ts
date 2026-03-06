@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateBearerToken, unauthorized } from "@/lib/followup/auth";
 import { db, schema } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   if (!validateBearerToken(request)) return unauthorized();
@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
       ooo: "cold",
       daily_cap: "cold",
       quiet_hours: "cold",
+      cold_score_drop: "cold",
     };
 
     const newStatus: LeadStatus = statusMap[body.reason] || "cold";
@@ -53,6 +54,8 @@ export async function POST(request: NextRequest) {
       await db.delete(schema.claimLocks).where(eq(schema.claimLocks.id, body.lock_id));
     }
 
+    const now = new Date().toISOString();
+
     // Write audit log entry
     await db.insert(schema.auditLog).values({
       id: crypto.randomUUID(),
@@ -61,8 +64,46 @@ export async function POST(request: NextRequest) {
       reason: body.reason,
       runId: body.run_id || null,
       metadata: JSON.stringify({ lock_id: body.lock_id, previous_status: lead.status, new_status: newStatus }),
-      createdAt: new Date().toISOString(),
+      createdAt: now,
     });
+
+    // OOO: pause lead_sequence with 7-day auto-resume
+    if (body.reason === "ooo") {
+      const resumeAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      await db
+        .update(schema.leadSequences)
+        .set({ status: "paused", pausedAt: now, resumeAt })
+        .where(
+          and(
+            eq(schema.leadSequences.leadId, body.lead_id),
+            eq(schema.leadSequences.status, "active"),
+          ),
+        );
+    }
+
+    // Cold score drop: pause lead_sequence and notify owner
+    if (body.reason === "cold_score_drop") {
+      await db
+        .update(schema.leadSequences)
+        .set({ status: "paused", pausedAt: now })
+        .where(
+          and(
+            eq(schema.leadSequences.leadId, body.lead_id),
+            eq(schema.leadSequences.status, "active"),
+          ),
+        );
+
+      // Create notification for the lead's owner
+      if (lead?.userId) {
+        await db.insert(schema.notifications).values({
+          userId: lead.userId,
+          type: "auto_paused",
+          title: `Sequence paused for ${lead.name || lead.email}`,
+          body: "Intent score dropped to cold. Review and resume when ready.",
+          leadId: lead.id,
+        });
+      }
+    }
 
     return NextResponse.json({
       status: "ok",
