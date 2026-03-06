@@ -25,6 +25,7 @@ export interface Tier {
     prioritySupport: boolean;
     multiChannel: boolean;
     sequences: boolean;
+    intentScoring: boolean;
   };
   cta: string;
   highlighted?: boolean;
@@ -53,6 +54,7 @@ export const TIERS: Tier[] = [
       prioritySupport: false,
       multiChannel: false,
       sequences: true,
+      intentScoring: false,
     },
     cta: "Start 7-day free trial",
   },
@@ -83,6 +85,7 @@ export const TIERS: Tier[] = [
       prioritySupport: false,
       multiChannel: true,
       sequences: true,
+      intentScoring: true,
     },
     cta: "Get started",
     highlighted: true,
@@ -114,6 +117,7 @@ export const TIERS: Tier[] = [
       prioritySupport: true,
       multiChannel: true,
       sequences: true,
+      intentScoring: true,
     },
     cta: "Get started",
   },
