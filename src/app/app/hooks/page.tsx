@@ -66,6 +66,17 @@ export default function HooksPage() {
   const [customRoleInput, setCustomRoleInput] = useState("");
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [hookVariants, setHookVariants] = useState<Array<{ hook_index: number; variants: ChannelVariant[] }>>([]);
+  const [intentData, setIntentData] = useState<{
+    score: number;
+    temperature: string;
+    signals: Array<{
+      type: string;
+      summary: string;
+      confidence: number;
+      sourceUrl: string;
+      detectedAt: string;
+    }>;
+  } | null>(null);
   const [activeChannel, setActiveChannel] = useState<Record<number, string>>({});
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
@@ -217,6 +228,7 @@ export default function HooksPage() {
     setGeneratedEmails({});
     setHookVariants([]);
     setActiveChannel({});
+    setIntentData(null);
     setSuggestion("");
     setLowSignal(false);
     setLinkedinSlug(null);
@@ -315,6 +327,8 @@ export default function HooksPage() {
       if (data.hookVariants) {
         setHookVariants(data.hookVariants);
       }
+
+      setIntentData(data.intent || null);
 
       if (data.suggestion) setSuggestion(data.suggestion);
       if (data.lowSignal) {
@@ -939,6 +953,57 @@ export default function HooksPage() {
           </div>
         );
       })()}
+      {intentData && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-zinc-200">Intent Signals</h3>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${
+              intentData.temperature === "hot"
+                ? "bg-red-900/30 text-red-400 border-red-800"
+                : intentData.temperature === "warm"
+                  ? "bg-amber-900/30 text-amber-400 border-amber-800"
+                  : "bg-zinc-800 text-zinc-400 border-zinc-700"
+            }`}>
+              Score: {intentData.score} — {intentData.temperature === "hot" ? "Hot" : intentData.temperature === "warm" ? "Warm" : "Cold"}
+            </span>
+          </div>
+          {intentData.signals.length === 0 ? (
+            <p className="text-xs text-zinc-500">No buying signals detected for this company.</p>
+          ) : (
+            <div className="space-y-2">
+              {intentData.signals.map((signal, i) => {
+                const typeColors: Record<string, string> = {
+                  hiring: "text-blue-400 bg-blue-900/30 border-blue-800",
+                  funding: "text-emerald-400 bg-emerald-900/30 border-emerald-800",
+                  tech_change: "text-purple-400 bg-purple-900/30 border-purple-800",
+                  growth: "text-orange-400 bg-orange-900/30 border-orange-800",
+                  news: "text-zinc-400 bg-zinc-800 border-zinc-700",
+                };
+                return (
+                  <div key={i} className="flex items-start gap-2 bg-black/30 rounded-lg px-3 py-2">
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 mt-0.5 ${typeColors[signal.type] || typeColors.news}`}>
+                      {signal.type.replace("_", " ")}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-zinc-300">{signal.summary}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-zinc-600">
+                          {Math.round(signal.confidence * 100)}% confidence
+                        </span>
+                        {signal.sourceUrl && (
+                          <a href={signal.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[10px] text-zinc-600 hover:text-zinc-400 underline underline-offset-2 truncate">
+                            Source
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {hooks.length > 0 && !hasProfile && !shouldGate && (
         <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg px-4 py-3 mt-6 text-sm text-zinc-400">
           Want hooks that connect to your pitch?{" "}

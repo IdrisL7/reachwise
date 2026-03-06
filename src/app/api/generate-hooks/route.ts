@@ -22,6 +22,7 @@ import {
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks, RULES_VERSION } from "@/lib/hook-cache";
+import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
 import { checkHookQuota } from "@/lib/tier-guard";
@@ -374,6 +375,32 @@ export async function POST(request: Request) {
       }))
       .slice(0, 6);
 
+    // Intent scoring for Pro/Concierge users
+    let intentData = null;
+    if (tierId === "pro" || tierId === "concierge") {
+      try {
+        if (braveApiKey && claudeApiKey) {
+          const signals = await researchIntentSignals(
+            url, companyName || companyDomain || "", braveApiKey, claudeApiKey
+          );
+          const score = computeIntentScore(signals);
+          intentData = {
+            score,
+            temperature: getTemperature(score),
+            signals: signals.map((s) => ({
+              type: s.type,
+              summary: s.summary,
+              confidence: s.confidence,
+              sourceUrl: s.sourceUrl,
+              detectedAt: s.detectedAt,
+            })),
+          };
+        }
+      } catch {
+        // Non-blocking — intent scoring failure should not affect hook generation
+      }
+    }
+
     return NextResponse.json({
       hooks: finalTop.map((h) => h.hook),
       structured_hooks: finalTop,
@@ -391,6 +418,7 @@ export async function POST(request: Request) {
       cached,
       targetRole: targetRole || "General",
       hookVariants,
+      intent: intentData,
     });
   } catch (error) {
     Sentry.captureException(error);
