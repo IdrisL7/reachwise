@@ -167,15 +167,15 @@ export function PricingSection() {
             </li>
             <li className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Signal, Implication, Question structure baked in
+              Trigger / Risk / Tradeoff angles with confidence levels
             </li>
             <li className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Angle tags (trigger / risk / tradeoff) and confidence levels
+              Custom sequence builder with multi-step workflows
             </li>
             <li className="flex items-start gap-2.5">
               <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
-              Evidence snippets and source titles for every hook
+              Lead management with CSV import and API access
             </li>
           </ul>
         </div>

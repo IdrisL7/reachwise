@@ -15,15 +15,15 @@ export function WhoItsForSection() {
           {[
             {
               title: "SDRs & BDRs",
-              desc: "Skip generic openers. Use hooks that show you actually looked at the prospect.",
+              desc: "Evidence-backed hooks across email, LinkedIn, and calls. Approve drafts in your inbox or let sequences run fully autonomous.",
             },
             {
               title: "Agency owners",
-              desc: "Scale personalized outreach across clients without sinking hours into research.",
+              desc: "Multi-channel sequences with intent scoring across all your clients. Scale personalized outreach without sinking hours into research.",
             },
             {
               title: "Founders",
-              desc: "Doing your own outbound. Get credible, specific openers in seconds, not evenings.",
+              desc: "Autonomous outbound that prioritizes hot leads and runs multi-step sequences while you focus on closing.",
             },
           ].map((item) => (
             <div

@@ -3,27 +3,27 @@ import Link from "next/link";
 const steps = [
   {
     number: "1",
-    title: "Import your leads",
+    title: "Import leads & assign sequences",
     description:
-      "Push leads from Apollo, Clay, or any CRM via API. Each lead enters a follow-up sequence automatically.",
+      "Push leads from Apollo, Clay, or any CRM via API. Assign multi-channel sequences (email, LinkedIn, cold call, video) or use a pre-built template.",
   },
   {
     number: "2",
-    title: "GetSignalHooks researches each company",
+    title: "Intent scoring prioritizes your pipeline",
     description:
-      "Fresh, evidence-based hooks are generated for every lead using real public signals from their company URL.",
+      "We detect buying signals — hiring, funding, tech changes — and score each lead as hot, warm, or cold so you focus on the right prospects first.",
   },
   {
     number: "3",
-    title: "AI writes the follow-up",
+    title: "AI generates channel-specific outreach",
     description:
-      "Each email is crafted with a unique angle — no templates, no repeats. The engine rotates between trigger, risk, and tradeoff hooks.",
+      "Each touchpoint gets a unique message crafted for its channel. Email follow-ups, LinkedIn connection requests, call openers, and video scripts — all evidence-backed.",
   },
   {
     number: "4",
-    title: "n8n sends and tracks",
+    title: "Autonomous execution with smart safeguards",
     description:
-      "Your n8n workflow calls our /api/leads/send-followup endpoint on a schedule. For each due lead, we generate the next follow-up email, log it as an outbound message, and n8n sends it via your email provider. You can keep a human-in-the-loop or go fully automatic for trusted segments.",
+      "The engine sends emails automatically, saves non-email content as drafts for your approval, auto-pauses on OOO or bounces, and classifies replies so you never miss a signal.",
   },
 ];
 
@@ -36,7 +36,7 @@ const transparency = [
     ),
     title: "What it reads from",
     description:
-      "Lead list and outbound history: who you emailed, when, and what step they're on. We integrate via CSV/CRM exports and n8n, not by taking over your whole stack.",
+      "Lead list, outbound history, sequence config, and public company signals (hiring pages, funding news, tech updates). We integrate via CSV/CRM exports and n8n, not by taking over your stack.",
   },
   {
     icon: (
@@ -44,9 +44,9 @@ const transparency = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
-    title: "What triggers a follow-up",
+    title: "What triggers the next step",
     description:
-      "If a lead hasn't replied after the configured delay for their current step, and they're not marked as won/lost/unreachable, we generate the next email in the sequence.",
+      "When a lead's delay window passes and they haven't replied or been paused, the engine generates the next touchpoint — email, LinkedIn message, call script, or video — based on the sequence you defined.",
   },
   {
     icon: (
@@ -56,7 +56,7 @@ const transparency = [
     ),
     title: "What gets logged where",
     description:
-      "Every follow-up we generate is logged as a message record with lead ID, step, subject, and body. You can sync this back to your CRM via n8n or use our API to inspect history.",
+      "Every message is logged with lead ID, step, channel, subject, and body. Replies are classified (interested, objection, OOO, etc.) and surfaced in your inbox. Sync everything back to your CRM via n8n.",
   },
   {
     icon: (
@@ -66,7 +66,7 @@ const transparency = [
     ),
     title: "Security & data handling",
     description:
-      "We store lead email, company URL, and sequence state. No inbox access. No CRM write-back without your explicit n8n workflow. Data retained for 90 days after last activity, then auto-purged.",
+      "We store lead email, company URL, and sequence state. No inbox access. No CRM write-back without your explicit n8n workflow. Approval mode lets you review every message before it sends.",
   },
 ];
 
@@ -76,15 +76,15 @@ export function FollowUpEngineSection() {
       <div className="mx-auto max-w-[90rem] px-6 py-28 lg:px-10 lg:py-40">
         <div className="mx-auto max-w-2xl text-center">
           <p className="mb-4 text-[0.9375rem] font-semibold text-violet-400">
-            Follow-Up Engine
+            Autonomous Outbound Engine
           </p>
           <h2 className="text-[clamp(2rem,3vw,3rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white">
-            Automated follow-ups that actually sound human
+            Multi-channel sequences that run on autopilot
           </h2>
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Stop writing follow-ups by hand. The Follow-Up Engine watches your
-            outbound, generates research-backed emails with fresh angles, and
-            sends them on schedule — so you never drop a lead.
+            Import leads, assign a sequence, and let the engine handle the rest.
+            It scores intent, generates channel-specific outreach, sends or
+            queues for approval, and classifies replies — so you never drop a lead.
           </p>
         </div>
 
@@ -111,7 +111,7 @@ export function FollowUpEngineSection() {
         <div className="mx-auto mt-20 max-w-3xl">
           <div className="mb-10 text-center">
             <h3 className="text-[1.5rem] font-bold tracking-[-0.01em] text-white">
-              What the Follow-Up Engine actually does (and doesn&apos;t do)
+              What the Outbound Engine actually does (and doesn&apos;t do)
             </h3>
           </div>
 
@@ -149,7 +149,7 @@ export function FollowUpEngineSection() {
         {/* Availability */}
         <div className="mx-auto mt-16 max-w-lg rounded-xl border border-zinc-700/20 bg-[#0c0c16]/60 px-6 py-5 text-center">
           <p className="text-[0.9375rem] text-zinc-400">
-            The Follow-Up Engine is included in:
+            The Autonomous Outbound Engine is included in:
           </p>
           <div className="mt-3 flex items-center justify-center gap-4">
             <span className="rounded-full border border-violet-500/30 bg-violet-600/10 px-4 py-1.5 text-[0.875rem] font-semibold text-violet-300">
@@ -161,9 +161,9 @@ export function FollowUpEngineSection() {
             </span>
           </div>
           <p className="mt-3 text-[0.8125rem] text-zinc-500">
-            Pro — for teams that want to run their own outbound on autopilot.
+            Pro — multi-channel sequences, intent scoring, and reply intelligence on autopilot.
             <br />
-            Concierge — for teams who want us to set it up and monitor it with them.
+            Concierge — we set it up, run it, and optimize it with you.
           </p>
           <Link
             href="#pricing"

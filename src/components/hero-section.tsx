@@ -10,17 +10,17 @@ export function HeroSection() {
         <div className="max-w-2xl">
           <span className="mb-8 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-4 py-1.5 text-[0.8125rem] font-medium text-violet-400">
             <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-            Evidence-backed outbound hooks
+            Autonomous outbound platform
           </span>
 
           <h1 className="text-[clamp(3rem,5.5vw,5.5rem)] font-bold leading-[1.02] tracking-[-0.02em] text-white">
-            Evidence-backed hooks from any company URL.
+            Evidence-backed outbound that runs itself.
           </h1>
 
           <p className="mt-8 max-w-lg text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-            Paste a website. Get fresh signals + Trigger&nbsp;/ Risk&nbsp;/
-            Tradeoff angles with receipts (quoted snippets&nbsp;+ source&nbsp;+
-            date) — so SDRs can send outreach that doesn&apos;t sound automated.
+            Research-backed hooks, multi-channel sequences, intent scoring,
+            and reply intelligence — so your outbound runs on autopilot
+            with evidence SDRs can actually defend.
           </p>
 
           <div className="mt-12 flex flex-wrap items-center gap-4">

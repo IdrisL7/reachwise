@@ -18,18 +18,18 @@ export function HowItWorksSection() {
           {[
             {
               step: "1",
-              title: "Paste a company URL",
-              desc: "Drop in a domain (optionally a LinkedIn URL) and your outreach context.",
+              title: "Paste a URL or import leads",
+              desc: "Drop in a single domain for instant hooks, or upload your lead list from Apollo, Clay, or any CRM to run full sequences.",
             },
             {
               step: "2",
-              title: "We pull real signals \u2014 not vibes",
-              desc: "We scan high-quality public sources (site updates, releases, product notes, hiring pages, reputable news) and extract only what can be cited.",
+              title: "We research signals & score intent",
+              desc: "We scan public sources for evidence you can cite, plus detect buying signals (hiring, funding, tech changes) to score each lead as hot, warm, or cold.",
             },
             {
               step: "3",
-              title: "We generate angles you can defend",
-              desc: "You get 3 angles per source: Trigger (what changed), Risk (what breaks if ignored), Tradeoff (the decision they\u2019re weighing). Each includes a quote + source title/date.",
+              title: "Multi-channel outreach, evidence-backed",
+              desc: "Get Trigger / Risk / Tradeoff hooks for email, LinkedIn, cold calls, and video scripts. Each angle includes a quote + source title/date.",
             },
           ].map((item) => (
             <div
@@ -52,28 +52,19 @@ export function HowItWorksSection() {
         <div className="mx-auto mt-8 grid max-w-5xl gap-5 lg:grid-cols-2">
           <div className="group rounded-xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 shadow-[0_2px_16px_rgba(0,0,0,0.2)] transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_4px_24px_rgba(139,92,246,0.06)] hover:-translate-y-0.5">
             <h3 className="text-[1.1875rem] font-bold text-white mb-3">
-              We draft sendable hooks (and optional follow-ups)
+              Sequences run autonomously
             </h3>
             <p className="text-[0.9375rem] leading-[1.6] text-zinc-400">
-              Hooks are short, specific, and end with a tight question. Export as{" "}
-              <span className="text-zinc-200 font-medium">Copy hook</span> or{" "}
-              <span className="text-zinc-200 font-medium">
-                Copy hook + evidence
-              </span>{" "}
-              for Apollo/Clay.
+              Assign a multi-step sequence and the engine handles execution — sending emails, drafting LinkedIn messages for your approval, and auto-pausing on replies or OOO.
             </p>
           </div>
 
           <div className="group rounded-xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 shadow-[0_2px_16px_rgba(0,0,0,0.2)] transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_4px_24px_rgba(139,92,246,0.06)] hover:-translate-y-0.5">
             <h3 className="text-[1.1875rem] font-bold text-white mb-3">
-              Guardrails built in
+              Replies classified, next steps suggested
             </h3>
             <p className="text-[0.9375rem] leading-[1.6] text-zinc-400">
-              No invented facts. If the evidence is weak, we label it{" "}
-              <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2.5 py-0.5 text-[0.8125rem] font-medium text-amber-400">
-                low confidence
-              </span>{" "}
-              or generate a verification-only hook instead.
+              Inbound replies are auto-classified (interested, objection, OOO, wrong person) and a suggested response is drafted in your inbox — so you can respond in seconds.
             </p>
           </div>
         </div>

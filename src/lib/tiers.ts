@@ -45,6 +45,7 @@ export const TIERS: Tier[] = [
       { text: "~200 single-URL hook generations / month" },
       { text: "Batch mode for up to 10 URLs at a time" },
       { text: "Hooks with evidence snippets from company URLs" },
+      { text: "Custom sequence builder" },
       { text: "Works with leads from Apollo, Clay, Sheets, etc." },
     ],
     flags: {
@@ -66,19 +67,22 @@ export const TIERS: Tier[] = [
     id: "pro",
     name: "Pro",
     price: 149,
-    description: "Hooks + automated follow-up sequences that run on autopilot.",
+    description: "Autonomous multi-channel outbound with intent scoring and reply intelligence.",
     bestFor:
-      "Teams and agencies that want research-grade hooks plus hands-free follow-up cadences powered by the Follow-Up Engine.",
+      "Teams and agencies that want research-grade hooks plus autonomous sequences across email, LinkedIn, calls, and video.",
     features: [
       { text: "Everything in Starter" },
       { text: "~750 hook generations / month" },
+      { text: "Multi-channel variants (LinkedIn, cold call, video scripts)" },
       {
-        text: "Follow-Up Engine: watches your outbound and auto-generates follow-ups (via API + n8n)",
+        text: "Autonomous Outbound Engine: sequences run on autopilot across channels",
         link: "/followup-engine",
       },
-      { text: "n8n workflow template & setup guide" },
+      { text: "Intent scoring & lead prioritization (hot / warm / cold)" },
+      { text: "Inbox with draft approval mode" },
+      { text: "Reply detection & auto-classification" },
       { text: "Batch mode for up to 75 URLs at a time" },
-      { text: "AI-generated follow-ups with angle rotation" },
+      { text: "n8n workflow template & setup guide" },
     ],
     flags: {
       hooks: true,
@@ -100,15 +104,16 @@ export const TIERS: Tier[] = [
     id: "concierge",
     name: "Concierge",
     price: 499,
-    description: "We set it up, run it, and optimize it for you.",
+    description: "We set up, run, and optimize your autonomous outbound for you.",
     bestFor:
-      "Agencies and teams that want the full system — hooks, follow-ups, and deliverability — managed end-to-end.",
+      "Agencies and teams that want the full platform — hooks, multi-channel sequences, intent scoring, and reply handling — managed end-to-end.",
     features: [
       { text: "Everything in Pro" },
       {
-        text: "Follow-Up Engine + we run it for you",
+        text: "Autonomous Outbound Engine — we run it for you",
         link: "/followup-engine",
       },
+      { text: "Unlimited agentic execution across all leads" },
       { text: "Done-for-you n8n workflow setup & configuration" },
       { text: "Sequence strategy & copy review" },
       { text: "Deliverability monitoring & warm-up guidance" },

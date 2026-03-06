@@ -10,11 +10,11 @@ export function WaitlistCTA() {
 
       <div className="relative mx-auto max-w-3xl px-6 py-28 text-center lg:py-40">
         <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-          Ready to run evidence-first outbound?
+          Ready to put your outbound on autopilot?
         </h2>
         <p className="mx-auto mt-6 max-w-lg text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-          Start generating hooks now, or get the full platform with Follow-Up
-          Engine and API access.
+          Start with evidence-backed hooks, then unlock multi-channel sequences,
+          intent scoring, and reply intelligence.
         </p>
 
         <div className="mt-12 flex flex-wrap items-center justify-center gap-4">
