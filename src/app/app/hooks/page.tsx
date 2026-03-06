@@ -21,6 +21,11 @@ interface GeneratedEmail {
   body: string;
 }
 
+interface ChannelVariant {
+  channel: string;
+  text: string;
+}
+
 function trackEvent(event: string) {
   fetch("/api/track-event", {
     method: "POST",
@@ -60,6 +65,8 @@ export default function HooksPage() {
   const hooksGeneratedFirstTracked = useRef(false);
   const [customRoleInput, setCustomRoleInput] = useState("");
   const [showCustomRole, setShowCustomRole] = useState(false);
+  const [hookVariants, setHookVariants] = useState<Array<{ hook_index: number; variants: ChannelVariant[] }>>([]);
+  const [activeChannel, setActiveChannel] = useState<Record<number, string>>({});
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
   } | null>(null);
@@ -106,6 +113,18 @@ export default function HooksPage() {
       setShowGateModal(true);
       return;
     }
+    const active = activeChannel[index] || "email";
+    if (active !== "email") {
+      const variantEntry = hookVariants.find((v) => v.hook_index === index);
+      const variant = variantEntry?.variants.find((v) => v.channel === active);
+      if (variant) {
+        await navigator.clipboard.writeText(variant.text);
+        setCopied(index);
+        markCopied();
+        setTimeout(() => setCopied(null), 2000);
+        return;
+      }
+    }
     await navigator.clipboard.writeText(text);
     setCopied(index);
     markCopied();
@@ -117,7 +136,13 @@ export default function HooksPage() {
       setShowGateModal(true);
       return;
     }
-    let content = `Hook: ${hook.text}`;
+    const active = activeChannel[index] || "email";
+    const hookText = (() => {
+      if (active === "email") return hook.text;
+      const variantEntry = hookVariants.find((v) => v.hook_index === index);
+      return variantEntry?.variants.find((v) => v.channel === active)?.text || hook.text;
+    })();
+    let content = `Hook: ${hookText}`;
     if (hook.source_snippet) content += `\nEvidence: ${hook.source_snippet}`;
     if (hook.source_url) content += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(content);
@@ -190,6 +215,8 @@ export default function HooksPage() {
     setOverflowHooks([]);
     setShowAll(false);
     setGeneratedEmails({});
+    setHookVariants([]);
+    setActiveChannel({});
     setSuggestion("");
     setLowSignal(false);
     setLinkedinSlug(null);
@@ -283,6 +310,10 @@ export default function HooksPage() {
           confidence: "med",
           evidence_tier: "B",
         })));
+      }
+
+      if (data.hookVariants) {
+        setHookVariants(data.hookVariants);
       }
 
       if (data.suggestion) setSuggestion(data.suggestion);
@@ -797,7 +828,44 @@ export default function HooksPage() {
                     Pick a role above to sharpen the question for a specific buyer.
                   </p>
                 )}
-                <p className="text-zinc-200 mb-3">{hook.text}</p>
+                {(() => {
+                  const variantEntry = hookVariants.find((v) => v.hook_index === i);
+                  if (!variantEntry || variantEntry.variants.length === 0) return null;
+                  const channels = [
+                    { key: "email", label: "Email" },
+                    { key: "linkedin_connection", label: "LinkedIn" },
+                    { key: "linkedin_message", label: "LinkedIn DM" },
+                    { key: "cold_call", label: "Call" },
+                    { key: "video_script", label: "Video" },
+                  ];
+                  const active = activeChannel[i] || "email";
+                  return (
+                    <div className="flex gap-1 mb-2 flex-wrap">
+                      {channels.map((ch) => (
+                        <button
+                          key={ch.key}
+                          onClick={() => setActiveChannel((prev) => ({ ...prev, [i]: ch.key }))}
+                          className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                            active === ch.key
+                              ? "bg-emerald-900/40 border-emerald-700 text-emerald-300"
+                              : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                          }`}
+                        >
+                          {ch.label}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
+                <p className="text-zinc-200 mb-3">
+                  {(() => {
+                    const active = activeChannel[i] || "email";
+                    if (active === "email") return hook.text;
+                    const variantEntry = hookVariants.find((v) => v.hook_index === i);
+                    const variant = variantEntry?.variants.find((v) => v.channel === active);
+                    return variant?.text || hook.text;
+                  })()}
+                </p>
                 {hook.source_snippet && (
                   <div className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-3 mb-3">
                     <p>{hook.source_snippet}</p>
