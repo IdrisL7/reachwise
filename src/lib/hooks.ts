@@ -65,6 +65,15 @@ export type Hook = {
   uses_sender_context?: boolean;
 };
 
+export type ChannelVariant = {
+  channel: "linkedin_connection" | "linkedin_message" | "cold_call" | "video_script";
+  text: string;
+};
+
+export type HookWithVariants = Hook & {
+  variants: ChannelVariant[];
+};
+
 export type Source = {
   title: string;
   publisher: string;
@@ -2850,4 +2859,111 @@ export async function generateHooksForUrl(opts: {
 
   const withMeta = attachRoleMeta(top, _targetRole, !!_senderContext);
   return { hooks: withMeta, lowSignal: false };
+}
+
+// ---------------------------------------------------------------------------
+// Multi-channel variant generation
+// ---------------------------------------------------------------------------
+
+const CHANNEL_LIMITS: Record<ChannelVariant["channel"], { maxChars?: number; maxWords?: number; label: string }> = {
+  linkedin_connection: { maxChars: 300, label: "LinkedIn Connection Request" },
+  linkedin_message: { maxChars: 1900, label: "LinkedIn DM" },
+  cold_call: { maxWords: 150, label: "Cold Call Opener" },
+  video_script: { maxWords: 200, label: "Video Message Script" },
+};
+
+export function buildVariantsSystemPrompt(targetRole?: string): string {
+  const roleCtx = targetRole && targetRole !== "General"
+    ? `The recipient is a ${targetRole}.`
+    : "";
+
+  return `You are an expert B2B sales copywriter. Given email hooks with evidence, generate channel-specific variants.
+
+Rules:
+- Each variant must preserve the SAME evidence/signal from the original hook
+- LinkedIn Connection Request: ≤300 characters. Casual, curious tone. No pitch.
+- LinkedIn DM: ≤1900 characters. Conversational, reference the evidence, ask a question.
+- Cold Call Opener: ≤150 words. Verbal/spoken style. Start with name, reference evidence, ask permission to continue.
+- Video Script: ≤200 words. Personable, reference evidence, end with clear CTA for a meeting.
+${roleCtx}
+
+Return valid JSON array matching this schema exactly:
+[
+  {
+    "hook_index": 0,
+    "variants": [
+      { "channel": "linkedin_connection", "text": "..." },
+      { "channel": "linkedin_message", "text": "..." },
+      { "channel": "cold_call", "text": "..." },
+      { "channel": "video_script", "text": "..." }
+    ]
+  }
+]
+
+Do NOT include any text outside the JSON array.`;
+}
+
+export function buildVariantsUserPrompt(hooks: Hook[]): string {
+  const hookDescriptions = hooks.map((h, i) => {
+    return `Hook ${i}:
+Text: ${h.hook}
+Angle: ${h.angle}
+Evidence: ${h.evidence_snippet || "N/A"}
+Source: ${h.source_title || h.source_url || "N/A"}`;
+  }).join("\n\n");
+
+  return `Generate channel variants for each of these ${hooks.length} hooks:\n\n${hookDescriptions}`;
+}
+
+export async function generateChannelVariants(
+  hooks: Hook[],
+  claudeApiKey: string,
+  targetRole?: string,
+): Promise<HookWithVariants[]> {
+  if (hooks.length === 0) return [];
+
+  const systemPrompt = buildVariantsSystemPrompt(targetRole);
+  const userPrompt = buildVariantsUserPrompt(hooks);
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": claudeApiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      }),
+    });
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || "[]";
+
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error("generateChannelVariants: no JSON array found in response");
+      return hooks.map((h) => ({ ...h, variants: [] }));
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]) as Array<{
+      hook_index: number;
+      variants: ChannelVariant[];
+    }>;
+
+    return hooks.map((hook, idx) => {
+      const entry = parsed.find((p) => p.hook_index === idx);
+      const variants = (entry?.variants || []).filter((v) =>
+        ["linkedin_connection", "linkedin_message", "cold_call", "video_script"].includes(v.channel),
+      );
+      return { ...hook, variants };
+    });
+  } catch (error) {
+    console.error("generateChannelVariants: failed", error);
+    return hooks.map((h) => ({ ...h, variants: [] }));
+  }
 }
