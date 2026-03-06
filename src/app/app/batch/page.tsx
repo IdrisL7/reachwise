@@ -163,7 +163,7 @@ export default function BatchPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Batch Generate</h1>
           <p className="text-sm text-zinc-500 mt-1">
@@ -172,7 +172,7 @@ export default function BatchPage() {
         </div>
         <Link
           href="/app/hooks"
-          className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors"
+          className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors shrink-0"
         >
           Single mode
         </Link>
@@ -190,14 +190,14 @@ export default function BatchPage() {
             rows={6}
             className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600 font-mono text-sm resize-y"
           />
-          <div className="flex items-center justify-between mt-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
             <p className="text-xs text-zinc-500">
               {urls.length} URL{urls.length !== 1 ? "s" : ""} detected
             </p>
             <button
               type="submit"
               disabled={loading || urls.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
+              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors w-full sm:w-auto"
             >
               {loading ? `Researching ${urls.length} companies...` : `Generate Hooks (${urls.length})`}
             </button>
@@ -242,7 +242,7 @@ export default function BatchPage() {
       {results.length > 0 && (
         <div>
           {/* Summary bar */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-4 text-sm">
               <span className="text-zinc-300">
                 <strong className="text-emerald-400">{totalHooks}</strong> hooks from{" "}
@@ -269,7 +269,7 @@ export default function BatchPage() {
                   result.error ? "border-red-800/50" : "border-zinc-800"
                 }`}
               >
-                <div className="flex items-center justify-between mb-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="text-sm font-medium text-zinc-200 truncate">
                       {result.url}

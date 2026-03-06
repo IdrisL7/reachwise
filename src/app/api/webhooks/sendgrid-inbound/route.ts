@@ -4,6 +4,21 @@ import { eq, and, desc } from "drizzle-orm";
 import { classifyReply, generateSuggestedResponse } from "@/lib/reply-analysis";
 
 export async function POST(request: NextRequest) {
+  // Basic auth check — SendGrid Inbound Parse doesn't support HMAC signing
+  const inboundSecret = process.env.SENDGRID_INBOUND_SECRET;
+  if (inboundSecret) {
+    const url = new URL(request.url);
+    const querySecret = url.searchParams.get("secret");
+    const authHeader = request.headers.get("authorization");
+    const basicSecret = authHeader?.startsWith("Basic ")
+      ? Buffer.from(authHeader.slice(6), "base64").toString().split(":")[1]
+      : null;
+
+    if (querySecret !== inboundSecret && basicSecret !== inboundSecret) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+
   try {
     // SendGrid Inbound Parse sends multipart form data
     const formData = await request.formData();

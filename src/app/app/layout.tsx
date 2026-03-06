@@ -17,6 +17,7 @@ const navItems = [
   { href: "/app/templates", label: "Templates" },
   { href: "/app/analytics", label: "Analytics" },
   { href: "/app/settings", label: "Settings" },
+  { href: "/app/integrations", label: "Integrations" },
 ];
 
 export default async function AppLayout({

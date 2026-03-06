@@ -562,12 +562,12 @@ function BillingSection() {
             {billingError}
           </div>
         )}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium">Current Plan</p>
             <p className="text-xs text-zinc-500 capitalize">{tierId}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={openPortal}
               disabled={billingLoading}
@@ -739,9 +739,9 @@ export default function SettingsPage() {
       <section className="mb-10">
         <h2 className="text-lg font-semibold mb-4">Integrations</h2>
         <div className="space-y-3">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex items-center justify-between">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-orange-600/20 rounded-lg flex items-center justify-center text-orange-400 font-bold text-sm">
+              <div className="w-8 h-8 bg-orange-600/20 rounded-lg flex items-center justify-center text-orange-400 font-bold text-sm shrink-0">
                 H
               </div>
               <div>
@@ -816,7 +816,7 @@ function DeleteAccountSection() {
       <h2 className="text-lg font-semibold mb-4 text-red-400">Danger Zone</h2>
       <div className="bg-zinc-900 border border-red-900/40 rounded-lg p-4">
         {!confirming ? (
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-zinc-200">Delete account</p>
               <p className="text-xs text-zinc-500">
@@ -825,7 +825,7 @@ function DeleteAccountSection() {
             </div>
             <button
               onClick={() => setConfirming(true)}
-              className="text-xs text-red-400 hover:text-red-300 border border-red-800 px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs text-red-400 hover:text-red-300 border border-red-800 px-3 py-1.5 rounded-lg transition-colors shrink-0"
             >
               Delete account
             </button>
@@ -838,13 +838,13 @@ function DeleteAccountSection() {
             <p className="text-xs text-zinc-400 mb-2">
               Type <span className="font-mono text-red-400 font-bold">DELETE</span> to confirm:
             </p>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <input
                 type="text"
                 value={confirmText}
                 onChange={(e) => setConfirmText(e.target.value)}
                 placeholder="DELETE"
-                className="flex-1 bg-black border border-red-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-600"
+                className="flex-1 min-w-[120px] bg-black border border-red-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-red-600"
               />
               <button
                 onClick={handleDelete}

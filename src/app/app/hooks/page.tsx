@@ -481,7 +481,7 @@ export default function HooksPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">Generate Hooks</h1>
         {/* 3-step progress bar */}
         {hooksUsed !== null && (
@@ -921,7 +921,7 @@ export default function HooksPage() {
                     )}
                   </div>
                 )}
-                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800">
                   <button
                     onClick={() => copyHook(hook.text, i)}
                     className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"

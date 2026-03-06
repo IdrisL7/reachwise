@@ -261,8 +261,8 @@ export default async function AnalyticsPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm min-w-[600px]">
             <thead>
               <tr className="text-left text-zinc-500 border-b border-zinc-800">
                 <th className="px-4 py-3">Event</th>

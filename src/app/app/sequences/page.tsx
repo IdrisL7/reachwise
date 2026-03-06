@@ -139,13 +139,13 @@ export default function SequencesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Sequences</h1>
           <p className="text-sm text-zinc-500 mt-1">Define multi-step outreach sequences with channel, timing, and tone per step.</p>
         </div>
         {!editing && (
-          <button onClick={startCreate} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+          <button onClick={startCreate} className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shrink-0">
             Create Sequence
           </button>
         )}
@@ -168,7 +168,7 @@ export default function SequencesPage() {
 
           <div className="space-y-2 mb-4">
             {formSteps.map((step, idx) => (
-              <div key={idx} className="flex items-center gap-2 bg-black/50 border border-zinc-800 rounded-lg px-3 py-2">
+              <div key={idx} className="flex flex-wrap items-center gap-2 bg-black/50 border border-zinc-800 rounded-lg px-3 py-2">
                 <span className="text-xs text-zinc-500 w-6 shrink-0">#{idx + 1}</span>
                 <select
                   value={step.channel}
@@ -203,7 +203,7 @@ export default function SequencesPage() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button onClick={addStep} className="text-xs text-emerald-400 hover:text-emerald-300 border border-emerald-800 px-3 py-1.5 rounded-lg transition-colors">
               + Add Step
             </button>
