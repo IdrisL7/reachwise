@@ -13,6 +13,7 @@ import {
   getDomain,
   isFirstPartySource,
   isReputablePublisher,
+  generateChannelVariants,
   type CompanyResolutionResult,
   type ClassifiedSource,
   type Hook,
@@ -333,8 +334,25 @@ export async function POST(request: Request) {
     // Cache hooks for next time:
     // - Fresh results: always cache
     // - Stale cached results (wrong rules_version): re-cache with corrected payload
+    // Generate multi-channel variants for Pro/Concierge
+    let hookVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> = [];
+    const tierId = (session.user as any).tierId || "starter";
+
     if (roleGated.length > 0 && (!cached || cacheStale)) {
-      setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole).catch(() => {});
+      // Generate variants for Pro/Concierge before caching
+      if (tierId === "pro" || tierId === "concierge") {
+        try {
+          const withVars = await generateChannelVariants(roleGated, claudeApiKey, targetRole);
+          hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
+        } catch {}
+      }
+      setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole, hookVariants.length > 0 ? hookVariants : undefined).catch(() => {});
+    } else if (cached && (tierId === "pro" || tierId === "concierge")) {
+      // Load variants from cache
+      try {
+        const cr = await getCachedHooks(url!, profileUpdatedAt, targetRole);
+        if (cr?.variants) hookVariants = cr.variants as typeof hookVariants;
+      } catch {}
     }
 
     // Split discovered URLs into first-party and web results
@@ -372,6 +390,7 @@ export async function POST(request: Request) {
       webUrls: finalLowSignal ? webUrls : undefined,
       cached,
       targetRole: targetRole || "General",
+      hookVariants,
     });
   } catch (error) {
     Sentry.captureException(error);

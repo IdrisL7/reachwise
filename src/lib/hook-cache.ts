@@ -23,6 +23,7 @@ async function hashUrl(url: string, targetRole?: string): Promise<string> {
 export interface CachedHookResult {
   hooks: unknown;
   citations: unknown;
+  variants: unknown;
   rulesVersion: number | null;
 }
 
@@ -56,7 +57,7 @@ export async function getCachedHooks(
   // Parse rulesVersion from the stored payload (column may not exist yet in old rows)
   const rulesVersion = (cached as Record<string, unknown>).rulesVersion as number | null ?? null;
 
-  return { hooks: cached.hooks, citations: cached.citations, rulesVersion };
+  return { hooks: cached.hooks, citations: cached.citations, variants: (cached as any).variants ?? null, rulesVersion };
 }
 
 export async function setCachedHooks(
@@ -65,6 +66,7 @@ export async function setCachedHooks(
   citations: unknown,
   profileUpdatedAt?: string | null,
   targetRole?: string,
+  variants?: unknown,
 ) {
   const urlHash = await hashUrl(url, targetRole);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
@@ -76,6 +78,7 @@ export async function setCachedHooks(
       url,
       hooks,
       citations,
+      variants: variants ?? null,
       rulesVersion: RULES_VERSION,
       profileUpdatedAt: profileUpdatedAt ?? null,
       expiresAt,
@@ -85,6 +88,7 @@ export async function setCachedHooks(
       set: {
         hooks,
         citations,
+        variants: variants ?? null,
         rulesVersion: RULES_VERSION,
         profileUpdatedAt: profileUpdatedAt ?? null,
         expiresAt,
