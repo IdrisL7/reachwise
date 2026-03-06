@@ -15,7 +15,7 @@ const exampleHooks = [
     angle: "risk" as const,
     confidence: "high" as const,
     tier: "A" as const,
-    text: "Shopify's B2B channel now supports company-specific pricing and net terms. If your mid-market accounts aren't on it yet, are you losing deals to sellers who are?",
+    text: "Shopify\u2019s B2B channel now supports company-specific pricing + net terms. Are your accounts asking for that yet\u2014or still fine with standard checkout?",
     evidence: '"Shopify launched a dedicated B2B sales channel with company-specific pricing, net payment terms, and custom catalogs..."',
     source: "Shopify B2B Wholesale Channel — Product Blog",
     date: "2025",
@@ -62,6 +62,11 @@ export function HeroHookPreview() {
             </div>
           </div>
 
+          {/* Sample label */}
+          <div className="mb-3 rounded-md border border-zinc-700/30 bg-zinc-800/30 px-3 py-1.5 text-center text-[0.6875rem] text-zinc-500">
+            Sample output (with receipts). Enter your own company above for fresh signals.
+          </div>
+
           {/* Hooks header */}
           <div className="mb-3 flex items-center justify-between">
             <div className="text-[0.6875rem] font-medium uppercase tracking-[0.12em] text-zinc-500">
@@ -106,6 +111,9 @@ export function HeroHookPreview() {
                       : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
                   }`}>
                     Tier {hook.tier}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-zinc-600/30 bg-zinc-800/40 px-2 py-0.5 text-[0.5rem] font-medium text-zinc-500">
+                    Role: VP Sales
                   </span>
                 </div>
                 <p className="text-[0.75rem] leading-[1.5] text-zinc-400">

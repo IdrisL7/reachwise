@@ -25,7 +25,7 @@ export function HeroSection() {
           </p>
 
           <p className="mt-4 text-[0.8125rem] font-medium text-zinc-500">
-            Every message cites a source. Execution pauses on reply/OOO/bounce and respects daily caps.
+            Every message cites a source. Execution stops on reply/OOO/bounce and respects caps + approvals.
           </p>
 
           <div className="mt-12 flex flex-wrap items-center gap-4">
