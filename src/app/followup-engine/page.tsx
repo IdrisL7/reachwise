@@ -1,6 +1,13 @@
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Follow-Up Engine — GetSignalHooks",
+  description:
+    "Automate multi-channel follow-ups with guardrails. Import leads, generate evidence-backed sequences, and execute safely with approvals, caps, and stop-on-reply.",
+};
 
 const steps = [
   {

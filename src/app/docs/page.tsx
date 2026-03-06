@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { Navbar } from "@/components/navbar";
 import { Footer } from "@/components/footer";
+
+export const metadata: Metadata = {
+  title: "API Documentation — GetSignalHooks",
+  description:
+    "GetSignalHooks API reference. Generate evidence-backed hooks, manage leads, run sequences, and integrate with your CRM programmatically.",
+};
 
 const API_BASE = "https://app.getsignalhooks.com";
 
