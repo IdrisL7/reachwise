@@ -27,8 +27,9 @@ export type PreviousMessage = {
 };
 
 export type FollowUpResult = {
-  subject: string;
+  subject?: string;
   body: string;
+  channel: string;
   hookUsed?: {
     angle: string;
     evidence: string;
@@ -231,6 +232,49 @@ function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[], avoidA
 }
 
 // ---------------------------------------------------------------------------
+// Channel-specific system prompts
+// ---------------------------------------------------------------------------
+
+function getChannelSystemPrompt(channel: string): string {
+  switch (channel) {
+    case "linkedin_connection":
+      return `You write LinkedIn connection request messages. Keep under 300 characters. Be personal, reference something specific about the person or company. No salesy language. Just a genuine reason to connect.`;
+    case "linkedin_message":
+      return `You write LinkedIn direct messages. Keep under 1900 characters. Reference evidence about their company. Be conversational, not formal. No "Dear" or "Hi there". Get to the point quickly.`;
+    case "cold_call":
+      return `You write cold call opener scripts. Keep under 150 words. Structure: introduce yourself (1 sentence), reference trigger/evidence (1 sentence), ask permission-based opener question. Include a talk track for likely objections.`;
+    case "video_script":
+      return `You write personalized video outreach scripts. Keep under 200 words. Structure: greet by name, reference specific evidence about their company, explain why it matters to them, soft CTA. Conversational tone, meant to be spoken on camera.`;
+    default:
+      return ""; // email uses existing system prompt
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Build user prompt for non-email channels
+// ---------------------------------------------------------------------------
+
+function buildChannelUserPrompt(lead: LeadInfo, hook: Hook): string {
+  const lines: string[] = [];
+
+  if (lead.companyWebsite) lines.push(`Company URL: ${lead.companyWebsite}`);
+  if (lead.companyName) lines.push(`Company: ${lead.companyName}`);
+  if (lead.name) lines.push(`Prospect name: ${lead.name}`);
+  if (lead.title) lines.push(`Prospect title: ${lead.title}`);
+
+  lines.push("");
+  lines.push("## Hook / evidence to reference:");
+  lines.push(`- Angle: ${hook.angle}`);
+  lines.push(`- Hook text: ${hook.hook}`);
+  lines.push(`- Evidence snippet: ${hook.evidence_snippet}`);
+  lines.push(`- Source: ${hook.source_title}`);
+
+  lines.push("");
+  lines.push("Write the message now. Return only the message text, no JSON wrapping.");
+  return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
 // Main: generate a follow-up email
 // ---------------------------------------------------------------------------
 
@@ -244,6 +288,7 @@ export async function generateFollowUp(opts: {
   wordCountHint?: number;
   senderProfile?: { name: string; role?: string; company?: string };
   avoidAngle?: string;
+  channel?: string;
 }): Promise<FollowUpResult> {
   const claudeApiKey = process.env.CLAUDE_API_KEY;
   if (!claudeApiKey) {
@@ -265,7 +310,40 @@ export async function generateFollowUp(opts: {
     throw new Error("Could not generate any hooks for this lead's company");
   }
 
+  const channel = opts.channel || "email";
   const hook = pickBestHook(hooks, opts.previousMessages, opts.avoidAngle);
+
+  // --- Non-email channels: simpler Claude call, no subject line ---
+  if (channel !== "email") {
+    const channelPrompt = getChannelSystemPrompt(channel);
+    if (!channelPrompt) {
+      throw new Error(`Unsupported channel: ${channel}`);
+    }
+
+    const userPrompt = buildChannelUserPrompt(opts.lead, hook);
+    const raw = await callClaudeText(channelPrompt, userPrompt, claudeApiKey, 800);
+
+    // Strip any accidental markdown fences
+    const body = raw
+      .replace(/^```(?:\w+)?\s*/i, "")
+      .replace(/\s*```\s*$/, "")
+      .trim();
+
+    if (!body) {
+      throw new Error("LLM returned empty content for channel message");
+    }
+
+    return {
+      body,
+      channel,
+      hookUsed: {
+        angle: hook.angle,
+        evidence: hook.evidence_snippet,
+      },
+    };
+  }
+
+  // --- Email channel: full generation with subject line ---
   const sequenceType = mapStepToSequenceType(opts.currentStep, opts.sequence.maxSteps);
   const tone = opts.tone || "direct";
   const wordCountHint = opts.wordCountHint || (sequenceType === "first" ? 80 : 60);
@@ -303,6 +381,7 @@ export async function generateFollowUp(opts: {
   return {
     subject: parsed.subject,
     body: parsed.body,
+    channel,
     hookUsed: {
       angle: hook.angle,
       evidence: hook.evidence_snippet,

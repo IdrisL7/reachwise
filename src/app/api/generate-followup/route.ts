@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
 
     const currentStep = typeof body.step === "number" ? body.step : lead.sequenceStep;
 
+    const channel = body.channel || "email";
+
     const result = await generateFollowUp({
       lead: {
         email: lead.email,
@@ -68,16 +70,21 @@ export async function POST(request: NextRequest) {
       tone: body.style?.tone,
       wordCountHint: body.style?.word_count_hint,
       avoidAngle: body.avoid_angle,
+      channel,
     });
 
     const mode = body.mode || "send";
 
+    const responsePayload: Record<string, any> = { body: result.body };
+    if (result.subject) responsePayload.subject = result.subject;
+
     return NextResponse.json({
-      email: { subject: result.subject, body: result.body },
+      email: responsePayload,
       meta: {
         step: currentStep,
         angle: result.hookUsed?.angle,
         sequence_id: sequenceId,
+        channel: result.channel,
         mode,
       },
     });
