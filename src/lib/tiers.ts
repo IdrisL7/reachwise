@@ -26,6 +26,7 @@ export interface Tier {
     multiChannel: boolean;
     sequences: boolean;
     intentScoring: boolean;
+    agenticExecution: boolean;
   };
   cta: string;
   highlighted?: boolean;
@@ -55,6 +56,7 @@ export const TIERS: Tier[] = [
       multiChannel: false,
       sequences: true,
       intentScoring: false,
+      agenticExecution: false,
     },
     cta: "Start 7-day free trial",
   },
@@ -86,6 +88,7 @@ export const TIERS: Tier[] = [
       multiChannel: true,
       sequences: true,
       intentScoring: true,
+      agenticExecution: true,
     },
     cta: "Get started",
     highlighted: true,
@@ -118,6 +121,7 @@ export const TIERS: Tier[] = [
       multiChannel: true,
       sequences: true,
       intentScoring: true,
+      agenticExecution: true,
     },
     cta: "Get started",
   },
