@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { TierId } from "@/lib/tiers";
 
@@ -267,4 +267,41 @@ export const leadSequences = sqliteTable("lead_sequences", {
   index("lead_sequences_lead_id_idx").on(table.leadId),
   index("lead_sequences_sequence_id_idx").on(table.sequenceId),
   index("lead_sequences_status_idx").on(table.status),
+]);
+
+// ── Intent scoring tables ──
+
+export const intentSignals = sqliteTable("intent_signals", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  leadId: text("lead_id").references(() => leads.id),
+  companyUrl: text("company_url").notNull(),
+  signalType: text("signal_type", {
+    enum: ["hiring", "funding", "tech_change", "growth", "news"],
+  }).notNull(),
+  summary: text("summary").notNull(),
+  confidence: real("confidence").notNull(),
+  sourceUrl: text("source_url"),
+  rawEvidence: text("raw_evidence"),
+  detectedAt: text("detected_at").notNull(),
+  scoreContribution: integer("score_contribution").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  expiresAt: text("expires_at").notNull(),
+}, (table) => [
+  index("intent_signals_lead_id_idx").on(table.leadId),
+  index("intent_signals_company_url_idx").on(table.companyUrl),
+  index("intent_signals_expires_at_idx").on(table.expiresAt),
+]);
+
+export const leadScores = sqliteTable("lead_scores", {
+  leadId: text("lead_id").primaryKey().references(() => leads.id),
+  score: integer("score").notNull().default(0),
+  temperature: text("temperature", {
+    enum: ["hot", "warm", "cold"],
+  }).notNull().default("cold"),
+  signalsCount: integer("signals_count").notNull().default(0),
+  lastScoredAt: text("last_scored_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("lead_scores_score_idx").on(table.score),
+  index("lead_scores_temperature_idx").on(table.temperature),
 ]);
