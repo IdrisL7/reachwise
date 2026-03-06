@@ -19,6 +19,7 @@ interface BatchResult {
   error: string | null;
   suggestion?: string;
   lowSignal?: boolean;
+  hookVariants?: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }>;
 }
 
 export default function BatchPage() {
@@ -27,6 +28,7 @@ export default function BatchPage() {
   const [error, setError] = useState("");
   const [results, setResults] = useState<BatchResult[]>([]);
   const [copiedIdx, setCopiedIdx] = useState<string | null>(null);
+  const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
   const [progress, setProgress] = useState(0);
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
@@ -115,8 +117,8 @@ export default function BatchPage() {
     setTimeout(() => setCopiedIdx(null), 2000);
   }
 
-  async function copySingleHook(hook: Hook, key: string) {
-    let text = hook.hook;
+  async function copySingleHook(hook: Hook, key: string, overrideText?: string) {
+    let text = overrideText || hook.hook;
     if (hook.evidence_snippet) text += `\nEvidence: ${hook.evidence_snippet}`;
     if (hook.source_url) text += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(text);
@@ -307,7 +309,46 @@ export default function BatchPage() {
                           </span>
                           <span className="text-[10px] text-zinc-500">{hook.angle}</span>
                         </div>
-                        <p className="text-sm text-zinc-200 mb-1.5">{hook.hook}</p>
+                        {(() => {
+                          const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
+                          if (!variantEntry || variantEntry.variants.length === 0) return null;
+                          const channels = [
+                            { key: "email", label: "Email" },
+                            { key: "linkedin_connection", label: "LinkedIn" },
+                            { key: "linkedin_message", label: "LinkedIn DM" },
+                            { key: "cold_call", label: "Call" },
+                            { key: "video_script", label: "Video" },
+                          ];
+                          const chanKey = `${idx}-${hi}`;
+                          const active = activeChannel[chanKey] || "email";
+                          return (
+                            <div className="flex gap-1 mb-1.5 flex-wrap">
+                              {channels.map((ch) => (
+                                <button
+                                  key={ch.key}
+                                  onClick={() => setActiveChannel((prev) => ({ ...prev, [chanKey]: ch.key }))}
+                                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+                                    active === ch.key
+                                      ? "bg-emerald-900/40 border-emerald-700 text-emerald-300"
+                                      : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                                  }`}
+                                >
+                                  {ch.label}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                        <p className="text-sm text-zinc-200 mb-1.5">
+                          {(() => {
+                            const chanKey = `${idx}-${hi}`;
+                            const active = activeChannel[chanKey] || "email";
+                            if (active === "email") return hook.hook;
+                            const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
+                            const variant = variantEntry?.variants.find((v) => v.channel === active);
+                            return variant?.text || hook.hook;
+                          })()}
+                        </p>
                         {hook.evidence_snippet && (
                           <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-2 mb-1.5">
                             {hook.evidence_snippet}
@@ -325,7 +366,16 @@ export default function BatchPage() {
                             </a>
                           )}
                           <button
-                            onClick={() => copySingleHook(hook, `${idx}-${hi}`)}
+                            onClick={() => {
+                              const chanKey = `${idx}-${hi}`;
+                              const active = activeChannel[chanKey] || "email";
+                              let overrideText: string | undefined;
+                              if (active !== "email") {
+                                const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
+                                overrideText = variantEntry?.variants.find((v) => v.channel === active)?.text;
+                              }
+                              copySingleHook(hook, `${idx}-${hi}`, overrideText);
+                            }}
                             className="text-[10px] font-medium px-2 py-1 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 ml-auto"
                           >
                             {copiedIdx === `${idx}-${hi}` ? "Copied!" : hook.evidence_snippet ? "Copy + Evidence" : "Copy"}

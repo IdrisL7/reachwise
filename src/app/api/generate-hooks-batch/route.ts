@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
-import { generateHooksForUrl, type Hook } from "@/lib/hooks";
+import { generateHooksForUrl, generateChannelVariants, type Hook } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
 import { checkTrialActive, checkBatchSize, getLimits } from "@/lib/tier-guard";
 import { db, schema } from "@/lib/db";
@@ -27,6 +27,7 @@ type BatchItemResult = {
   error: string | null;
   suggestion?: string;
   lowSignal?: boolean;
+  hookVariants?: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }>;
 };
 
 type BatchResponse = {
@@ -101,12 +102,21 @@ export async function POST(request: Request) {
             pitchContext: item.pitchContext,
             count: maxHooksPerUrl,
           });
+          let itemVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> | undefined;
+          if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
+            try {
+              const claudeKey = process.env.CLAUDE_API_KEY!;
+              const withVars = await generateChannelVariants(result.hooks, claudeKey);
+              itemVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
+            } catch {}
+          }
           return {
             url,
             hooks: result.hooks,
             error: null,
             suggestion: result.suggestion,
             lowSignal: result.lowSignal,
+            hookVariants: itemVariants,
           };
         } catch (err) {
           console.error(`generate-hooks-batch: failed for ${url}`, err);
