@@ -43,6 +43,9 @@ src/
 │   │   ├── hooks/                  # Hook generator UI
 │   │   ├── leads/                  # Lead management + CSV upload
 │   │   ├── analytics/              # Usage analytics
+│   │   ├── sequences/              # Sequence builder UI
+│   │   ├── inbox/                  # Draft approval + notifications
+│   │   ├── batch/                  # Batch hook generation UI
 │   │   └── settings/               # API keys, integrations, billing
 │   ├── internal/                   # Internal admin tools
 │   └── api/                        # 38 API route handlers
@@ -59,7 +62,8 @@ src/
     ├── integrations/               # HubSpot + Salesforce OAuth & sync
     ├── n8n/                        # Docker container management
     ├── email/                      # SendGrid integration
-    └── prospect-agent/             # LinkedIn DM automation
+    ├── intent.ts                    # Intent signal research + scoring
+    └── reply-analysis.ts            # Reply classification + suggested responses
 ```
 
 ## Database Schema
@@ -78,6 +82,16 @@ src/
 | `n8n_instances` | Per-customer n8n workflow containers |
 | `api_keys` | Self-serve API keys (SHA-256 hashed, `gsh_` prefix) |
 | `claim_locks` | Distributed locks for concurrent processing |
+| `sequences` | Custom outreach sequence definitions |
+| `lead_sequences` | Lead-to-sequence assignment + progress |
+| `intent_signals` | Cached buying signals per company |
+| `lead_scores` | Computed lead temperature scores |
+| `notifications` | In-app notification queue |
+| `hook_cache` | Hook generation cache (48h TTL) |
+| `rate_limits` | Rate limiting state |
+| `stripe_events` | Idempotent Stripe event processing |
+| `workspaces` | User workspaces |
+| `workspace_profiles` | Workspace selling context |
 
 ## API Routes
 
@@ -123,6 +137,7 @@ src/
 | `/api/stripe/portal` | POST | Open Stripe Customer Portal |
 | `/api/webhooks/stripe` | POST | Stripe event webhook handler |
 | `/api/webhooks/sendgrid` | POST | SendGrid event webhook handler |
+| `/api/webhooks/sendgrid-inbound` | POST | Inbound reply parsing + classification |
 | `/api/auth/register` | POST | User registration |
 | `/api/auth/[...nextauth]` | * | NextAuth session routes |
 | `/api/auth/forgot-password` | POST | Send password reset email |
@@ -134,22 +149,41 @@ src/
 | `/api/cron/onboarding-emails` | GET | Onboarding drip sequence (Day 1/3/6) |
 | `/api/api-keys` | POST, GET, DELETE | API key management |
 
-### Workflows & Prospect Agent
+### Sequences & Lead Sequences
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sequences` | GET, POST | List/create sequences |
+| `/api/sequences/[id]` | GET, PATCH, DELETE | Manage single sequence |
+| `/api/lead-sequences` | POST | Assign sequence to lead |
+| `/api/lead-sequences/[id]` | PATCH | Advance/update lead sequence |
+
+### Intent Scoring
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/leads/[id]/intent` | POST | Score lead intent signals |
+| `/api/cron/intent-refresh` | GET | Daily intent score refresh |
+
+### Notifications & Drafts
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/notifications` | GET, PATCH | List/mark-read notifications |
+| `/api/notifications/[id]` | PATCH, DELETE | Manage single notification |
+| `/api/drafts/[id]/approve` | POST | Approve draft message |
+| `/api/drafts/[id]/reject` | POST | Reject draft message |
+
+### Workflows
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/n8n-instances` | POST, GET, PATCH | n8n container management |
 | `/api/n8n-templates` | GET | List workflow templates |
-| `/api/prospect-agent/search` | POST | Prospect search via Brave |
-| `/api/prospect-agent/send-dms` | POST | Generate LinkedIn DMs |
-| `/api/prospect-agent/dm-log` | GET | DM activity log |
 
 ## Pricing Tiers
 
 | Tier | Price | Hooks/Month | Batch Size | Key Features |
 |------|-------|-------------|------------|--------------|
-| Starter | £29 | 200 | 10 | Evidence-first hooks, 7-day free trial |
-| Pro | £149 | 750 | 75 | + Follow-Up Engine, n8n templates |
-| Concierge | £499 | 10,000 | 75 | + Done-for-you setup, priority support |
+| Starter | £29 | 200 | 10 | Evidence-backed hooks, basic sequences, role selection |
+| Pro | £149 | 750 | 75 | + Multi-channel, intent scoring, inbox, reply analysis |
+| Concierge | £499 | 10,000 | 75 | + Autonomous execution, white-glove setup |
 
 ## Getting Started
 
@@ -192,6 +226,7 @@ Open http://localhost:3000
 | `STRIPE_PRICE_STARTER` | Stripe Price ID for Starter tier |
 | `STRIPE_PRICE_PRO` | Stripe Price ID for Pro tier |
 | `STRIPE_PRICE_CONCIERGE` | Stripe Price ID for Concierge tier |
+| `NEXT_PUBLIC_APP_URL` | Public app URL (e.g. `https://www.getsignalhooks.com`) |
 
 **Optional (CRM integrations):**
 | Variable | Description |
@@ -200,12 +235,6 @@ Open http://localhost:3000
 | `HUBSPOT_CLIENT_SECRET` | HubSpot OAuth app client secret |
 | `SALESFORCE_CLIENT_ID` | Salesforce Connected App client ID |
 | `SALESFORCE_CLIENT_SECRET` | Salesforce Connected App client secret |
-
-**Optional (Prospect Agent):**
-| Variable | Description |
-|----------|-------------|
-| `TURSO_PROSPECT_DATABASE_URL` | Separate Turso DB for prospect agent |
-| `TURSO_PROSPECT_AUTH_TOKEN` | Prospect DB auth token |
 
 **Optional (VPS/Docker deployment):**
 | Variable | Description |
@@ -287,6 +316,12 @@ This runs the Next.js app + Caddy reverse proxy with automatic SSL.
 ## Key Features
 
 - **Evidence-First Hooks**: AI generates hooks anchored on real public signals (earnings, hiring, tech changes) with evidence tier classification (A/B/C) and source citations
+- **Multi-Channel Variants**: LinkedIn, cold call, video scripts alongside email hooks
+- **Custom Sequences**: Multi-step, multi-channel sequence builder with templates
+- **Intent Scoring**: Buying signal detection (hiring, funding, tech changes) with lead temperature
+- **Inbox & Approvals**: Draft review, approve/reject, notification feed
+- **Reply Analysis**: Inbound reply classification with suggested responses
+- **Autonomous Execution**: n8n-based agentic sequences with guardrails
 - **Follow-Up Engine**: Automated multi-step email sequences with angle rotation to avoid repetition
 - **CRM Sync**: Bidirectional sync with HubSpot and Salesforce (OAuth, auto-refresh tokens)
 - **Per-Customer n8n**: Isolated Docker containers for workflow automation per user
