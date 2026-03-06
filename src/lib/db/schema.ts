@@ -88,6 +88,7 @@ export const leads = sqliteTable("leads", {
 }, (table) => [
   index("leads_user_id_idx").on(table.userId),
   index("leads_status_idx").on(table.status),
+  index("leads_created_at_idx").on(table.createdAt),
 ]);
 
 export const claimLocks = sqliteTable("claim_locks", {
@@ -170,6 +171,7 @@ export const outboundMessages = sqliteTable("outbound_messages", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 }, (table) => [
   index("outbound_messages_lead_id_idx").on(table.leadId),
+  index("outbound_messages_status_idx").on(table.status),
 ]);
 
 // ── Caching & rate limiting ──
@@ -184,7 +186,9 @@ export const hookCache = sqliteTable("hook_cache", {
   profileUpdatedAt: text("profile_updated_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   expiresAt: text("expires_at").notNull(),
-});
+}, (table) => [
+  index("hook_cache_expires_at_idx").on(table.expiresAt),
+]);
 
 // ── Workspaces ──
 
@@ -212,7 +216,9 @@ export const rateLimits = sqliteTable("rate_limits", {
   key: text("key").notNull().unique(),
   count: integer("count").notNull().default(1),
   resetAt: text("reset_at").notNull(),
-});
+}, (table) => [
+  index("rate_limits_reset_at_idx").on(table.resetAt),
+]);
 
 export const stripeEvents = sqliteTable("stripe_events", {
   eventId: text("event_id").primaryKey(),
