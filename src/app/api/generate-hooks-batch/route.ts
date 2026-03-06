@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { generateHooksForUrl, generateChannelVariants, type Hook } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
 import { checkTrialActive, checkBatchSize, getLimits } from "@/lib/tier-guard";
+import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
 import { db, schema } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
 import type { TierId } from "@/lib/tiers";
@@ -28,6 +29,7 @@ type BatchItemResult = {
   suggestion?: string;
   lowSignal?: boolean;
   hookVariants?: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }>;
+  intent?: { score: number; temperature: string; signalsCount: number } | null;
 };
 
 type BatchResponse = {
@@ -110,6 +112,31 @@ export async function POST(request: Request) {
               itemVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
             } catch {}
           }
+          let intentData: { score: number; temperature: string; signalsCount: number } | null = null;
+          if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
+            try {
+              const braveKey = process.env.BRAVE_API_KEY;
+              const claudeKey = process.env.CLAUDE_API_KEY;
+              if (braveKey && claudeKey) {
+                // Derive company name from URL hostname
+                let companyName: string;
+                try {
+                  companyName = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "").split(".")[0];
+                } catch {
+                  companyName = url;
+                }
+                const signals = await researchIntentSignals(url, companyName, braveKey, claudeKey);
+                const score = computeIntentScore(signals);
+                intentData = {
+                  score,
+                  temperature: getTemperature(score),
+                  signalsCount: signals.length,
+                };
+              }
+            } catch {
+              // Non-blocking
+            }
+          }
           return {
             url,
             hooks: result.hooks,
@@ -117,6 +144,7 @@ export async function POST(request: Request) {
             suggestion: result.suggestion,
             lowSignal: result.lowSignal,
             hookVariants: itemVariants,
+            intent: intentData,
           };
         } catch (err) {
           console.error(`generate-hooks-batch: failed for ${url}`, err);

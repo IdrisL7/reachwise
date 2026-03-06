@@ -20,6 +20,7 @@ interface BatchResult {
   suggestion?: string;
   lowSignal?: boolean;
   hookVariants?: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }>;
+  intent?: { score: number; temperature: string; signalsCount: number } | null;
 }
 
 export default function BatchPage() {
@@ -276,6 +277,17 @@ export default function BatchPage() {
                     {result.lowSignal && (
                       <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-amber-400 bg-amber-900/20 border-amber-800/50 shrink-0">
                         Low signal
+                      </span>
+                    )}
+                    {result.intent && (
+                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${
+                        result.intent.temperature === "hot"
+                          ? "bg-red-900/30 text-red-400 border-red-800"
+                          : result.intent.temperature === "warm"
+                            ? "bg-amber-900/30 text-amber-400 border-amber-800"
+                            : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                      }`}>
+                        {result.intent.score} {result.intent.temperature === "hot" ? "Hot" : result.intent.temperature === "warm" ? "Warm" : "Cold"}
                       </span>
                     )}
                   </div>
