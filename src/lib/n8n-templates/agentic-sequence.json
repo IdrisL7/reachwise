@@ -1,0 +1,1019 @@
+{
+  "name": "GetSignalHooks — Agentic Sequence Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 4
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{$vars.GSH_API_BASE}}/api/followup/due",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "limit",
+              "value": "50"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "check-due-leads",
+      "name": "Check Due Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-leads",
+              "leftValue": "={{$json.leads.length}}",
+              "rightValue": "0",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "has-due-leads",
+      "name": "Has Due Leads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "leads",
+        "options": {}
+      },
+      "id": "split-items",
+      "name": "Split Out Leads",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [660, 200]
+    },
+    {
+      "parameters": {
+        "batchSize": 25,
+        "options": {}
+      },
+      "id": "split-in-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [880, 200]
+    },
+    {
+      "parameters": {
+        "amount": 15,
+        "unit": "seconds"
+      },
+      "id": "batch-wait",
+      "name": "Wait Between Batches",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/claim",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$json.lead_id}}\",\n  \"run_id\": \"{{$execution.id}}\",\n  \"lock_ttl_minutes\": 30\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "claim-lead-lock",
+      "name": "Claim Lead Lock",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-claimed",
+              "leftValue": "={{$json.claimed}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-claimed",
+      "name": "IF — Claimed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1320, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/safety-check",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"email_to\": \"{{$node['Split Out Leads'].json.email_to}}\",\n  \"rep_id\": \"{{$node['Split Out Leads'].json.rep_id || ''}}\",\n  \"account_domain\": \"{{$node['Split Out Leads'].json.account_domain || ''}}\",\n  \"timezone\": \"{{$node['Split Out Leads'].json.timezone || 'UTC'}}\",\n  \"step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"channel\": \"{{$node['Split Out Leads'].json.channel || 'email'}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "safety-check",
+      "name": "Safety Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-safe",
+              "leftValue": "={{$json.safe_to_send}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "if-safe",
+      "name": "IF — Safe to Send?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1760, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/pause",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"lock_id\": \"{{$node['Claim Lead Lock'].json.lock_id}}\",\n  \"reason\": \"{{$node['Safety Check'].json.reason}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "mark-paused",
+      "name": "Mark Paused",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/audit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"event\": \"paused\",\n  \"reason\": \"{{$node['Safety Check'].json.reason}}\",\n  \"run_id\": \"{{$execution.id}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "audit-paused",
+      "name": "Audit Log (paused)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-email-channel",
+              "leftValue": "={{$node['Split Out Leads'].json.channel || 'email'}}",
+              "rightValue": "email",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "channel-router",
+      "name": "Channel Router",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1980, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/generate-followup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"mode\": \"{{$node['Split Out Leads'].json.mode || 'send'}}\",\n  \"channel\": \"email\",\n  \"avoid_angle\": \"{{$node['Split Out Leads'].json.last_angle_used || ''}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "generate-email-content",
+      "name": "Generate Content (Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, -100],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/generate-followup",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"mode\": \"draft\",\n  \"channel\": \"{{$node['Split Out Leads'].json.channel}}\",\n  \"avoid_angle\": \"{{$node['Split Out Leads'].json.last_angle_used || ''}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "generate-non-email-content",
+      "name": "Generate Content (Non-Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2200, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is-approval-mode",
+              "leftValue": "={{$node['Split Out Leads'].json.approval_mode}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "approval-mode-check",
+      "name": "IF — Approval Mode?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2420, -100]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$vars.SENDER_EMAIL}}",
+        "toEmail": "={{$node['Split Out Leads'].json.email_to}}",
+        "subject": "={{$node['Generate Content (Email)'].json.email.subject}}",
+        "emailType": "text",
+        "message": "={{$node['Generate Content (Email)'].json.email.body}}",
+        "options": {}
+      },
+      "id": "send-email",
+      "name": "Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [2640, -200],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "GMAIL_CRED",
+          "name": "Gmail"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/leads/{{$node['Split Out Leads'].json.lead_id}}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"body\": {{JSON.stringify($node['Generate Content (Email)'].json.email.body)}},\n  \"subject\": {{JSON.stringify($node['Generate Content (Email)'].json.email.subject)}},\n  \"direction\": \"outbound\",\n  \"status\": \"sent\",\n  \"sequence_step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"channel\": \"email\",\n  \"metadata\": {\n    \"angle\": \"{{$node['Generate Content (Email)'].json.meta.angle}}\",\n    \"run_id\": \"{{$execution.id}}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "record-message-sent",
+      "name": "Record Message (Sent)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, -200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/leads/{{$node['Split Out Leads'].json.lead_id}}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"body\": {{JSON.stringify($node['Generate Content (Email)'].json.email.body)}},\n  \"subject\": {{JSON.stringify($node['Generate Content (Email)'].json.email.subject)}},\n  \"direction\": \"outbound\",\n  \"status\": \"draft\",\n  \"sequence_step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"channel\": \"email\",\n  \"metadata\": {\n    \"angle\": \"{{$node['Generate Content (Email)'].json.meta.angle}}\",\n    \"run_id\": \"{{$execution.id}}\",\n    \"approval_mode\": true\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "draft-save-email",
+      "name": "Draft Save (Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/leads/{{$node['Split Out Leads'].json.lead_id}}/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"body\": {{JSON.stringify($node['Generate Content (Non-Email)'].json.email.body)}},\n  \"subject\": {{JSON.stringify($node['Generate Content (Non-Email)'].json.email.subject || '')}},\n  \"direction\": \"outbound\",\n  \"status\": \"draft\",\n  \"sequence_step\": {{$node['Split Out Leads'].json.followup_step}},\n  \"channel\": \"{{$node['Split Out Leads'].json.channel}}\",\n  \"metadata\": {\n    \"angle\": \"{{$node['Generate Content (Non-Email)'].json.meta.angle}}\",\n    \"run_id\": \"{{$execution.id}}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "draft-save-non-email",
+      "name": "Draft Save (Non-Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$vars.GSH_API_BASE}}/api/lead-sequences/{{$node['Split Out Leads'].json.lead_sequence_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"advance\",\n  \"run_id\": \"{{$execution.id}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "advance-step-sent",
+      "name": "Advance Step (Sent)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3080, -200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$vars.GSH_API_BASE}}/api/lead-sequences/{{$node['Split Out Leads'].json.lead_sequence_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"advance\",\n  \"run_id\": \"{{$execution.id}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "advance-step-draft-email",
+      "name": "Advance Step (Draft Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{$vars.GSH_API_BASE}}/api/lead-sequences/{{$node['Split Out Leads'].json.lead_sequence_id}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"action\": \"advance\",\n  \"run_id\": \"{{$execution.id}}\"\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "advance-step-draft-non-email",
+      "name": "Advance Step (Draft Non-Email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2640, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/audit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"event\": \"sent\",\n  \"reason\": \"email_delivered\",\n  \"run_id\": \"{{$execution.id}}\",\n  \"metadata\": {\n    \"step\": {{$node['Split Out Leads'].json.followup_step}},\n    \"channel\": \"email\",\n    \"angle\": \"{{$node['Generate Content (Email)'].json.meta.angle}}\",\n    \"subject\": {{JSON.stringify($node['Generate Content (Email)'].json.email.subject)}}\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "audit-sent",
+      "name": "Audit Log (sent)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3300, -200],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/audit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"event\": \"draft_saved\",\n  \"reason\": \"approval_mode\",\n  \"run_id\": \"{{$execution.id}}\",\n  \"metadata\": {\n    \"step\": {{$node['Split Out Leads'].json.followup_step}},\n    \"channel\": \"email\",\n    \"subject\": {{JSON.stringify($node['Generate Content (Email)'].json.email.subject)}}\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "audit-draft-email",
+      "name": "Audit Log (draft email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3080, 0],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$vars.GSH_API_BASE}}/api/followups/audit",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"lead_id\": \"{{$node['Split Out Leads'].json.lead_id}}\",\n  \"event\": \"draft_saved\",\n  \"reason\": \"non_email_channel\",\n  \"run_id\": \"{{$execution.id}}\",\n  \"metadata\": {\n    \"step\": {{$node['Split Out Leads'].json.followup_step}},\n    \"channel\": \"{{$node['Split Out Leads'].json.channel}}\"\n  }\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "audit-draft-non-email",
+      "name": "Audit Log (draft non-email)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2860, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "GSH_AUTH",
+          "name": "GSH Auth"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-leads-end",
+      "name": "No Leads — End",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [660, 400]
+    },
+    {
+      "parameters": {},
+      "id": "skip-not-claimed",
+      "name": "Skip (Not Claimed)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1540, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check Due Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Due Leads": {
+      "main": [
+        [
+          {
+            "node": "Has Due Leads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Due Leads?": {
+      "main": [
+        [
+          {
+            "node": "Split Out Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Leads — End",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Leads": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "Wait Between Batches",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Claim Lead Lock",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Between Batches": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Lead Lock": {
+      "main": [
+        [
+          {
+            "node": "IF — Claimed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Claimed?": {
+      "main": [
+        [
+          {
+            "node": "Safety Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Skip (Not Claimed)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Safety Check": {
+      "main": [
+        [
+          {
+            "node": "IF — Safe to Send?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Safe to Send?": {
+      "main": [
+        [
+          {
+            "node": "Channel Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Paused",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Paused": {
+      "main": [
+        [
+          {
+            "node": "Audit Log (paused)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Channel Router": {
+      "main": [
+        [
+          {
+            "node": "Generate Content (Email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate Content (Non-Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Content (Email)": {
+      "main": [
+        [
+          {
+            "node": "IF — Approval Mode?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF — Approval Mode?": {
+      "main": [
+        [
+          {
+            "node": "Draft Save (Email)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Record Message (Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Message (Sent)": {
+      "main": [
+        [
+          {
+            "node": "Advance Step (Sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advance Step (Sent)": {
+      "main": [
+        [
+          {
+            "node": "Audit Log (sent)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Save (Email)": {
+      "main": [
+        [
+          {
+            "node": "Advance Step (Draft Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advance Step (Draft Email)": {
+      "main": [
+        [
+          {
+            "node": "Audit Log (draft email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Content (Non-Email)": {
+      "main": [
+        [
+          {
+            "node": "Draft Save (Non-Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Draft Save (Non-Email)": {
+      "main": [
+        [
+          {
+            "node": "Advance Step (Draft Non-Email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Advance Step (Draft Non-Email)": {
+      "main": [
+        [
+          {
+            "node": "Audit Log (draft non-email)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "GetSignalHooks",
+      "id": "gsh-agentic-sequence"
+    }
+  ],
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "getsignalhooks-agentic-sequence"
+  },
+  "pinData": {}
+}

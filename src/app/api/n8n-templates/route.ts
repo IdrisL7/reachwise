@@ -5,6 +5,7 @@ import followupCore from "@/lib/n8n-templates/followup-core.json";
 import hubspotSync from "@/lib/n8n-templates/hubspot-sync.json";
 import salesforceSync from "@/lib/n8n-templates/salesforce-sync.json";
 import customWebhook from "@/lib/n8n-templates/custom-webhook.json";
+import agenticSequence from "@/lib/n8n-templates/agentic-sequence.json";
 
 const TEMPLATES = {
   "followup-core": {
@@ -46,6 +47,16 @@ const TEMPLATES = {
     requiredCredentials: ["GSH_AUTH"],
     requiredVars: ["GSH_API_BASE"],
     workflow: customWebhook,
+  },
+  "agentic-sequence": {
+    id: "agentic-sequence",
+    name: "Agentic Sequence Engine",
+    description:
+      "Multi-channel sequence execution with approval mode, intent scoring priority, and auto-pause.",
+    category: "automation",
+    requiredCredentials: ["GSH_AUTH", "GMAIL_CRED"],
+    requiredVars: ["GSH_API_BASE", "SENDER_EMAIL"],
+    workflow: agenticSequence,
   },
 } as const;
 
