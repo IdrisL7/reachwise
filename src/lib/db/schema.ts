@@ -182,6 +182,7 @@ export const hookCache = sqliteTable("hook_cache", {
   url: text("url").notNull(),
   hooks: text("hooks", { mode: "json" }).notNull(),
   citations: text("citations", { mode: "json" }),
+  variants: text("variants", { mode: "json" }),
   rulesVersion: integer("rules_version"),
   profileUpdatedAt: text("profile_updated_at"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
@@ -225,3 +226,45 @@ export const stripeEvents = sqliteTable("stripe_events", {
   type: text("type").notNull(),
   processedAt: text("processed_at").notNull().default(sql`(datetime('now'))`),
 });
+
+// ── Sequence types ──
+
+export type SequenceStep = {
+  order: number;
+  channel: "email" | "linkedin_connection" | "linkedin_message" | "cold_call" | "video_script";
+  delayDays: number;
+  type: "first" | "bump" | "breakup";
+  tone?: "concise" | "warm" | "direct";
+};
+
+// ── Sequences ──
+
+export const sequences = sqliteTable("sequences", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(),
+  steps: text("steps", { mode: "json" }).$type<SequenceStep[]>().notNull(),
+  isDefault: integer("is_default").notNull().default(0),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("sequences_user_id_idx").on(table.userId),
+]);
+
+export const leadSequences = sqliteTable("lead_sequences", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  leadId: text("lead_id").notNull().references(() => leads.id),
+  sequenceId: text("sequence_id").notNull().references(() => sequences.id),
+  currentStep: integer("current_step").notNull().default(0),
+  status: text("status", {
+    enum: ["active", "paused", "completed"],
+  }).notNull().default("active"),
+  approvalMode: integer("approval_mode").notNull().default(0),
+  startedAt: text("started_at").notNull().default(sql`(datetime('now'))`),
+  pausedAt: text("paused_at"),
+  completedAt: text("completed_at"),
+}, (table) => [
+  index("lead_sequences_lead_id_idx").on(table.leadId),
+  index("lead_sequences_sequence_id_idx").on(table.sequenceId),
+  index("lead_sequences_status_idx").on(table.status),
+]);
