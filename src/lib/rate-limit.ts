@@ -21,6 +21,7 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "auth:reset-password": { limit: 5, windowSeconds: 600 },
   "public:email": { limit: 5, windowSeconds: 60 },
   "auth:email": { limit: 20, windowSeconds: 60 },
+  "demo:hooks": { limit: 3, windowSeconds: 86400 },
 };
 
 /**

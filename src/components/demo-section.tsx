@@ -201,7 +201,7 @@ export function DemoSection() {
         | null;
 
       if (!response.ok || !data) {
-        const message = data?.error || "Failed to generate hooks.";
+        const message = data?.error || (data as any)?.message || "Failed to generate hooks.";
         throw new Error(message);
       }
 

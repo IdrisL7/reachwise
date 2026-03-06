@@ -118,31 +118,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auth required
+    // Auth — allow unauthenticated demo (3 per day per IP)
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const isDemo = !session?.user?.id;
+
+    if (isDemo) {
+      const demoLimited = await checkRateLimit(getClientIp(request), "demo:hooks");
+      if (demoLimited) return demoLimited;
+    } else {
+      const rateLimited = await checkRateLimit(getClientIp(request), "auth:hooks");
+      if (rateLimited) return rateLimited;
+
+      // Quota check (trial + monthly limit + increment)
+      const quotaError = await checkHookQuota(session.user.id);
+      if (quotaError) return quotaError;
     }
 
-    // Rate limiting
-    const rateLimited = await checkRateLimit(getClientIp(request), "auth:hooks");
-    if (rateLimited) return rateLimited;
-
-    // Quota check (trial + monthly limit + increment)
-    const quotaError = await checkHookQuota(session.user.id);
-    if (quotaError) return quotaError;
-
-    // Resolve workspace profile for cache busting
+    // Resolve workspace profile for cache busting (skip for demo)
     let profileUpdatedAt: string | null = null;
     let _senderContext: Awaited<ReturnType<typeof getWorkspaceProfile>> = null;
-    try {
-      const workspaceId = await resolveWorkspaceId(session.user.id);
-      [_senderContext, profileUpdatedAt] = await Promise.all([
-        getWorkspaceProfile(workspaceId),
-        getProfileUpdatedAt(workspaceId),
-      ]);
-    } catch {
-      // Non-critical — continue without profile context
+    if (!isDemo) {
+      try {
+        const workspaceId = await resolveWorkspaceId(session!.user!.id);
+        [_senderContext, profileUpdatedAt] = await Promise.all([
+          getWorkspaceProfile(workspaceId),
+          getProfileUpdatedAt(workspaceId),
+        ]);
+      } catch {
+        // Non-critical — continue without profile context
+      }
     }
 
     let url = rawUrl;
@@ -337,7 +341,7 @@ export async function POST(request: Request) {
     // - Stale cached results (wrong rules_version): re-cache with corrected payload
     // Generate multi-channel variants for Pro/Concierge
     let hookVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> = [];
-    const tierId = (session.user as any).tierId || "starter";
+    const tierId = isDemo ? "starter" : ((session!.user as any).tierId || "starter");
 
     if (roleGated.length > 0 && (!cached || cacheStale)) {
       // Generate variants for Pro/Concierge before caching
