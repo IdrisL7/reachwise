@@ -1,9 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TIERS, type TierFeature } from "@/lib/tiers";
+
+type Currency = "usd" | "gbp" | "eur";
+const SYMBOLS: Record<Currency, string> = { usd: "$", gbp: "\u00a3", eur: "\u20ac" };
+
+function detectCurrency(): Currency {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz.startsWith("America/")) return "usd";
+    if (tz === "Europe/London") return "gbp";
+    if (tz.startsWith("Europe/")) return "eur";
+  } catch {}
+  return "usd";
+}
 
 function FeatureItem({ feature }: { feature: TierFeature }) {
   const content = (
@@ -34,6 +47,9 @@ export function PricingSection() {
   const currentTier = (session?.user as any)?.tierId;
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [currency, setCurrency] = useState<Currency>("usd");
+
+  useEffect(() => { setCurrency(detectCurrency()); }, []);
 
   async function handleCheckout(tierId: string, trial = false) {
     setCheckoutLoading(tierId);
@@ -77,6 +93,22 @@ export function PricingSection() {
           </p>
         </div>
 
+        <div className="mx-auto mt-6 flex items-center justify-center gap-1 rounded-full border border-zinc-700/40 bg-zinc-800/30 p-1 w-fit">
+          {(["usd", "gbp", "eur"] as Currency[]).map((c) => (
+            <button
+              key={c}
+              onClick={() => setCurrency(c)}
+              className={`px-3.5 py-1.5 rounded-full text-[0.8125rem] font-medium transition-all ${
+                currency === c
+                  ? "bg-violet-600 text-white shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              {c === "usd" ? "USD ($)" : c === "gbp" ? "GBP (\u00a3)" : "EUR (\u20ac)"}
+            </button>
+          ))}
+        </div>
+
         {error && (
           <div className="mx-auto mt-8 max-w-md bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg text-sm text-center">
             {error}
@@ -103,7 +135,7 @@ export function PricingSection() {
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
                 <span className="text-[2.75rem] font-bold tracking-tight text-white">
-                  £{tier.price}
+                  {SYMBOLS[currency]}{tier.price[currency]}
                 </span>
                 <span className="text-[0.875rem] text-zinc-500">/month</span>
               </div>

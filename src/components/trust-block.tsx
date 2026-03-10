@@ -36,7 +36,7 @@ const trustItems = [
 export function TrustBlock() {
   return (
     <section className="border-t border-white/[0.06] bg-[#0c0c14]/50">
-      <div className="mx-auto max-w-5xl px-6 py-16 lg:py-20">
+      <div className="mx-auto max-w-5xl px-6 py-10 lg:py-12">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {trustItems.map((item, i) => (
             <div key={i} className="flex items-start gap-3.5 rounded-xl border border-zinc-800/40 bg-zinc-900/30 p-4 transition-colors hover:border-zinc-700/50">

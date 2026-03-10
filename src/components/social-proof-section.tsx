@@ -1,37 +1,36 @@
-const stats = [
-  { value: "10,000+", label: "Hooks generated" },
-  { value: "98%", label: "Source accuracy" },
-  { value: "3x", label: "Higher reply rates vs generic outbound" },
-  { value: "<30s", label: "Per company research time" },
-];
+import Link from "next/link";
 
-const quotes = [
+const stats = [
   {
-    text: "We stopped writing cold emails from scratch. Every hook has a real quote attached — prospects actually reply because they can tell it's not templated.",
-    name: "SDR Manager",
-    role: "B2B SaaS, 50-200 employees",
+    value: "100%",
+    label: "Cited with source + date",
   },
   {
-    text: "The evidence tier system is brilliant. Knowing whether a signal came from a first-party source or a news article changes how I frame the conversation.",
-    name: "Account Executive",
-    role: "Sales intelligence platform",
-  },
-  {
-    text: "I was spending 20 minutes per company doing manual research. Now I paste a URL and have 5 cited hooks in under a minute. It's not even close.",
-    name: "Founder",
-    role: "Outbound agency",
+    value: "0",
+    label: "Facts invented",
   },
 ];
 
 export function SocialProofSection() {
   return (
     <section className="border-t border-white/[0.06] bg-[#0a0a12]">
-      <div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10 lg:py-24">
-        {/* Stats row */}
-        <div className="mx-auto max-w-4xl grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 mb-16">
+      <div className="mx-auto max-w-[90rem] px-6 py-14 lg:px-10 lg:py-20">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-violet-400/70">
+            Just launched
+          </p>
+          <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-white">
+            We&apos;d rather show you than tell you
+          </h2>
+          <p className="mt-3 text-[1rem] leading-[1.6] text-zinc-400">
+            No fake testimonials. Try the demo above &mdash; the output quality is the proof.
+          </p>
+        </div>
+
+        <div className="mx-auto mt-10 flex max-w-md items-center justify-center gap-12 sm:gap-16">
           {stats.map((stat) => (
             <div key={stat.label} className="text-center">
-              <p className="text-[clamp(1.75rem,3vw,2.5rem)] font-bold text-white tracking-[-0.02em]">
+              <p className="text-[clamp(2rem,4vw,3rem)] font-bold text-white tracking-[-0.02em]">
                 {stat.value}
               </p>
               <p className="mt-1 text-[0.8125rem] text-zinc-500">
@@ -41,25 +40,16 @@ export function SocialProofSection() {
           ))}
         </div>
 
-        {/* Testimonials */}
-        <div className="mx-auto max-w-5xl grid gap-5 md:grid-cols-3">
-          {quotes.map((q, i) => (
-            <div
-              key={i}
-              className="rounded-xl border border-zinc-700/20 bg-gradient-to-br from-[#111120]/50 to-[#0d0d16]/30 p-6"
-            >
-              <svg className="h-5 w-5 text-violet-500/40 mb-3" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M4.583 17.321C3.553 16.227 3 15 3 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311 1.804.167 3.226 1.648 3.226 3.489a3.5 3.5 0 01-3.5 3.5c-1.073 0-2.099-.49-2.748-1.179zm10 0C13.553 16.227 13 15 13 13.011c0-3.5 2.457-6.637 6.03-8.188l.893 1.378c-3.335 1.804-3.987 4.145-4.247 5.621.537-.278 1.24-.375 1.929-.311 1.804.167 3.226 1.648 3.226 3.489a3.5 3.5 0 01-3.5 3.5c-1.073 0-2.099-.49-2.748-1.179z" />
-              </svg>
-              <p className="text-[0.9375rem] leading-[1.6] text-zinc-300 mb-4">
-                {q.text}
-              </p>
-              <div>
-                <p className="text-[0.8125rem] font-semibold text-zinc-200">{q.name}</p>
-                <p className="text-[0.75rem] text-zinc-500">{q.role}</p>
-              </div>
-            </div>
-          ))}
+        <div className="mt-8 flex justify-center">
+          <Link
+            href="#demo"
+            className="inline-flex h-11 items-center gap-2 rounded-lg bg-violet-600 px-6 text-[0.875rem] font-semibold text-white shadow-[0_0_16px_rgba(139,92,246,0.2)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_24px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97]"
+          >
+            Try it free &mdash; no signup
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+            </svg>
+          </Link>
         </div>
       </div>
     </section>

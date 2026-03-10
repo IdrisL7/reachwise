@@ -12,7 +12,7 @@ export interface TierFeature {
 export interface Tier {
   id: TierId;
   name: string;
-  price: number; // £/month
+  price: { usd: number; gbp: number; eur: number };
   description: string;
   bestFor: string;
   features: TierFeature[];
@@ -37,7 +37,7 @@ export const TIERS: Tier[] = [
   {
     id: "starter",
     name: "Starter",
-    price: 29,
+    price: { usd: 35, gbp: 29, eur: 33 },
     description: "Evidence-backed hooks with receipts for every send.",
     bestFor:
       "Individuals and light outbound — founders testing angles and solo SDRs who want research without the hours.",
@@ -65,7 +65,7 @@ export const TIERS: Tier[] = [
   {
     id: "pro",
     name: "Pro",
-    price: 149,
+    price: { usd: 179, gbp: 149, eur: 169 },
     description: "Multi-channel outbound with intent scoring and guardrails.",
     bestFor:
       "Teams that run outbound daily and want evidence-backed sequences across email, LinkedIn, calls, and video.",
@@ -95,7 +95,7 @@ export const TIERS: Tier[] = [
   {
     id: "concierge",
     name: "Concierge",
-    price: 499,
+    price: { usd: 599, gbp: 499, eur: 559 },
     description: "Set it up and let it run \u2014 we handle execution.",
     bestFor:
       "Teams that want the full platform managed end-to-end: hooks, sequences, intent scoring, and reply handling.",

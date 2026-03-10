@@ -27,6 +27,10 @@ export function HeroSection() {
             and date attached to every one.
           </p>
 
+          <p className="mt-3 text-[0.875rem] text-zinc-500/80 tracking-[0.01em]">
+            No invented facts. No stored URLs. Weak evidence is labeled or skipped.
+          </p>
+
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <a href="#demo">
               <Button size="lg">
