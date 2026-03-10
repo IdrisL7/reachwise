@@ -63,7 +63,7 @@ export function PricingSection() {
       id="pricing"
       className="border-t border-white/[0.06] bg-[#0b0b10]"
     >
-      <div className="mx-auto max-w-[90rem] px-6 py-28 lg:px-10 lg:py-40">
+      <div className="mx-auto max-w-[90rem] px-6 py-20 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-2xl text-center">
           <p className="mb-4 text-[0.9375rem] font-semibold text-violet-400">
             Pricing

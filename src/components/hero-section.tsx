@@ -9,7 +9,7 @@ export function HeroSection() {
       <div className="pointer-events-none absolute -top-60 left-1/2 h-[800px] w-[1100px] -translate-x-1/2 rounded-full bg-violet-600/[0.07] blur-[150px]" />
       <div className="pointer-events-none absolute -top-20 left-1/3 h-[400px] w-[600px] -translate-x-1/2 rounded-full bg-fuchsia-500/[0.04] blur-[120px]" />
 
-      <div className="relative mx-auto grid max-w-[90rem] gap-12 px-6 pb-24 pt-20 lg:grid-cols-2 lg:items-center lg:gap-20 lg:px-10 lg:pb-36 lg:pt-32">
+      <div className="relative mx-auto grid max-w-[90rem] gap-12 px-6 pb-20 pt-20 lg:grid-cols-2 lg:items-center lg:gap-20 lg:px-10 lg:pb-28 lg:pt-32">
         <div className="max-w-2xl">
           <span className="mb-8 inline-flex items-center gap-2 rounded-full border border-violet-500/20 bg-violet-500/[0.08] px-4 py-1.5 text-[0.8125rem] font-medium text-violet-400">
             <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
@@ -17,17 +17,20 @@ export function HeroSection() {
           </span>
 
           <h1 className="text-[clamp(3rem,5.5vw,5.5rem)] font-bold leading-[1.02] tracking-[-0.02em] text-white">
-            Evidence-backed outbound that executes with guardrails.
+            Cold outreach that cites its sources.
           </h1>
 
-          <p className="mt-8 max-w-xl text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-            Paste a company URL and get role-tailored hooks with receipts. Turn them into multi-channel sequences with intent scoring and safe follow-ups.
+          <p className="mt-6 max-w-xl text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
+            Paste a company URL, pick a buyer role, and get
+            <span className="text-zinc-200"> hooks</span> &mdash; personalized
+            conversation starters grounded in real evidence with a quote, source,
+            and date attached to every one.
           </p>
 
-          <div className="mt-12 flex flex-wrap items-center gap-4">
+          <div className="mt-10 flex flex-wrap items-center gap-4">
             <a href="#demo">
               <Button size="lg">
-                Generate hooks
+                Try the live demo
                 <svg
                   className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
                   fill="none"
@@ -56,11 +59,11 @@ export function HeroSection() {
             </a>
           </div>
 
-          <div className="mt-16 border-t border-white/[0.06] pt-8">
+          <div className="mt-14 border-t border-white/[0.06] pt-7">
             <p className="text-[0.8125rem] font-medium text-zinc-500">
               Works on top of
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-2">
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               {integrations.map((name) => (
                 <span
                   key={name}

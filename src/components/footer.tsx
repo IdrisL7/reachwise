@@ -1,53 +1,93 @@
 import Image from "next/image";
+import Link from "next/link";
+
+const productLinks = [
+  { href: "#how-it-works", label: "How it works" },
+  { href: "#demo", label: "Live demo" },
+  { href: "#pricing", label: "Pricing" },
+  { href: "/followup-engine", label: "Follow-up engine" },
+];
+
+const resourceLinks = [
+  { href: "/docs", label: "Documentation" },
+  { href: "/contact", label: "Contact" },
+  { href: "/setup", label: "Setup guide" },
+];
+
+const legalLinks = [
+  { href: "/privacy", label: "Privacy" },
+  { href: "/terms", label: "Terms" },
+];
 
 export function Footer() {
   return (
-    <footer className="border-t border-white/[0.06]">
-      <div className="mx-auto flex max-w-[90rem] flex-col items-center justify-between gap-5 px-6 py-10 sm:flex-row lg:px-10">
-        <a href="#" className="flex items-center gap-2.5">
-          <Image src="/logo-getsignalhooks.svg" alt="GetSignalHooks" width={28} height={28} />
-          <span className="text-[0.875rem] font-semibold text-zinc-300">
-            GetSignalHooks
-          </span>
-        </a>
+    <footer className="border-t border-white/[0.06] bg-[#070710]">
+      <div className="mx-auto max-w-[90rem] px-6 py-14 lg:px-10">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          {/* Brand */}
+          <div>
+            <a href="#" className="flex items-center gap-2.5">
+              <Image src="/logo-getsignalhooks.svg" alt="GetSignalHooks" width={28} height={28} />
+              <span className="text-[0.875rem] font-semibold text-zinc-300">
+                GetSignalHooks
+              </span>
+            </a>
+            <p className="mt-3 text-[0.8125rem] leading-relaxed text-zinc-500 max-w-xs">
+              Evidence-backed outbound hooks with cited sources. Every message traces back to a real public signal.
+            </p>
+          </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-2 text-[0.875rem] text-zinc-500">
-          <a
-            href="#how-it-works"
-            className="transition-colors duration-200 hover:text-zinc-300"
-          >
-            About
-          </a>
-          <a
-            href="#pricing"
-            className="transition-colors duration-200 hover:text-zinc-300"
-          >
-            Pricing
-          </a>
-          <a
-            href="mailto:hello@getsignalhooks.com"
-            className="transition-colors duration-200 hover:text-zinc-300"
-          >
-            Contact
-          </a>
-          <a
-            href="/privacy"
-            className="transition-colors duration-200 hover:text-zinc-300"
-          >
-            Privacy
-          </a>
-          <a
-            href="/terms"
-            className="transition-colors duration-200 hover:text-zinc-300"
-          >
-            Terms
-          </a>
+          {/* Product */}
+          <div>
+            <p className="text-[0.75rem] font-semibold uppercase tracking-wider text-zinc-400 mb-3">Product</p>
+            <ul className="space-y-2">
+              {productLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-[0.875rem] text-zinc-500 transition-colors hover:text-zinc-300">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Resources */}
+          <div>
+            <p className="text-[0.75rem] font-semibold uppercase tracking-wider text-zinc-400 mb-3">Resources</p>
+            <ul className="space-y-2">
+              {resourceLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-[0.875rem] text-zinc-500 transition-colors hover:text-zinc-300">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Legal */}
+          <div>
+            <p className="text-[0.75rem] font-semibold uppercase tracking-wider text-zinc-400 mb-3">Legal</p>
+            <ul className="space-y-2">
+              {legalLinks.map((link) => (
+                <li key={link.href}>
+                  <Link href={link.href} className="text-[0.875rem] text-zinc-500 transition-colors hover:text-zinc-300">
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
 
-        <p className="text-[0.75rem] text-zinc-600">
-          &copy; {new Date().getFullYear()} GetSignalHooks. All rights
-          reserved.
-        </p>
+        <div className="mt-10 flex flex-col items-center justify-between gap-3 border-t border-white/[0.06] pt-6 sm:flex-row">
+          <p className="text-[0.75rem] text-zinc-600">
+            &copy; {new Date().getFullYear()} GetSignalHooks. All rights reserved.
+          </p>
+          <a href="mailto:hello@getsignalhooks.com" className="text-[0.75rem] text-zinc-600 transition-colors hover:text-zinc-400">
+            hello@getsignalhooks.com
+          </a>
+        </div>
       </div>
     </footer>
   );
