@@ -10,6 +10,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --animate-shimmer: shimmer 2s infinite;
+  --animate-fade-in: fadeIn 0.3s ease-out both;
+  --animate-slide-in-bottom: slideInFromBottom 0.35s ease-out both;
+  --animate-scale-in: scaleIn 0.2s ease-out both;
+  --animate-slide-in-right: slideInFromRight 0.3s ease-out both;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +30,12 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Shimmer animation for skeleton loaders */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
 /* PrimeUI-style fade-in animation */
 @keyframes fadeInUp {
   from {
@@ -34,6 +45,44 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideInFromRight {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -47,3 +96,8 @@ body {
 .animate-fade-in-up:nth-child(3) { animation-delay: 160ms; }
 .animate-fade-in-up:nth-child(4) { animation-delay: 240ms; }
 .animate-fade-in-up:nth-child(5) { animation-delay: 320ms; }
+
+/* Staggered slide-in-bottom for hook cards */
+.animate-stagger-1 { animation: slideInFromBottom 0.35s ease-out 0ms both; }
+.animate-stagger-2 { animation: slideInFromBottom 0.35s ease-out 100ms both; }
+.animate-stagger-3 { animation: slideInFromBottom 0.35s ease-out 200ms both; }

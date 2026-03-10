@@ -1,4 +1,7 @@
 import { HeroHookPreview } from "./hero-hook-preview";
+import { Button } from "./ui/button";
+
+const integrations = ["Apollo", "Clay", "Instantly", "Lattice", "Ramp"];
 
 export function HeroSection() {
   return (
@@ -18,73 +21,54 @@ export function HeroSection() {
           </h1>
 
           <p className="mt-8 max-w-xl text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-            Paste a company URL and get role-tailored hooks with receipts
-            (quote&nbsp;+ source&nbsp;+ date). Turn them into multi-channel
-            sequences, prioritize leads with intent scoring, and run follow-ups
-            safely with approvals, caps, and stop-on-reply.
-          </p>
-
-          <p className="mt-4 text-[0.8125rem] font-medium text-zinc-500">
-            Every message cites a source. Execution stops on reply/OOO/bounce and respects caps + approvals.
+            Paste a company URL and get role-tailored hooks with receipts. Turn them into multi-channel sequences with intent scoring and safe follow-ups.
           </p>
 
           <div className="mt-12 flex flex-wrap items-center gap-4">
-            <a
-              href="#demo"
-              className="group inline-flex h-[3.5rem] items-center gap-2 rounded-lg bg-violet-600 px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_24px_rgba(139,92,246,0.25)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_36px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
-            >
-              Generate hooks
-              <svg
-                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                />
-              </svg>
+            <a href="#demo">
+              <Button size="lg">
+                Generate hooks
+                <svg
+                  className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Button>
             </a>
 
-            <a
-              href="#how-it-works"
-              className="group inline-flex h-[3.5rem] items-center gap-2 rounded-lg border border-zinc-700/50 bg-transparent px-8 text-[1.0625rem] font-semibold tracking-[-0.01em] text-zinc-200 transition-all duration-200 hover:border-violet-500/40 hover:text-white hover:scale-[1.02] active:scale-[0.97]"
-            >
-              See how it works
-              <svg
-                className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                />
-              </svg>
+            <a href="#how-it-works">
+              <Button variant="secondary" size="lg">
+                See how it works
+                <svg
+                  className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2.5}
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Button>
             </a>
           </div>
 
           <div className="mt-16 border-t border-white/[0.06] pt-8">
             <p className="text-[0.8125rem] font-medium text-zinc-500">
-              Works on top of Apollo, Clay, Instantly, and any CRM.
+              Works on top of
             </p>
-            <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3">
-              {["Lattice", "Ramp", "Clay", "Instantly", "Apollo"].map(
-                (name) => (
-                  <span
-                    key={name}
-                    className="text-[0.9375rem] font-semibold tracking-[-0.01em] text-zinc-600"
-                  >
-                    {name}
-                  </span>
-                ),
-              )}
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {integrations.map((name) => (
+                <span
+                  key={name}
+                  className="inline-flex items-center rounded-full border border-zinc-700/40 bg-zinc-800/30 px-3.5 py-1.5 text-[0.8125rem] font-semibold tracking-[-0.01em] text-zinc-500 transition-colors hover:text-zinc-400 hover:border-zinc-600/50"
+                >
+                  {name}
+                </span>
+              ))}
             </div>
           </div>
         </div>

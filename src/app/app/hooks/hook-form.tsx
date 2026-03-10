@@ -1,0 +1,132 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Input } from "@/components/ui/input";
+
+interface HookFormProps {
+  url: string;
+  setUrl: (v: string) => void;
+  companyName: string;
+  setCompanyName: (v: string) => void;
+  targetRole: string;
+  setTargetRole: (v: string) => void;
+  showCustomRole: boolean;
+  setShowCustomRole: (v: boolean) => void;
+  customRoleInput: string;
+  setCustomRoleInput: (v: string) => void;
+  loading: boolean;
+  error: string;
+  onSubmit: (e: React.FormEvent) => void;
+}
+
+const loadingSteps = [
+  "Finding signals...",
+  "Analyzing evidence...",
+  "Drafting hooks...",
+];
+
+function LoadingText() {
+  const [step, setStep] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStep((s) => (s + 1) % loadingSteps.length);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span className="animate-fade-in">{loadingSteps[step]}</span>;
+}
+
+export function HookForm({
+  url,
+  setUrl,
+  companyName,
+  setCompanyName,
+  targetRole,
+  setTargetRole,
+  showCustomRole,
+  setShowCustomRole,
+  customRoleInput,
+  setCustomRoleInput,
+  loading,
+  error,
+  onSubmit,
+}: HookFormProps) {
+  return (
+    <form id="hooks-form" onSubmit={onSubmit} className="mb-8">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <Input
+            type="url"
+            label="Company URL"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://acme.com"
+          />
+          <Input
+            type="text"
+            label="Company Name (optional)"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            placeholder="Acme Inc"
+          />
+          <div>
+            <label className="block text-sm text-zinc-400 mb-1.5">
+              Who are you emailing?
+            </label>
+            <select
+              value={targetRole === "Custom" ? "Custom" : targetRole}
+              onChange={(e) => {
+                const val = e.target.value;
+                setTargetRole(val);
+                setShowCustomRole(val === "Custom");
+                if (val !== "Custom") {
+                  setCustomRoleInput("");
+                  localStorage.setItem("gsh_targetRole", val);
+                }
+              }}
+              className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors appearance-none"
+            >
+              <option value="Not sure / Any role">Not sure / Any role</option>
+              <option value="VP Sales">VP Sales</option>
+              <option value="RevOps">RevOps</option>
+              <option value="SDR Manager">SDR Manager</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Founder/CEO">Founder/CEO</option>
+              <option value="Custom">Custom...</option>
+            </select>
+            {showCustomRole && (
+              <div className="mt-2">
+                <Input
+                  type="text"
+                  value={customRoleInput}
+                  onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
+                  placeholder="e.g. Head of Partnerships"
+                  error={error && targetRole === "Custom" && !customRoleInput.trim() ? "Enter a role name to continue" : undefined}
+                  className="text-sm"
+                />
+              </div>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-zinc-500 mb-4">
+          Best results: paste the company homepage + pick who you&apos;re emailing. Every hook includes receipts (quote + source + date).
+        </p>
+        <button
+          type="submit"
+          disabled={loading || (!url && !companyName)}
+          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg shadow-[0_0_20px_rgba(139,92,246,0.2)] hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all duration-200"
+        >
+          {loading && (
+            <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          )}
+          {loading ? <LoadingText /> : "Generate Hooks"}
+        </button>
+      </div>
+    </form>
+  );
+}

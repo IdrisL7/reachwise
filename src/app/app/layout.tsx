@@ -6,19 +6,25 @@ import { eq } from "drizzle-orm";
 import Link from "next/link";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SignOutButton } from "@/components/sign-out-button";
+import { MobileMoreMenu } from "./mobile-more-menu";
 
-const navItems = [
+const primaryNav = [
   { href: "/app", label: "Dashboard" },
-  { href: "/app/inbox", label: "Inbox" },
   { href: "/app/hooks", label: "Hooks" },
   { href: "/app/batch", label: "Batch" },
   { href: "/app/leads", label: "Leads" },
+];
+
+const secondaryNav = [
+  { href: "/app/inbox", label: "Inbox" },
   { href: "/app/sequences", label: "Sequences" },
   { href: "/app/templates", label: "Templates" },
   { href: "/app/analytics", label: "Analytics" },
   { href: "/app/settings", label: "Settings" },
   { href: "/app/integrations", label: "Integrations" },
 ];
+
+const allNav = [...primaryNav, ...secondaryNav];
 
 export default async function AppLayout({
   children,
@@ -28,7 +34,6 @@ export default async function AppLayout({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  // Read fresh tier from DB (JWT may be stale after upgrade)
   const [freshUser] = await db
     .select({ tierId: schema.users.tierId })
     .from(schema.users)
@@ -44,17 +49,34 @@ export default async function AppLayout({
           <Link href="/app" className="text-lg font-bold text-emerald-400 mr-4 sm:mr-8 shrink-0">
             GSH
           </Link>
-          <nav className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide">
-            {navItems.map((item) => (
+
+          {/* Desktop nav — all items */}
+          <nav className="hidden sm:flex items-center gap-1">
+            {allNav.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
               >
                 {item.label}
               </Link>
             ))}
           </nav>
+
+          {/* Mobile nav — 4 primary + "More" */}
+          <nav className="flex sm:hidden items-center gap-0.5">
+            {primaryNav.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className="px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
+              >
+                {item.label}
+              </Link>
+            ))}
+            <MobileMoreMenu items={secondaryNav} />
+          </nav>
+
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
             <span className="text-xs text-zinc-500 hidden sm:block">
               {session.user.email}
