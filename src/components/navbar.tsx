@@ -55,6 +55,12 @@ export function Navbar() {
           >
             Pricing
           </Link>
+          <Link
+            href="/blog"
+            className="text-[0.875rem] font-medium text-zinc-400 transition-colors duration-200 hover:text-white"
+          >
+            Blog
+          </Link>
           {isLoggedIn ? (
             <div className="relative" ref={menuRef}>
               <button
