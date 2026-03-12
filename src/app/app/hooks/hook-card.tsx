@@ -7,6 +7,9 @@ interface Hook {
   angle: string;
   confidence: string;
   evidence_tier: string;
+  quality_score?: number;
+  quality_label?: "Excellent" | "Strong" | "Decent" | "Weak";
+  generated_hook_id?: string;
   source_snippet?: string;
   source_url?: string;
   source_title?: string;
@@ -83,10 +86,14 @@ interface HookCardProps {
   generatingEmail: number | null;
   generatedEmails: Record<number, GeneratedEmail>;
   copiedEmail: number | null;
+  pushingCrm?: boolean;
+  pushedToCrm?: boolean;
+  showCrmPush?: boolean;
   onCopyHook: (text: string, index: number) => void;
   onCopyHookWithEvidence: (hook: Hook, index: number) => void;
   onGenerateEmail: (hook: Hook, index: number) => void;
   onCopyEmail: (email: GeneratedEmail, index: number) => void;
+  onPushToCrm?: (hook: Hook, index: number) => void;
 }
 
 export function HookCard({
@@ -103,10 +110,14 @@ export function HookCard({
   generatingEmail,
   generatedEmails,
   copiedEmail,
+  pushingCrm,
+  pushedToCrm,
+  showCrmPush,
   onCopyHook,
   onCopyHookWithEvidence,
   onGenerateEmail,
   onCopyEmail,
+  onPushToCrm,
 }: HookCardProps) {
   const variantEntry = hookVariants.find((v) => v.hook_index === index);
   const active = activeChannel[index] || "email";
@@ -149,6 +160,22 @@ export function HookCard({
         {srcType && <Badge variant={srcVariant} className="text-[10px]">{srcType}</Badge>}
         {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
         <Badge variant={angleVariant(hook.angle)}>{hook.angle}</Badge>
+        {typeof hook.quality_score === "number" && (
+          <Badge
+            variant={
+              hook.quality_score >= 90
+                ? "fresh"
+                : hook.quality_score >= 70
+                  ? "trigger"
+                  : hook.quality_score >= 50
+                    ? "older"
+                    : "risk"
+            }
+            className="text-[10px]"
+          >
+            {hook.quality_label || "Score"} {hook.quality_score}
+          </Badge>
+        )}
         {hook.psych_mode && (
           <Badge
             variant="psych"
@@ -239,6 +266,15 @@ export function HookCard({
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-800/60 bg-violet-900/20 text-violet-400 hover:bg-violet-900/40 hover:text-violet-300 transition-colors"
           >
             {copiedEmail === index ? "Copied!" : "Copy Email"}
+          </button>
+        )}
+        {onPushToCrm && showCrmPush && hook.generated_hook_id && (
+          <button
+            onClick={() => onPushToCrm(hook, index)}
+            disabled={pushingCrm}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+          >
+            {pushingCrm ? "Pushing..." : pushedToCrm ? "Pushed" : "Push to CRM"}
           </button>
         )}
       </div>

@@ -191,6 +191,41 @@ export const hookCache = sqliteTable("hook_cache", {
   index("hook_cache_expires_at_idx").on(table.expiresAt),
 ]);
 
+export const generatedHooks = sqliteTable("generated_hooks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  batchId: text("batch_id").notNull(),
+  companyUrl: text("company_url").notNull(),
+  companyName: text("company_name"),
+  hookText: text("hook_text").notNull(),
+  angle: text("angle", { enum: ["trigger", "risk", "tradeoff"] }).notNull(),
+  confidence: text("confidence", { enum: ["high", "med", "low"] }).notNull(),
+  evidenceTier: text("evidence_tier", { enum: ["A", "B", "C"] }).notNull(),
+  qualityScore: integer("quality_score").notNull(),
+  sourceSnippet: text("source_snippet"),
+  sourceUrl: text("source_url"),
+  sourceTitle: text("source_title"),
+  sourceDate: text("source_date"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("generated_hooks_user_id_idx").on(table.userId),
+  index("generated_hooks_batch_id_idx").on(table.batchId),
+]);
+
+export const hookCrmPushes = sqliteTable("hook_crm_pushes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  generatedHookId: text("generated_hook_id").notNull().references(() => generatedHooks.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider", { enum: ["hubspot", "salesforce"] }).notNull(),
+  crmRecordId: text("crm_record_id"),
+  status: text("status", { enum: ["success", "failed"] }).notNull(),
+  errorMessage: text("error_message"),
+  pushedAt: text("pushed_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("hook_crm_pushes_hook_idx").on(table.generatedHookId),
+  index("hook_crm_pushes_user_id_idx").on(table.userId),
+]);
+
 // ── Workspaces ──
 
 export const workspaces = sqliteTable("workspaces", {

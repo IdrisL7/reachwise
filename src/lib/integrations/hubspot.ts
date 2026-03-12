@@ -261,6 +261,47 @@ export async function fetchNewHubSpotContacts(
 }
 
 /** Run a full bidirectional sync */
+export async function pushHookToHubSpot(
+  integrationId: string,
+  hook: {
+    companyName?: string | null;
+    companyUrl: string;
+    hookText: string;
+    sourceUrl?: string;
+    sourceTitle?: string;
+    sourceDate?: string;
+    sourceSnippet?: string;
+    qualityScore?: number;
+  },
+): Promise<string> {
+  const noteBody = [
+    `Hook: ${hook.hookText}`,
+    hook.qualityScore ? `Quality score: ${hook.qualityScore}/100` : null,
+    hook.sourceSnippet ? `Evidence: ${hook.sourceSnippet}` : null,
+    hook.sourceTitle || hook.sourceUrl ? `Source: ${hook.sourceTitle || hook.sourceUrl}` : null,
+    hook.sourceDate ? `Date: ${hook.sourceDate}` : null,
+    `Company URL: ${hook.companyUrl}`,
+  ].filter(Boolean).join("\n");
+
+  const res = await hubspotFetch(integrationId, "/crm/v3/objects/notes", {
+    method: "POST",
+    body: JSON.stringify({
+      properties: {
+        hs_note_body: noteBody,
+        hs_timestamp: new Date().toISOString(),
+      },
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`HubSpot note create failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id as string;
+}
+
 export async function syncHubSpot(integrationId: string) {
   const results = { pushed: 0, pulled: 0, updated: 0, errors: [] as string[] };
 

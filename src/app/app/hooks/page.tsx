@@ -17,6 +17,9 @@ interface Hook {
   angle: string;
   confidence: string;
   evidence_tier: string;
+  quality_score?: number;
+  quality_label?: "Excellent" | "Strong" | "Decent" | "Weak";
+  generated_hook_id?: string;
   source_snippet?: string;
   source_url?: string;
   source_title?: string;
@@ -47,6 +50,11 @@ export default function HooksPage() {
   const [url, setUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [hooks, setHooks] = useState<Hook[]>([]);
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [pushingBatch, setPushingBatch] = useState(false);
+  const [pushingHook, setPushingHook] = useState<string | null>(null);
+  const [pushedHookIds, setPushedHookIds] = useState<Record<string, boolean>>({});
+  const [crmConnected, setCrmConnected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState<number | null>(null);
@@ -111,13 +119,18 @@ export default function HooksPage() {
     Promise.all([
       fetch("/api/workspace-profile").then((r) => r.json()).catch(() => ({})),
       fetch("/api/user-stats").then((r) => r.json()).catch(() => ({})),
-    ]).then(([profileData, statsData]) => {
+      Promise.all([
+        fetch("/api/integrations/hubspot/status").then((r) => r.json()).catch(() => ({ connected: false })),
+        fetch("/api/integrations/salesforce/status").then((r) => r.json()).catch(() => ({ connected: false })),
+      ]),
+    ]).then(([profileData, statsData, [hsStatus, sfStatus]]) => {
       if (profileData.profile) setHasProfile(true);
       const used = statsData.hooksUsed ?? 0;
       setHooksUsed(used);
       if (used === 0 && !localStorage.getItem("gsh_onboarding_done")) {
         setOnboardingStep(0);
       }
+      setCrmConnected(hsStatus.connected || sfStatus.connected);
     });
   }, []);
 
@@ -203,6 +216,50 @@ export default function HooksPage() {
     setTimeout(() => setCopiedEmail(null), 2000);
   }
 
+  async function pushSingleHookToCrm(hook: Hook, _index: number) {
+    if (!hook.generated_hook_id) return;
+    setPushingHook(hook.generated_hook_id);
+    setError("");
+    try {
+      const res = await fetch("/api/hooks/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hookId: hook.generated_hook_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to push hook to CRM");
+      setPushedHookIds((prev) => ({ ...prev, [hook.generated_hook_id!]: true }));
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPushingHook(null);
+    }
+  }
+
+  async function pushBatchToCrm() {
+    if (!batchId) return;
+    setPushingBatch(true);
+    setError("");
+    try {
+      const res = await fetch("/api/hooks/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ batchId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to push hooks to CRM");
+      setPushedHookIds((prev) => {
+        const next = { ...prev };
+        for (const id of data.pushedHookIds || []) next[id] = true;
+        return next;
+      });
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setPushingBatch(false);
+    }
+  }
+
   function runWithUrl(newUrl: string) {
     setUrl(newUrl);
     setTimeout(() => {
@@ -218,6 +275,8 @@ export default function HooksPage() {
     setError("");
     setUpgradePrompt(null);
     setHooks([]);
+    setBatchId(null);
+    setPushedHookIds({});
     setOverflowHooks([]);
     setShowAll(false);
     setGeneratedEmails({});
@@ -266,12 +325,15 @@ export default function HooksPage() {
 
       type RawHook = {
         hook: string; angle: string; confidence: string; evidence_tier: string;
+        quality_score?: number; quality_label?: "Excellent" | "Strong" | "Decent" | "Weak";
+        generated_hook_id?: string;
         evidence_snippet?: string; source_url?: string; source_title?: string;
         source_date?: string; psych_mode?: string; why_this_works?: string;
       };
 
       const mapHook = (h: RawHook): Hook => ({
         text: h.hook, angle: h.angle, confidence: h.confidence, evidence_tier: h.evidence_tier,
+        quality_score: h.quality_score, quality_label: h.quality_label, generated_hook_id: h.generated_hook_id,
         source_snippet: h.evidence_snippet, source_url: h.source_url, source_title: h.source_title,
         source_date: h.source_date, psych_mode: h.psych_mode, why_this_works: h.why_this_works,
       });
@@ -287,6 +349,7 @@ export default function HooksPage() {
       }
 
       if (data.hookVariants) setHookVariants(data.hookVariants);
+      if (data.batchId) setBatchId(data.batchId);
       setIntentData(data.intent || null);
       setCompanyIntel(data.companyIntel || null);
       setIsBasicIntel(!!data.isBasicIntel);
@@ -586,7 +649,7 @@ export default function HooksPage() {
         const totalCount = hooks.length + overflowHooks.length;
         return (
           <div className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 justify-between">
               <h2 className="text-lg font-semibold">
                 Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
                 {totalCount > hooks.length && !showAll && (
@@ -594,6 +657,15 @@ export default function HooksPage() {
                 )}
                 {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
               </h2>
+              {batchId && crmConnected && (
+                <button
+                  onClick={pushBatchToCrm}
+                  disabled={pushingBatch}
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                >
+                  {pushingBatch ? "Pushing all..." : "Push batch to CRM"}
+                </button>
+              )}
             </div>
             {visibleHooks.map((hook, i) => (
               <HookCard
@@ -611,10 +683,14 @@ export default function HooksPage() {
                 generatingEmail={generatingEmail}
                 generatedEmails={generatedEmails}
                 copiedEmail={copiedEmail}
+                pushingCrm={!!hook.generated_hook_id && pushingHook === hook.generated_hook_id}
+                pushedToCrm={!!(hook.generated_hook_id && pushedHookIds[hook.generated_hook_id])}
+                showCrmPush={crmConnected}
                 onCopyHook={copyHook}
                 onCopyHookWithEvidence={copyHookWithEvidence}
                 onGenerateEmail={generateEmail}
                 onCopyEmail={copyEmail}
+                onPushToCrm={pushSingleHookToCrm}
               />
             ))}
             {overflowHooks.length > 0 && !showAll && (

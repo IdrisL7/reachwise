@@ -14,6 +14,8 @@ import {
   isFirstPartySource,
   isReputablePublisher,
   generateChannelVariants,
+  scoreHookQuality,
+  getQualityLabel,
   type CompanyResolutionResult,
   type ClassifiedSource,
   type Hook,
@@ -28,6 +30,7 @@ import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
 import { checkHookQuota } from "@/lib/tier-guard";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { db, schema } from "@/lib/db";
 
 // ---------------------------------------------------------------------------
 // Enforce current tier rules on citations (works on both cached and fresh)
@@ -327,6 +330,16 @@ export async function POST(request: Request) {
       finalLowSignal = true;
     }
 
+    finalTop = finalTop.map((hook) => {
+      const quality = scoreHookQuality(hook, companyDomain || undefined);
+      return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
+    });
+
+    finalOverflow = finalOverflow.map((hook) => {
+      const quality = scoreHookQuality(hook, companyDomain || undefined);
+      return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
+    });
+
     const resolvedCompany = resolution && resolution.candidates[0]
       ? {
           id: resolution.candidates[0].id,
@@ -417,6 +430,38 @@ export async function POST(request: Request) {
       }
     }
 
+    let batchId: string | undefined;
+    if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
+      try {
+        batchId = crypto.randomUUID();
+        const allHooks = [...finalTop, ...finalOverflow];
+        const inserted = await db.insert(schema.generatedHooks).values(
+          allHooks.map((h) => ({
+            userId: session.user.id,
+            batchId: batchId!,
+            companyUrl: url!,
+            companyName: companyName || resolvedCompany?.name || null,
+            hookText: h.hook,
+            angle: h.angle,
+            confidence: h.confidence,
+            evidenceTier: h.evidence_tier,
+            qualityScore: h.quality_score ?? scoreHookQuality(h, companyDomain || undefined),
+            sourceSnippet: h.evidence_snippet || null,
+            sourceUrl: h.source_url || null,
+            sourceTitle: h.source_title || null,
+            sourceDate: h.source_date || null,
+          })),
+        ).returning({ id: schema.generatedHooks.id });
+
+        const topLen = finalTop.length;
+        finalTop = finalTop.map((h, i) => ({ ...h, generated_hook_id: inserted[i]?.id }));
+        finalOverflow = finalOverflow.map((h, i) => ({ ...h, generated_hook_id: inserted[topLen + i]?.id }));
+      } catch (persistErr) {
+        console.error("Failed to persist generated hooks:", persistErr);
+        batchId = undefined;
+      }
+    }
+
     return NextResponse.json({
       hooks: finalTop.map((h) => h.hook),
       structured_hooks: finalTop,
@@ -428,6 +473,7 @@ export async function POST(request: Request) {
       suggestion,
       companyName: companyName ?? undefined,
       companyDomain: companyDomain || undefined,
+      batchId,
       resolvedCompany,
       firstPartyUrls: finalLowSignal ? firstPartyUrls : undefined,
       webUrls: finalLowSignal ? webUrls : undefined,

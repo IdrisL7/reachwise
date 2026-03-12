@@ -11,6 +11,9 @@ export type StructuredHook = {
   source_url: string;
   evidence_tier: EvidenceTier;
   confidence: "high" | "med" | "low";
+  quality_score?: number;
+  quality_label?: "Excellent" | "Strong" | "Decent" | "Weak";
+  generated_hook_id?: string;
   psych_mode?: PsychMode;
   why_this_works?: string;
 };

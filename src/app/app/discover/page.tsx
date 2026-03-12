@@ -27,6 +27,8 @@ export default function DiscoverPage() {
   const [savingSearch, setSavingSearch] = useState(false);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [showSaved, setShowSaved] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/user-stats")
@@ -58,6 +60,8 @@ export default function DiscoverPage() {
       if (!res.ok) throw new Error(data.error || data.message || "Discovery failed");
       setResults(data.companies || []);
       setSearchId(data.searchId || null);
+      setHasSearched(true);
+      setSaveNotice("");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -92,17 +96,25 @@ export default function DiscoverPage() {
 
   async function saveSearch() {
     if (!searchId) return;
-    const name = prompt("Name this search (optional):");
-    if (name === null) return;
     setSavingSearch(true);
+    setSaveNotice("");
     try {
+      const labelParts = [criteria.industry, criteria.location].filter(Boolean);
+      const generatedName = labelParts.length
+        ? `${labelParts.join(" • ")} (${new Date().toLocaleDateString()})`
+        : `Search ${new Date().toLocaleDateString()}`;
+
       const res = await fetch("/api/discover", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ searchId, name: name || `Search ${new Date().toLocaleDateString()}` }),
+        body: JSON.stringify({ searchId, name: generatedName }),
       });
-      if (res.ok) loadSavedSearches();
-    } catch {}
+      if (!res.ok) throw new Error("Failed to save search");
+      loadSavedSearches();
+      setSaveNotice("Search saved");
+    } catch {
+      setSaveNotice("Could not save search");
+    }
     setSavingSearch(false);
   }
 
@@ -182,6 +194,7 @@ export default function DiscoverPage() {
       </div>
 
       {error && <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>}
+      {saveNotice && <div className="bg-zinc-900 border border-zinc-700 text-zinc-300 px-4 py-2 rounded-xl mb-6 text-sm">{saveNotice}</div>}
 
       {results.length > 0 && (
         <div className="space-y-3">
@@ -189,7 +202,7 @@ export default function DiscoverPage() {
             <p className="text-sm text-zinc-400">Found {results.length} companies matching your criteria</p>
             <div className="flex gap-2">
               {searchId && (
-                <button onClick={saveSearch} disabled={savingSearch} className="text-xs px-3 py-1.5 rounded-lg border border-violet-700 text-violet-300 hover:bg-violet-900/30 disabled:opacity-50">
+                <button onClick={saveSearch} disabled={savingSearch} className="text-xs px-3 py-1.5 rounded-lg border border-violet-600 text-violet-300 hover:bg-violet-900/30 disabled:opacity-50">
                   {savingSearch ? "Saving..." : "Save Search"}
                 </button>
               )}
@@ -211,6 +224,12 @@ export default function DiscoverPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {hasSearched && !loading && results.length === 0 && !error && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-400">
+          No companies matched this search yet. Try broader filters like a wider location or fewer tech constraints.
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { checkDiscoveryQuota, checkFeature, featureError } from "@/lib/tier-guard";
 import { discoverCompanies, type DiscoveryCriteria } from "@/lib/discovery";
 import { db, schema } from "@/lib/db";
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 
 export async function GET(request: Request) {
   try {
@@ -45,10 +45,17 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    await db
+    const result = await db
       .update(schema.discoverySearches)
       .set({ name: body.name })
-      .where(eq(schema.discoverySearches.id, body.searchId));
+      .where(and(
+        eq(schema.discoverySearches.id, body.searchId),
+        eq(schema.discoverySearches.userId, session.user.id),
+      ));
+
+    if (!result.rowsAffected) {
+      return NextResponse.json({ error: "Search not found" }, { status: 404 });
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

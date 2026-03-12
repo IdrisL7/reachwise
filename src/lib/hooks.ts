@@ -57,6 +57,9 @@ export type Hook = {
   source_url: string;
   evidence_tier: EvidenceTier;
   confidence: Confidence;
+  quality_score?: number;
+  quality_label?: "Excellent" | "Strong" | "Decent" | "Weak";
+  generated_hook_id?: string;
   psych_mode?: PsychMode;
   why_this_works?: string;
   role_used?: TargetRole;
@@ -2673,6 +2676,49 @@ export function isTradeoffGrounded(hookText: string, evidenceSnippet: string): b
   }
 
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// Hook quality scoring (1-100) + ranking
+// ---------------------------------------------------------------------------
+
+export function getQualityLabel(score: number): "Excellent" | "Strong" | "Decent" | "Weak" {
+  if (score >= 90) return "Excellent";
+  if (score >= 70) return "Strong";
+  if (score >= 50) return "Decent";
+  return "Weak";
+}
+
+export function scoreHookQuality(hook: Hook, companyDomain?: string): number {
+  let evidence = 0;
+  if (hook.source_url) evidence += 12;
+  if (hook.source_date) evidence += 8;
+  if (hook.evidence_snippet && hook.evidence_snippet.length >= 30) evidence += 8;
+  if (/['"“”]/.test(hook.evidence_snippet || "")) evidence += 7;
+  if (hook.evidence_tier === "A") evidence += 8;
+  if (hook.evidence_tier === "B") evidence += 4;
+
+  let relevance = hook.angle === "trigger" ? 30 : hook.angle === "risk" ? 24 : 18;
+  if (hook.role_token_hit) relevance += 2;
+
+  let recency = 6;
+  if (hook.source_date) {
+    const daysAgo = (Date.now() - new Date(hook.source_date).getTime()) / (1000 * 60 * 60 * 24);
+    if (daysAgo <= 14) recency = 20;
+    else if (daysAgo <= 45) recency = 16;
+    else if (daysAgo <= 90) recency = 12;
+    else if (daysAgo <= 180) recency = 8;
+    else recency = 4;
+  }
+
+  let specificity = 4;
+  if (/\d/.test(hook.hook)) specificity += 4;
+  if (/['"“”]/.test(hook.hook)) specificity += 3;
+  if ((hook.hook.match(/\b[A-Z][a-z]{2,}\b/g) || []).length >= 2) specificity += 3;
+  if (companyDomain && (`${hook.hook} ${hook.evidence_snippet}`).toLowerCase().includes(companyDomain.toLowerCase())) specificity += 1;
+
+  const raw = evidence + relevance + recency + Math.min(specificity, 15);
+  return Math.max(1, Math.min(100, Math.round(raw)));
 }
 
 // ---------------------------------------------------------------------------

@@ -19,7 +19,7 @@ export function DiscoveryForm({ criteria, setCriteria, onSubmit, loading }: Prop
         <input className="bg-zinc-800 rounded-lg px-3 py-2 text-sm" placeholder="Tech stack (comma-separated)" value={(criteria.techStack || []).join(", ")} onChange={(e) => setCriteria({ ...criteria, techStack: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) })} />
       </div>
       <textarea className="w-full mt-3 bg-zinc-800 rounded-lg px-3 py-2 text-sm" rows={3} placeholder="Keywords" value={criteria.keywords || ""} onChange={(e) => setCriteria({ ...criteria, keywords: e.target.value })} />
-      <button onClick={onSubmit} disabled={loading} className="mt-3 bg-emerald-600 hover:bg-emerald-500 text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50">
+      <button onClick={onSubmit} disabled={loading} className="mt-3 bg-violet-600 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-lg disabled:opacity-50">
         {loading ? "Discovering..." : "Discover Companies"}
       </button>
     </div>

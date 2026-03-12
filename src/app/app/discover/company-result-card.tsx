@@ -31,7 +31,7 @@ export function CompanyResultCard({ company, onViewIntel, intelLoading = false }
         >
           {intelLoading ? "Loading intel..." : "View Intel"}
         </button>
-        <Link href={`/app/hooks?url=${encodeURIComponent(company.url)}`} className="text-xs px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded">
+        <Link href={`/app/hooks?url=${encodeURIComponent(company.url)}`} className="text-xs px-2 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded">
           Generate Hooks
         </Link>
         <a href={company.url} target="_blank" rel="noopener noreferrer" className="text-xs px-2 py-1 border border-zinc-700 rounded text-zinc-300">Visit</a>

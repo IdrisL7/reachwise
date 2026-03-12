@@ -305,6 +305,46 @@ export async function fetchNewSalesforceLeads(
   return result.records;
 }
 
+/** Push a generated hook as a Salesforce task */
+export async function pushHookToSalesforce(
+  integrationId: string,
+  hook: {
+    companyName?: string | null;
+    companyUrl: string;
+    hookText: string;
+    sourceUrl?: string;
+    sourceTitle?: string;
+    sourceDate?: string;
+    sourceSnippet?: string;
+    qualityScore?: number;
+  },
+): Promise<string> {
+  const res = await sfFetch(integrationId, `/services/data/${SF_API_VERSION}/sobjects/Task`, {
+    method: "POST",
+    body: JSON.stringify({
+      Subject: `GetSignalHooks insight${hook.companyName ? ` • ${hook.companyName}` : ""}`,
+      Status: "Not Started",
+      Priority: "Normal",
+      Description: [
+        `Hook: ${hook.hookText}`,
+        hook.qualityScore ? `Quality score: ${hook.qualityScore}/100` : null,
+        hook.sourceSnippet ? `Evidence: ${hook.sourceSnippet}` : null,
+        hook.sourceTitle || hook.sourceUrl ? `Source: ${hook.sourceTitle || hook.sourceUrl}` : null,
+        hook.sourceDate ? `Date: ${hook.sourceDate}` : null,
+        `Company URL: ${hook.companyUrl}`,
+      ].filter(Boolean).join("\n"),
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Salesforce task create failed: ${res.status} ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id as string;
+}
+
 /** Run a full bidirectional sync */
 export async function syncSalesforce(integrationId: string) {
   const results = { pushed: 0, pulled: 0, updated: 0, errors: [] as string[] };

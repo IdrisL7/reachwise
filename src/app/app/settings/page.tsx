@@ -737,7 +737,10 @@ export default function SettingsPage() {
 
       {/* Integrations */}
       <section className="mb-10">
-        <h2 className="text-lg font-semibold mb-4">Integrations</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Integrations</h2>
+          <a href="/app/settings/integrations" className="text-xs text-violet-400 hover:text-violet-300">Manage CRM integrations</a>
+        </div>
         <div className="space-y-3">
           <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
