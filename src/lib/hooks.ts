@@ -881,28 +881,24 @@ async function fetchNewsSignals(
   apiKey: string,
 ): Promise<ClassifiedSource[]> {
   const query = `"${companyName}" OR "${domain}"`;
-  const daysList = [30, 90, 365]; // month → quarter → year
 
-  for (const days of daysList) {
-    try {
-      const results = await tavilySearch(query, apiKey, {
-        topic: "news",
-        max_results: 15,
-        days,
-        exclude_domains: [domain],
-      });
+  // Fire all freshness windows in parallel, pick narrowest with enough results
+  const [r30, r90, r365] = await Promise.all(
+    [30, 90, 365].map((days) =>
+      tavilySearch(query, apiKey, { topic: "news", max_results: 15, days, exclude_domains: [domain] })
+        .then((results) =>
+          results
+            .map((r) => tavilyResultToSource(r, domain))
+            .filter((s): s is Source => s !== null)
+            .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
+        )
+        .catch(() => [] as ClassifiedSource[]),
+    ),
+  );
 
-      const sources = results
-        .map((r) => tavilyResultToSource(r, domain))
-        .filter((s): s is Source => s !== null)
-        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
-
-      if (sources.length >= 3 || days === 365) return sources;
-    } catch {
-      continue;
-    }
-  }
-  return [];
+  if (r30.length >= 3) return r30;
+  if (r90.length >= 3) return r90;
+  return r365;
 }
 
 // ---------------------------------------------------------------------------
@@ -922,29 +918,22 @@ async function fetchWebSignals(
   ].join(" OR ");
 
   const query = `("${companyName}" OR "${domain}") (${eventVerbs})`;
-  const daysList = [30, 90];
 
-  for (const days of daysList) {
-    try {
-      const results = await tavilySearch(query, apiKey, {
-        topic: "general",
-        search_depth: "advanced",
-        max_results: 10,
-        days,
-        exclude_domains: [domain],
-      });
+  // Fire both freshness windows in parallel
+  const [r30, r90] = await Promise.all(
+    [30, 90].map((days) =>
+      tavilySearch(query, apiKey, { topic: "general", search_depth: "basic", max_results: 10, days, exclude_domains: [domain] })
+        .then((results) =>
+          results
+            .map((r) => tavilyResultToSource(r, domain))
+            .filter((s): s is Source => s !== null)
+            .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
+        )
+        .catch(() => [] as ClassifiedSource[]),
+    ),
+  );
 
-      const sources = results
-        .map((r) => tavilyResultToSource(r, domain))
-        .filter((s): s is Source => s !== null)
-        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
-
-      if (sources.length >= 3 || days === 90) return sources;
-    } catch {
-      continue;
-    }
-  }
-  return [];
+  return r30.length >= 3 ? r30 : r90;
 }
 
 // ---------------------------------------------------------------------------
