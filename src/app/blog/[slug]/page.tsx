@@ -3,9 +3,13 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { MDXRemote } from "next-mdx-remote/rsc";
 import { getAllSlugs, getPostBySlug } from "@/lib/blog";
+import { CTABlock } from "@/components/blog/cta-block";
+import { ComparisonTable } from "@/components/blog/comparison-table";
+
+const mdxComponents = { CTABlock, ComparisonTable };
 
 type BlogPostPageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateStaticParams() {
@@ -14,7 +18,7 @@ export async function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }: BlogPostPageProps): Promise<Metadata> {
-  const { slug } = params;
+  const { slug } = await params;
 
   try {
     const post = await getPostBySlug(slug);
@@ -48,7 +52,7 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
 }
 
 export default async function BlogPostPage({ params }: BlogPostPageProps) {
-  const { slug } = params;
+  const { slug } = await params;
 
   let post;
   try {
@@ -104,7 +108,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         </header>
 
         <div className="prose prose-invert prose-zinc max-w-none prose-headings:text-zinc-100 prose-a:text-violet-300 hover:prose-a:text-violet-200 prose-strong:text-zinc-100">
-          <MDXRemote source={post.source} />
+          <MDXRemote source={post.source} components={mdxComponents} />
         </div>
       </article>
     </main>
