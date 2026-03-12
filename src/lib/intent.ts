@@ -17,16 +17,16 @@ export type IntentSignal = {
 // Query builders
 // ---------------------------------------------------------------------------
 
-export function buildHiringQuery(companyName: string, domain: string): string {
-  return `"${companyName}" (hiring OR careers OR "open roles" OR "we're hiring" OR "job openings") -site:${domain}`;
+export function buildHiringQuery(companyName: string): string {
+  return `"${companyName}" (hiring OR careers OR "open roles" OR "we're hiring" OR "job openings")`;
 }
 
-export function buildFundingQuery(companyName: string, domain: string): string {
-  return `"${companyName}" (funding OR raised OR "series" OR acquisition OR revenue OR IPO) -site:${domain}`;
+export function buildFundingQuery(companyName: string): string {
+  return `"${companyName}" (funding OR raised OR "series" OR acquisition OR revenue OR IPO)`;
 }
 
-export function buildTechChangeQuery(companyName: string, domain: string): string {
-  return `"${companyName}" (migrated OR switched OR adopted OR integration OR "now using" OR "replaced") -site:${domain}`;
+export function buildTechChangeQuery(companyName: string): string {
+  return `"${companyName}" (migrated OR switched OR adopted OR integration OR "now using" OR "replaced")`;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,42 +84,44 @@ export function getTemperature(score: number): "hot" | "warm" | "cold" {
 }
 
 // ---------------------------------------------------------------------------
-// Brave Search → Claude extraction pipeline
+// Tavily Search → Claude extraction pipeline
 // ---------------------------------------------------------------------------
 
-type BraveWebResult = {
+type SearchResult = {
   title?: string;
   url?: string;
   description?: string;
-  snippet?: string;
-  page_age?: string;
 };
 
-async function searchBrave(
+async function searchTavily(
   query: string,
   apiKey: string,
   count = 5,
-): Promise<BraveWebResult[]> {
-  const params = new URLSearchParams({
-    q: query,
-    count: String(count),
-    freshness: "pm",
-  });
+  exclude_domains?: string[],
+): Promise<SearchResult[]> {
+  const body: Record<string, unknown> = {
+    query,
+    api_key: apiKey,
+    max_results: count,
+    days: 30,
+    search_depth: "basic",
+    include_raw_content: false,
+  };
+  if (exclude_domains?.length) body.exclude_domains = exclude_domains;
 
-  const res = await fetch(
-    `https://api.search.brave.com/res/v1/web/search?${params}`,
-    {
-      headers: {
-        Accept: "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": apiKey,
-      },
-    },
-  );
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.web?.results || []) as BraveWebResult[];
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+    title: r.title,
+    url: r.url,
+    description: r.content,
+  }));
 }
 
 const EXTRACTION_PROMPT = `You are an intent-signal extractor. Given search results about a company, identify buying signals.
@@ -141,7 +143,7 @@ Rules:
 - Return ONLY valid JSON array, no markdown or extra text`;
 
 async function extractSignals(
-  searchResults: BraveWebResult[],
+  searchResults: SearchResult[],
   companyName: string,
   queryType: string,
   claudeApiKey: string,
@@ -149,7 +151,7 @@ async function extractSignals(
   if (searchResults.length === 0) return [];
 
   const context = searchResults
-    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`)
     .join("\n\n");
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -200,7 +202,7 @@ async function extractSignals(
 export async function researchIntentSignals(
   companyUrl: string,
   companyName: string,
-  braveApiKey: string,
+  searchApiKey: string,
   claudeApiKey: string,
 ): Promise<IntentSignal[]> {
   let domain: string;
@@ -211,9 +213,9 @@ export async function researchIntentSignals(
   }
 
   const [hiringResults, fundingResults, techResults] = await Promise.all([
-    searchBrave(buildHiringQuery(companyName, domain), braveApiKey),
-    searchBrave(buildFundingQuery(companyName, domain), braveApiKey),
-    searchBrave(buildTechChangeQuery(companyName, domain), braveApiKey),
+    searchTavily(buildHiringQuery(companyName), searchApiKey, 5, [domain]),
+    searchTavily(buildFundingQuery(companyName), searchApiKey, 5, [domain]),
+    searchTavily(buildTechChangeQuery(companyName), searchApiKey, 5, [domain]),
   ]);
 
   const [hiringSignals, fundingSignals, techSignals] = await Promise.all([

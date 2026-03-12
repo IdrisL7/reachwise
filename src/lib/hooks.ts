@@ -795,82 +795,84 @@ export function countSignalFacts(sources: ClassifiedSource[]): number {
 }
 
 // ---------------------------------------------------------------------------
-// Brave API helpers
+// Tavily Search API helpers
 // ---------------------------------------------------------------------------
 
-type BraveWebResult = {
+type TavilyResult = {
   title?: string;
   url?: string;
-  description?: string;
-  snippet?: string;
-  page_age?: string;
-  meta_url?: { hostname?: string };
+  content?: string;
+  raw_content?: string;
+  score?: number;
+  published_date?: string;
 };
 
-type BraveNewsResult = {
-  title?: string;
-  url?: string;
-  description?: string;
-  age?: string;
-  meta_url?: { hostname?: string };
-};
-
-function braveHeaders(apiKey: string) {
-  return {
-    Accept: "application/json",
-    "Accept-Encoding": "gzip",
-    "X-Subscription-Token": apiKey,
+async function tavilySearch(
+  query: string,
+  apiKey: string,
+  options: {
+    topic?: "general" | "news";
+    max_results?: number;
+    days?: number;
+    include_domains?: string[];
+    exclude_domains?: string[];
+    search_depth?: "basic" | "advanced";
+  } = {},
+): Promise<TavilyResult[]> {
+  const body: Record<string, unknown> = {
+    query,
+    api_key: apiKey,
+    topic: options.topic ?? "general",
+    max_results: options.max_results ?? 10,
+    search_depth: options.search_depth ?? "basic",
+    include_raw_content: false,
   };
+  if (options.days) body.days = options.days;
+  if (options.include_domains?.length) body.include_domains = options.include_domains;
+  if (options.exclude_domains?.length) body.exclude_domains = options.exclude_domains;
+
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data?.results ?? []) as TavilyResult[];
 }
 
-function webResultToSource(r: BraveWebResult, fallbackUrl: string): Source | null {
+function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | null {
   const facts: string[] = [];
-  if (r.description?.trim()) facts.push(r.description.trim());
-  if (r.snippet?.trim() && r.snippet.trim() !== r.description?.trim()) {
-    facts.push(r.snippet.trim());
+  if (r.content?.trim()) {
+    // Split long content into sentences for better fact extraction
+    const sentences = r.content.trim().split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
+    if (sentences.length > 1) {
+      facts.push(...sentences.slice(0, 3));
+    } else {
+      facts.push(r.content.trim());
+    }
   }
   if (facts.length === 0) return null;
 
   let publisher = "";
   try {
-    publisher = r.meta_url?.hostname || new URL(r.url || fallbackUrl).hostname;
+    publisher = new URL(r.url || fallbackUrl).hostname;
   } catch {
-    publisher = r.meta_url?.hostname || fallbackUrl;
+    publisher = fallbackUrl;
   }
 
   return {
     title: (r.title || "Untitled").trim(),
     publisher,
-    date: r.page_age || "",
-    url: r.url || "",
-    facts,
-  };
-}
-
-function newsResultToSource(r: BraveNewsResult): Source | null {
-  if (!r.description?.trim() && !r.title?.trim()) return null;
-
-  const facts: string[] = [];
-  if (r.description?.trim()) facts.push(r.description.trim());
-
-  let publisher = "";
-  try {
-    publisher = r.meta_url?.hostname || (r.url ? new URL(r.url).hostname : "");
-  } catch {
-    publisher = r.meta_url?.hostname || "";
-  }
-
-  return {
-    title: (r.title || "Untitled").trim(),
-    publisher,
-    date: r.age || "",
+    date: r.published_date || "",
     url: r.url || "",
     facts,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Prong A: Brave News Search
+// Prong A: Tavily News Search
 // ---------------------------------------------------------------------------
 
 async function fetchNewsSignals(
@@ -878,30 +880,24 @@ async function fetchNewsSignals(
   domain: string,
   apiKey: string,
 ): Promise<ClassifiedSource[]> {
-  const query = `("${companyName}" OR "${domain}") -site:${domain}`;
-  const freshnessList = ["pm", "pq", "py"]; // month → quarter → year
+  const query = `"${companyName}" OR "${domain}"`;
+  const daysList = [30, 90, 365]; // month → quarter → year
 
-  for (const freshness of freshnessList) {
+  for (const days of daysList) {
     try {
-      const response = await fetch(
-        `https://api.search.brave.com/res/v1/news/search?q=${encodeURIComponent(query)}&count=15&freshness=${freshness}`,
-        { headers: braveHeaders(apiKey) },
-      );
+      const results = await tavilySearch(query, apiKey, {
+        topic: "news",
+        max_results: 15,
+        days,
+        exclude_domains: [domain],
+      });
 
-      if (!response.ok) continue;
-
-      const data = (await response.json()) as {
-        results?: BraveNewsResult[];
-      };
-
-      const results = data?.results ?? [];
       const sources = results
-        .map((r) => newsResultToSource(r))
+        .map((r) => tavilyResultToSource(r, domain))
         .filter((s): s is Source => s !== null)
         .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
 
-      if (sources.length >= 3 || freshness === "py") return sources;
-      // Expand freshness if too few results
+      if (sources.length >= 3 || days === 365) return sources;
     } catch {
       continue;
     }
@@ -910,7 +906,7 @@ async function fetchNewsSignals(
 }
 
 // ---------------------------------------------------------------------------
-// Prong B: Improved Web Search (event-focused, excludes company site)
+// Prong B: Tavily Web Search (event-focused, excludes company site)
 // ---------------------------------------------------------------------------
 
 async function fetchWebSignals(
@@ -920,32 +916,30 @@ async function fetchWebSignals(
 ): Promise<ClassifiedSource[]> {
   const eventVerbs = [
     "announced", "launches", "launched", "release", "released",
-    "changelog", '"release notes"', "partnership", "partners",
-    "hires", "hiring", '"job posting"', "funding",
-    "acquired", "acquisition", '"now supports"', "introduces",
+    "changelog", "release notes", "partnership", "partners",
+    "hires", "hiring", "job posting", "funding",
+    "acquired", "acquisition", "now supports", "introduces",
   ].join(" OR ");
 
-  const query = `("${companyName}" OR "${domain}") (${eventVerbs}) -site:${domain}`;
-  const freshnessList = ["pm", "pq"];
+  const query = `("${companyName}" OR "${domain}") (${eventVerbs})`;
+  const daysList = [30, 90];
 
-  for (const freshness of freshnessList) {
+  for (const days of daysList) {
     try {
-      const response = await fetch(
-        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&freshness=${freshness}`,
-        { headers: braveHeaders(apiKey) },
-      );
-
-      if (!response.ok) continue;
-
-      const data = (await response.json()) as { web?: { results?: BraveWebResult[] } };
-      const results = data?.web?.results ?? [];
+      const results = await tavilySearch(query, apiKey, {
+        topic: "general",
+        search_depth: "advanced",
+        max_results: 10,
+        days,
+        exclude_domains: [domain],
+      });
 
       const sources = results
-        .map((r) => webResultToSource(r, domain))
+        .map((r) => tavilyResultToSource(r, domain))
         .filter((s): s is Source => s !== null)
         .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
 
-      if (sources.length >= 3 || freshness === "pq") return sources;
+      if (sources.length >= 3 || days === 90) return sources;
     } catch {
       continue;
     }
@@ -962,25 +956,22 @@ async function fetchCompanyOwnSignals(
   apiKey: string,
 ): Promise<ClassifiedSource[]> {
   const signalPaths = [
-    "changelog", '"release notes"', "press", "newsroom",
-    "blog", "careers", "jobs", "partners", "integrations", '"case study"',
+    "changelog", "release notes", "press", "newsroom",
+    "blog", "careers", "jobs", "partners", "integrations", "case study",
   ].join(" OR ");
 
-  const query = `site:${domain} (${signalPaths})`;
+  const query = `${signalPaths}`;
 
   try {
-    const response = await fetch(
-      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=10&freshness=pm`,
-      { headers: braveHeaders(apiKey) },
-    );
-
-    if (!response.ok) return [];
-
-    const data = (await response.json()) as { web?: { results?: BraveWebResult[] } };
-    const results = data?.web?.results ?? [];
+    const results = await tavilySearch(query, apiKey, {
+      topic: "general",
+      max_results: 10,
+      days: 30,
+      include_domains: [domain],
+    });
 
     return results
-      .map((r) => webResultToSource(r, domain))
+      .map((r) => tavilyResultToSource(r, domain))
       .filter((s): s is Source => s !== null)
       .map((s) => applyRecencyDowngrade({
         ...s,
@@ -1461,12 +1452,20 @@ export async function fetchSourcesWithGating(
 }
 
 // ---------------------------------------------------------------------------
-// Brave search → company name resolution (unchanged)
+// Search → company name resolution
 // ---------------------------------------------------------------------------
+
+type WebSearchResult = {
+  title?: string;
+  url?: string;
+  description?: string;
+  snippet?: string;
+  meta_url?: { hostname?: string };
+};
 
 export function computeCompanyResolution(
   companyName: string,
-  webResults: BraveWebResult[],
+  webResults: WebSearchResult[],
 ): CompanyResolutionResult {
   const normalizedName = companyName.trim();
 
@@ -1546,23 +1545,26 @@ export async function resolveCompanyByName(
     };
   }
 
-  const response = await fetch(
-    `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=8`,
-    {
-      method: "GET",
-      headers: braveHeaders(apiKey),
-    },
-  );
+  const tavilyResults = await tavilySearch(query, apiKey, {
+    topic: "general",
+    max_results: 8,
+  });
 
-  if (!response.ok) {
-    throw new Error(`Brave API error: ${response.status}`);
-  }
+  // Map Tavily results to the shape computeCompanyResolution expects
+  const webResults: { title?: string; url?: string; description?: string; snippet?: string; meta_url?: { hostname?: string } }[] =
+    tavilyResults.map((r) => {
+      let hostname = "";
+      try {
+        hostname = r.url ? new URL(r.url).hostname : "";
+      } catch {}
+      return {
+        title: r.title,
+        url: r.url,
+        description: r.content,
+        meta_url: { hostname },
+      };
+    });
 
-  const data = (await response.json()) as {
-    web?: { results?: BraveWebResult[] };
-  };
-
-  const webResults = data?.web?.results ?? [];
   return computeCompanyResolution(companyName, webResults);
 }
 
@@ -2814,14 +2816,14 @@ export async function generateHooksForUrl(opts: {
   senderContext?: SenderContext | null;
   targetRole?: TargetRole | null;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
-  const braveApiKey = process.env.BRAVE_API_KEY;
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
-  if (!braveApiKey || !claudeApiKey) {
-    throw new Error("Missing BRAVE_API_KEY or CLAUDE_API_KEY");
+  if (!tavilyApiKey || !claudeApiKey) {
+    throw new Error("Missing TAVILY_API_KEY or CLAUDE_API_KEY");
   }
 
-  const { sources: rawSources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, braveApiKey);
+  const { sources: rawSources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, tavilyApiKey);
   const domain = getDomain(opts.url);
   const includeMarketContext = opts.includeMarketContext ?? false;
 

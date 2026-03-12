@@ -2,7 +2,7 @@ import { and, eq, gt } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { callClaude, getDomain } from "@/lib/hooks";
 
-type BraveWebResult = { title?: string; url?: string; description?: string; snippet?: string; page_age?: string };
+type SearchResult = { title?: string; url?: string; description?: string };
 
 export interface CompanyIntelligence {
   companyName: string | null;
@@ -48,18 +48,25 @@ const EMPTY_INTEL: CompanyIntelligence = {
   confidenceScore: 0,
 };
 
-async function searchBrave(query: string, apiKey: string, count = 6): Promise<BraveWebResult[]> {
-  const params = new URLSearchParams({ q: query, count: String(count) });
-  const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
-    headers: {
-      Accept: "application/json",
-      "Accept-Encoding": "gzip",
-      "X-Subscription-Token": apiKey,
-    },
+async function searchTavily(query: string, apiKey: string, count = 6): Promise<SearchResult[]> {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query,
+      api_key: apiKey,
+      max_results: count,
+      search_depth: "basic",
+      include_raw_content: false,
+    }),
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.web?.results || []) as BraveWebResult[];
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+    title: r.title,
+    url: r.url,
+    description: r.content,
+  }));
 }
 
 async function fetchPage(url: string): Promise<string> {
@@ -80,15 +87,15 @@ async function extractJsonArray(prompt: string, claudeApiKey: string) {
   return Array.isArray(payload) ? payload : [];
 }
 
-async function extractBasicCompanyInfo(url: string, braveApiKey: string, claudeApiKey: string): Promise<BasicCompanyIntel & { companyNameRaw?: string; industryRaw?: string; foundedYear?: number | null }> {
+async function extractBasicCompanyInfo(url: string, searchApiKey: string, claudeApiKey: string): Promise<BasicCompanyIntel & { companyNameRaw?: string; industryRaw?: string; foundedYear?: number | null }> {
   const domain = getDomain(url);
   const [homepage, results] = await Promise.all([
     fetchPage(url).catch(() => ""),
-    searchBrave(`"${domain}" company overview employees headquarters`, braveApiKey, 5),
+    searchTavily(`"${domain}" company overview employees headquarters`, searchApiKey, 5),
   ]);
 
   const context = results
-    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`)
     .join("\n\n");
 
   const rows = await extractJsonArray(
@@ -109,13 +116,13 @@ async function extractBasicCompanyInfo(url: string, braveApiKey: string, claudeA
   };
 }
 
-async function detectTechStack(companyName: string, domain: string, braveApiKey: string, claudeApiKey: string) {
+async function detectTechStack(companyName: string, domain: string, searchApiKey: string, claudeApiKey: string) {
   const [jobs, thirdParty] = await Promise.all([
-    searchBrave(`"${companyName}" hiring engineer developer React Python AWS`, braveApiKey, 6),
-    searchBrave(`"${domain}" site:stackshare.io OR site:builtwith.com`, braveApiKey, 6),
+    searchTavily(`"${companyName}" hiring engineer developer React Python AWS`, searchApiKey, 6),
+    searchTavily(`"${domain}" site:stackshare.io OR site:builtwith.com`, searchApiKey, 6),
   ]);
   const combined = [...jobs, ...thirdParty]
-    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`)
     .join("\n\n");
 
   const rows = await extractJsonArray(
@@ -132,9 +139,9 @@ async function detectTechStack(companyName: string, domain: string, braveApiKey:
   return { stack, sources };
 }
 
-async function extractDecisionMakers(companyName: string, domain: string, braveApiKey: string, claudeApiKey: string) {
-  const results = await searchBrave(`"${companyName}" VP Director "Head of" Chief Sales Marketing Engineering`, braveApiKey, 8);
-  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`).join("\n\n");
+async function extractDecisionMakers(companyName: string, domain: string, searchApiKey: string, claudeApiKey: string) {
+  const results = await searchTavily(`"${companyName}" VP Director "Head of" Chief Sales Marketing Engineering`, searchApiKey, 8);
+  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`).join("\n\n");
 
   const rows = await extractJsonArray(
     `Extract decision maker TITLES ONLY (no names, no emails) as JSON array: [{"title":string,"department":string}]\nCompany: ${companyName} (${domain})\n${context}`,
@@ -148,9 +155,9 @@ async function extractDecisionMakers(companyName: string, domain: string, braveA
     .slice(0, 8);
 }
 
-async function findCompetitors(companyName: string, industry: string, braveApiKey: string, claudeApiKey: string) {
-  const results = await searchBrave(`"${companyName}" competitor alternative vs compared ${industry || ""}`, braveApiKey, 8);
-  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`).join("\n\n");
+async function findCompetitors(companyName: string, industry: string, searchApiKey: string, claudeApiKey: string) {
+  const results = await searchTavily(`"${companyName}" competitor alternative vs compared ${industry || ""}`, searchApiKey, 8);
+  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`).join("\n\n");
 
   const rows = await extractJsonArray(
     `Extract competitors as JSON array: [{"name":string,"domain":string}]\n${context}`,
@@ -252,7 +259,7 @@ export async function setCachedIntel(domain: string, intel: CompanyIntelligence,
 
 export async function getCompanyIntelligence(
   companyUrl: string,
-  braveApiKey: string,
+  searchApiKey: string,
   claudeApiKey: string,
   fullAccess: boolean,
 ): Promise<CompanyIntelligence> {
@@ -263,7 +270,7 @@ export async function getCompanyIntelligence(
     return { ...cached, techStack: [], techStackSources: [], decisionMakers: [], competitors: [] };
   }
 
-  const basic = await extractBasicCompanyInfo(companyUrl, braveApiKey, claudeApiKey);
+  const basic = await extractBasicCompanyInfo(companyUrl, searchApiKey, claudeApiKey);
   const base: CompanyIntelligence = {
     ...EMPTY_INTEL,
     companyName: basic.companyName,
@@ -277,9 +284,9 @@ export async function getCompanyIntelligence(
   if (fullAccess) {
     const companyName = base.companyName || domain;
     const [tech, roles, competitors] = await Promise.all([
-      detectTechStack(companyName, domain, braveApiKey, claudeApiKey).catch(() => ({ stack: [], sources: [] })),
-      extractDecisionMakers(companyName, domain, braveApiKey, claudeApiKey).catch(() => []),
-      findCompetitors(companyName, base.industry || "", braveApiKey, claudeApiKey).catch(() => []),
+      detectTechStack(companyName, domain, searchApiKey, claudeApiKey).catch(() => ({ stack: [], sources: [] })),
+      extractDecisionMakers(companyName, domain, searchApiKey, claudeApiKey).catch(() => []),
+      findCompetitors(companyName, base.industry || "", searchApiKey, claudeApiKey).catch(() => []),
     ]);
     base.techStack = tech.stack;
     base.techStackSources = tech.sources;

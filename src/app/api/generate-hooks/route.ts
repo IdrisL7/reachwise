@@ -105,7 +105,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const braveApiKey = process.env.BRAVE_API_KEY;
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
 
     if (!rawUrl && !companyName) {
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!braveApiKey || !claudeApiKey) {
+    if (!tavilyApiKey || !claudeApiKey) {
       return NextResponse.json(
         { error: "Server misconfiguration: missing API keys. Please contact support." },
         { status: 500 },
@@ -157,7 +157,7 @@ export async function POST(request: Request) {
     let resolution: CompanyResolutionResult | null = null;
 
     if (!url && companyName) {
-      resolution = await resolveCompanyByName(companyName, braveApiKey);
+      resolution = await resolveCompanyByName(companyName, tavilyApiKey);
 
       if (resolution.status === "no_match") {
         return NextResponse.json({
@@ -217,7 +217,7 @@ export async function POST(request: Request) {
     if (!candidateHooks) {
       try {
         // 1. Gather and classify sources with signal gating + anchor scoring
-        const result = await fetchSourcesWithGating(url, braveApiKey!);
+        const result = await fetchSourcesWithGating(url, tavilyApiKey!);
         const sources = result.sources;
         signalCount = result.signalCount;
         isLowSignal = result.lowSignal;
@@ -399,8 +399,8 @@ export async function POST(request: Request) {
 
     if (tierId === "pro" || tierId === "concierge") {
       const [intentResult, intelResult] = await Promise.allSettled([
-        researchIntentSignals(url, companyName || companyDomain || "", braveApiKey, claudeApiKey),
-        getCompanyIntelligence(url, braveApiKey, claudeApiKey, true),
+        researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
+        getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, true),
       ]);
 
       if (intentResult.status === "fulfilled") {
@@ -424,7 +424,7 @@ export async function POST(request: Request) {
       }
     } else {
       try {
-        companyIntel = await getCompanyIntelligence(url, braveApiKey, claudeApiKey, false);
+        companyIntel = await getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, false);
       } catch {
         // Non-blocking
       }

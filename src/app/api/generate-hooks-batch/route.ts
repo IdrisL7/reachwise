@@ -115,9 +115,9 @@ export async function POST(request: Request) {
           let intentData: { score: number; temperature: string; signalsCount: number } | null = null;
           if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
             try {
-              const braveKey = process.env.BRAVE_API_KEY;
+              const tavilyKey = process.env.TAVILY_API_KEY;
               const claudeKey = process.env.CLAUDE_API_KEY;
-              if (braveKey && claudeKey) {
+              if (tavilyKey && claudeKey) {
                 // Derive company name from URL hostname
                 let companyName: string;
                 try {
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
                 } catch {
                   companyName = url;
                 }
-                const signals = await researchIntentSignals(url, companyName, braveKey, claudeKey);
+                const signals = await researchIntentSignals(url, companyName, tavilyKey, claudeKey);
                 const score = computeIntentScore(signals);
                 intentData = {
                   score,

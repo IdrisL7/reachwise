@@ -87,13 +87,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    const braveApiKey = process.env.BRAVE_API_KEY;
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
-    if (!braveApiKey || !claudeApiKey) {
+    if (!tavilyApiKey || !claudeApiKey) {
       return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }
 
-    const result = await discoverCompanies(body, session.user.id, braveApiKey, claudeApiKey, 20);
+    const result = await discoverCompanies(body, session.user.id, tavilyApiKey, claudeApiKey, 20);
     return NextResponse.json(result);
   } catch (error) {
     console.error("/api/discover POST failed", error);

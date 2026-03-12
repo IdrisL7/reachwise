@@ -25,14 +25,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Missing url query param" }, { status: 400 });
     }
 
-    const braveApiKey = process.env.BRAVE_API_KEY;
+    const tavilyApiKey = process.env.TAVILY_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
-    if (!braveApiKey || !claudeApiKey) {
+    if (!tavilyApiKey || !claudeApiKey) {
       return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }
 
     const fullAccess = tierId === "pro" || tierId === "concierge";
-    const intel = await getCompanyIntelligence(url, braveApiKey, claudeApiKey, fullAccess);
+    const intel = await getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, fullAccess);
 
     return NextResponse.json(intel);
   } catch (error) {

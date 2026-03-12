@@ -1,11 +1,10 @@
 import { db, schema } from "@/lib/db";
 import { callClaude, getDomain } from "@/lib/hooks";
 
-type BraveWebResult = {
+type SearchResult = {
   title?: string;
   url?: string;
   description?: string;
-  snippet?: string;
 };
 
 export interface DiscoveryCriteria {
@@ -37,18 +36,25 @@ export interface DiscoveryResult {
   criteria: DiscoveryCriteria;
 }
 
-async function searchBrave(query: string, apiKey: string, count = 8): Promise<BraveWebResult[]> {
-  const params = new URLSearchParams({ q: query, count: String(count) });
-  const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
-    headers: {
-      Accept: "application/json",
-      "Accept-Encoding": "gzip",
-      "X-Subscription-Token": apiKey,
-    },
+async function searchTavily(query: string, apiKey: string, count = 8): Promise<SearchResult[]> {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query,
+      api_key: apiKey,
+      max_results: count,
+      search_depth: "basic",
+      include_raw_content: false,
+    }),
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.web?.results || []) as BraveWebResult[];
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+    title: r.title,
+    url: r.url,
+    description: r.content,
+  }));
 }
 
 export function buildDiscoveryQueries(criteria: DiscoveryCriteria): string[] {
@@ -79,14 +85,14 @@ export function buildDiscoveryQueries(criteria: DiscoveryCriteria): string[] {
 }
 
 async function extractCompaniesFromResults(
-  searchResults: BraveWebResult[],
+  searchResults: SearchResult[],
   criteria: DiscoveryCriteria,
   claudeApiKey: string,
 ): Promise<DiscoveredCompany[]> {
   if (searchResults.length === 0) return [];
 
   const context = searchResults
-    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`)
     .join("\n\n");
 
   const raw = await callClaude(
@@ -142,12 +148,12 @@ function deduplicateAndScore(companies: DiscoveredCompany[], criteria: Discovery
 export async function discoverCompanies(
   criteria: DiscoveryCriteria,
   userId: string,
-  braveApiKey: string,
+  searchApiKey: string,
   claudeApiKey: string,
   limit = 20,
 ): Promise<DiscoveryResult> {
   const queries = buildDiscoveryQueries(criteria);
-  const resultLists = await Promise.all(queries.map((q) => searchBrave(q, braveApiKey, 8).catch(() => [])));
+  const resultLists = await Promise.all(queries.map((q) => searchTavily(q, searchApiKey, 8).catch(() => [])));
 
   const merged = resultLists.flat().slice(0, 30);
   const extracted = await extractCompaniesFromResults(merged, criteria, claudeApiKey);
