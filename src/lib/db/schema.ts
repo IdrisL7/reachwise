@@ -227,6 +227,44 @@ export const stripeEvents = sqliteTable("stripe_events", {
   processedAt: text("processed_at").notNull().default(sql`(datetime('now'))`),
 });
 
+export const companyIntel = sqliteTable("company_intel", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  domain: text("domain").notNull().unique(),
+  url: text("url").notNull(),
+  companyName: text("company_name"),
+  industry: text("industry"),
+  subIndustry: text("sub_industry"),
+  employeeRange: text("employee_range"),
+  hqLocation: text("hq_location"),
+  foundedYear: integer("founded_year"),
+  description: text("description"),
+  techStack: text("tech_stack", { mode: "json" }).$type<string[]>().default(sql`'[]'`),
+  techStackSources: text("tech_stack_sources", { mode: "json" }).$type<Array<{ tech: string; source: string; evidence: string }>>().default(sql`'[]'`),
+  decisionMakers: text("decision_makers", { mode: "json" }).$type<Array<{ title: string; department: string }>>().default(sql`'[]'`),
+  competitors: text("competitors", { mode: "json" }).$type<Array<{ name: string; domain: string }>>().default(sql`'[]'`),
+  fundingSignals: text("funding_signals", { mode: "json" }).$type<Array<{ summary: string; date: string; sourceUrl: string }>>().default(sql`'[]'`),
+  hiringSignals: text("hiring_signals", { mode: "json" }).$type<Array<{ summary: string; roles: string[]; sourceUrl: string }>>().default(sql`'[]'`),
+  recentNews: text("recent_news", { mode: "json" }).$type<Array<{ headline: string; date: string; sourceUrl: string }>>().default(sql`'[]'`),
+  confidenceScore: real("confidence_score"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  expiresAt: text("expires_at").notNull(),
+}, (table) => [
+  index("company_intel_domain_idx").on(table.domain),
+  index("company_intel_expires_at_idx").on(table.expiresAt),
+]);
+
+export const discoverySearches = sqliteTable("discovery_searches", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id),
+  name: text("name"),
+  criteria: text("criteria", { mode: "json" }).notNull(),
+  resultCount: integer("result_count").notNull().default(0),
+  results: text("results", { mode: "json" }),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("discovery_searches_user_id_idx").on(table.userId),
+]);
+
 // ── Sequence types ──
 
 export type SequenceStep = {

@@ -23,6 +23,7 @@ import {
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks, RULES_VERSION } from "@/lib/hook-cache";
 import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
+import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
 import { checkHookQuota } from "@/lib/tier-guard";
@@ -379,29 +380,40 @@ export async function POST(request: Request) {
       }))
       .slice(0, 6);
 
-    // Intent scoring for Pro/Concierge users
+    // Intent scoring + company intel
     let intentData = null;
+    let companyIntel = null;
+
     if (tierId === "pro" || tierId === "concierge") {
+      const [intentResult, intelResult] = await Promise.allSettled([
+        researchIntentSignals(url, companyName || companyDomain || "", braveApiKey, claudeApiKey),
+        getCompanyIntelligence(url, braveApiKey, claudeApiKey, true),
+      ]);
+
+      if (intentResult.status === "fulfilled") {
+        const signals = intentResult.value;
+        const score = computeIntentScore(signals);
+        intentData = {
+          score,
+          temperature: getTemperature(score),
+          signals: signals.map((s) => ({
+            type: s.type,
+            summary: s.summary,
+            confidence: s.confidence,
+            sourceUrl: s.sourceUrl,
+            detectedAt: s.detectedAt,
+          })),
+        };
+      }
+
+      if (intelResult.status === "fulfilled") {
+        companyIntel = intelResult.value;
+      }
+    } else {
       try {
-        if (braveApiKey && claudeApiKey) {
-          const signals = await researchIntentSignals(
-            url, companyName || companyDomain || "", braveApiKey, claudeApiKey
-          );
-          const score = computeIntentScore(signals);
-          intentData = {
-            score,
-            temperature: getTemperature(score),
-            signals: signals.map((s) => ({
-              type: s.type,
-              summary: s.summary,
-              confidence: s.confidence,
-              sourceUrl: s.sourceUrl,
-              detectedAt: s.detectedAt,
-            })),
-          };
-        }
+        companyIntel = await getCompanyIntelligence(url, braveApiKey, claudeApiKey, false);
       } catch {
-        // Non-blocking — intent scoring failure should not affect hook generation
+        // Non-blocking
       }
     }
 
@@ -423,6 +435,8 @@ export async function POST(request: Request) {
       targetRole: targetRole || "General",
       hookVariants,
       intent: intentData,
+      companyIntel,
+      isBasicIntel: tierId === "starter",
     });
   } catch (error) {
     Sentry.captureException(error);

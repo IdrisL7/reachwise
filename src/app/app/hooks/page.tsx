@@ -9,6 +9,8 @@ import { HookForm } from "./hook-form";
 import { EmptyState } from "./empty-state";
 import { IntentSignals } from "./intent-signals";
 import { UpgradePrompt } from "./upgrade-prompt";
+import { CompanyIntelPanel } from "./company-intel-panel";
+import type { CompanyIntelligence } from "@/lib/company-intel";
 
 interface Hook {
   text: string;
@@ -84,6 +86,8 @@ export default function HooksPage() {
       detectedAt: string;
     }>;
   } | null>(null);
+  const [companyIntel, setCompanyIntel] = useState<CompanyIntelligence | null>(null);
+  const [isBasicIntel, setIsBasicIntel] = useState(false);
   const [activeChannel, setActiveChannel] = useState<Record<number, string>>({});
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
@@ -96,6 +100,12 @@ export default function HooksPage() {
     }
     return "Not sure / Any role";
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const prefillUrl = params.get("url");
+    if (prefillUrl) setUrl(prefillUrl);
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -214,6 +224,8 @@ export default function HooksPage() {
     setHookVariants([]);
     setActiveChannel({});
     setIntentData(null);
+    setCompanyIntel(null);
+    setIsBasicIntel(false);
     setSuggestion("");
     setLowSignal(false);
     setLinkedinSlug(null);
@@ -276,6 +288,8 @@ export default function HooksPage() {
 
       if (data.hookVariants) setHookVariants(data.hookVariants);
       setIntentData(data.intent || null);
+      setCompanyIntel(data.companyIntel || null);
+      setIsBasicIntel(!!data.isBasicIntel);
       if (data.suggestion) setSuggestion(data.suggestion);
       if (data.lowSignal) {
         setLowSignal(true);
@@ -414,6 +428,13 @@ export default function HooksPage() {
           message={upgradePrompt.message}
           cta={upgradePrompt.cta}
           href={upgradePrompt.href}
+        />
+      )}
+
+      {companyIntel && (
+        <CompanyIntelPanel
+          intel={companyIntel}
+          isBasic={isBasicIntel}
         />
       )}
 

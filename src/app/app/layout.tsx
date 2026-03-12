@@ -12,6 +12,7 @@ const primaryNav = [
   { href: "/app", label: "Dashboard" },
   { href: "/app/hooks", label: "Hooks" },
   { href: "/app/batch", label: "Batch" },
+  { href: "/app/discover", label: "Discover" },
   { href: "/app/leads", label: "Leads" },
 ];
 

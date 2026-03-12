@@ -127,19 +127,19 @@ describe("checkFeature", () => {
 
 describe("getLimits", () => {
   it("returns correct limits for starter", () => {
-    expect(getLimits("starter")).toEqual({ hooksPerMonth: 200, batchSize: 10 });
+    expect(getLimits("starter")).toEqual({ hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 });
   });
 
   it("returns correct limits for pro", () => {
-    expect(getLimits("pro")).toEqual({ hooksPerMonth: 750, batchSize: 75 });
+    expect(getLimits("pro")).toEqual({ hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 });
   });
 
   it("returns correct limits for concierge", () => {
-    expect(getLimits("concierge")).toEqual({ hooksPerMonth: 10000, batchSize: 75 });
+    expect(getLimits("concierge")).toEqual({ hooksPerMonth: 10000, batchSize: 75, discoverySearchesPerMonth: 200 });
   });
 
   it("falls back to starter limits for unknown tier", () => {
-    expect(getLimits("unknown" as any)).toEqual({ hooksPerMonth: 200, batchSize: 10 });
+    expect(getLimits("unknown" as any)).toEqual({ hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 });
   });
 });
 

@@ -1,0 +1,297 @@
+import { and, eq, gt } from "drizzle-orm";
+import { db, schema } from "@/lib/db";
+import { callClaude, getDomain } from "@/lib/hooks";
+
+type BraveWebResult = { title?: string; url?: string; description?: string; snippet?: string; page_age?: string };
+
+export interface CompanyIntelligence {
+  companyName: string | null;
+  industry: string | null;
+  subIndustry: string | null;
+  employeeRange: string | null;
+  hqLocation: string | null;
+  foundedYear: number | null;
+  description: string | null;
+  techStack: string[];
+  techStackSources: Array<{ tech: string; source: string; evidence: string }>;
+  decisionMakers: Array<{ title: string; department: string }>;
+  competitors: Array<{ name: string; domain: string }>;
+  fundingSignals: Array<{ summary: string; date: string; sourceUrl: string }>;
+  hiringSignals: Array<{ summary: string; roles: string[]; sourceUrl: string }>;
+  recentNews: Array<{ headline: string; date: string; sourceUrl: string }>;
+  confidenceScore: number;
+}
+
+export interface BasicCompanyIntel {
+  companyName: string | null;
+  industry: string | null;
+  employeeRange: string | null;
+  hqLocation: string | null;
+  description: string | null;
+}
+
+const EMPTY_INTEL: CompanyIntelligence = {
+  companyName: null,
+  industry: null,
+  subIndustry: null,
+  employeeRange: null,
+  hqLocation: null,
+  foundedYear: null,
+  description: null,
+  techStack: [],
+  techStackSources: [],
+  decisionMakers: [],
+  competitors: [],
+  fundingSignals: [],
+  hiringSignals: [],
+  recentNews: [],
+  confidenceScore: 0,
+};
+
+async function searchBrave(query: string, apiKey: string, count = 6): Promise<BraveWebResult[]> {
+  const params = new URLSearchParams({ q: query, count: String(count) });
+  const res = await fetch(`https://api.search.brave.com/res/v1/web/search?${params}`, {
+    headers: {
+      Accept: "application/json",
+      "Accept-Encoding": "gzip",
+      "X-Subscription-Token": apiKey,
+    },
+  });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.web?.results || []) as BraveWebResult[];
+}
+
+async function fetchPage(url: string): Promise<string> {
+  const res = await fetch(url, { headers: { "User-Agent": "GetSignalHooksBot/1.0" } });
+  if (!res.ok) return "";
+  const html = await res.text();
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 8000);
+}
+
+async function extractJsonArray(prompt: string, claudeApiKey: string) {
+  const payload = await callClaude("Return ONLY a JSON array.", prompt, claudeApiKey);
+  return Array.isArray(payload) ? payload : [];
+}
+
+async function extractBasicCompanyInfo(url: string, braveApiKey: string, claudeApiKey: string): Promise<BasicCompanyIntel & { companyNameRaw?: string; industryRaw?: string; foundedYear?: number | null }> {
+  const domain = getDomain(url);
+  const [homepage, results] = await Promise.all([
+    fetchPage(url).catch(() => ""),
+    searchBrave(`"${domain}" company overview employees headquarters`, braveApiKey, 5),
+  ]);
+
+  const context = results
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .join("\n\n");
+
+  const rows = await extractJsonArray(
+    `Extract one company profile as JSON array with one object:\n[{"companyName":string|null,"industry":string|null,"employeeRange":string|null,"hqLocation":string|null,"description":string|null,"subIndustry":string|null,"foundedYear":number|null}]\nHomepage text:\n${homepage}\n\nSearch results:\n${context}`,
+    claudeApiKey,
+  );
+
+  const obj = (rows[0] || {}) as Record<string, unknown>;
+  return {
+    companyName: typeof obj.companyName === "string" ? obj.companyName : null,
+    industry: typeof obj.industry === "string" ? obj.industry : null,
+    employeeRange: typeof obj.employeeRange === "string" ? obj.employeeRange : null,
+    hqLocation: typeof obj.hqLocation === "string" ? obj.hqLocation : null,
+    description: typeof obj.description === "string" ? obj.description : null,
+    companyNameRaw: typeof obj.companyName === "string" ? obj.companyName : undefined,
+    industryRaw: typeof obj.industry === "string" ? obj.industry : undefined,
+    foundedYear: typeof obj.foundedYear === "number" ? obj.foundedYear : null,
+  };
+}
+
+async function detectTechStack(companyName: string, domain: string, braveApiKey: string, claudeApiKey: string) {
+  const [jobs, thirdParty] = await Promise.all([
+    searchBrave(`"${companyName}" hiring engineer developer React Python AWS`, braveApiKey, 6),
+    searchBrave(`"${domain}" site:stackshare.io OR site:builtwith.com`, braveApiKey, 6),
+  ]);
+  const combined = [...jobs, ...thirdParty]
+    .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`)
+    .join("\n\n");
+
+  const rows = await extractJsonArray(
+    `Extract tech stack evidence as JSON array:\n[{"tech":string,"source":string,"evidence":string}]\nCompany: ${companyName}\n${combined}`,
+    claudeApiKey,
+  );
+
+  const sources = rows
+    .map((x) => x as Record<string, unknown>)
+    .filter((x) => typeof x.tech === "string" && typeof x.source === "string")
+    .map((x) => ({ tech: String(x.tech), source: String(x.source), evidence: String(x.evidence || "") }));
+
+  const stack = [...new Set(sources.map((s) => s.tech))];
+  return { stack, sources };
+}
+
+async function extractDecisionMakers(companyName: string, domain: string, braveApiKey: string, claudeApiKey: string) {
+  const results = await searchBrave(`"${companyName}" VP Director "Head of" Chief Sales Marketing Engineering`, braveApiKey, 8);
+  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`).join("\n\n");
+
+  const rows = await extractJsonArray(
+    `Extract decision maker TITLES ONLY (no names, no emails) as JSON array: [{"title":string,"department":string}]\nCompany: ${companyName} (${domain})\n${context}`,
+    claudeApiKey,
+  );
+
+  return rows
+    .map((x) => x as Record<string, unknown>)
+    .filter((x) => typeof x.title === "string")
+    .map((x) => ({ title: String(x.title), department: String(x.department || "General") }))
+    .slice(0, 8);
+}
+
+async function findCompetitors(companyName: string, industry: string, braveApiKey: string, claudeApiKey: string) {
+  const results = await searchBrave(`"${companyName}" competitor alternative vs compared ${industry || ""}`, braveApiKey, 8);
+  const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || r.snippet || ""}`).join("\n\n");
+
+  const rows = await extractJsonArray(
+    `Extract competitors as JSON array: [{"name":string,"domain":string}]\n${context}`,
+    claudeApiKey,
+  );
+
+  return rows
+    .map((x) => x as Record<string, unknown>)
+    .filter((x) => typeof x.name === "string")
+    .map((x) => ({ name: String(x.name), domain: String(x.domain || "") }))
+    .slice(0, 8);
+}
+
+function computeConfidence(intel: CompanyIntelligence): number {
+  const checks = [
+    !!intel.companyName,
+    !!intel.industry,
+    !!intel.employeeRange,
+    !!intel.hqLocation,
+    !!intel.description,
+    intel.techStack.length > 0,
+    intel.decisionMakers.length > 0,
+    intel.competitors.length > 0,
+  ];
+  return Number((checks.filter(Boolean).length / checks.length).toFixed(2));
+}
+
+export async function getCachedIntel(domain: string): Promise<CompanyIntelligence | null> {
+  const [row] = await db
+    .select()
+    .from(schema.companyIntel)
+    .where(and(eq(schema.companyIntel.domain, domain), gt(schema.companyIntel.expiresAt, new Date().toISOString())))
+    .limit(1);
+
+  if (!row) return null;
+  return {
+    companyName: row.companyName,
+    industry: row.industry,
+    subIndustry: row.subIndustry,
+    employeeRange: row.employeeRange,
+    hqLocation: row.hqLocation,
+    foundedYear: row.foundedYear,
+    description: row.description,
+    techStack: (row.techStack as string[]) || [],
+    techStackSources: (row.techStackSources as Array<{ tech: string; source: string; evidence: string }>) || [],
+    decisionMakers: (row.decisionMakers as Array<{ title: string; department: string }>) || [],
+    competitors: (row.competitors as Array<{ name: string; domain: string }>) || [],
+    fundingSignals: (row.fundingSignals as Array<{ summary: string; date: string; sourceUrl: string }>) || [],
+    hiringSignals: (row.hiringSignals as Array<{ summary: string; roles: string[]; sourceUrl: string }>) || [],
+    recentNews: (row.recentNews as Array<{ headline: string; date: string; sourceUrl: string }>) || [],
+    confidenceScore: row.confidenceScore || 0,
+  };
+}
+
+export async function setCachedIntel(domain: string, intel: CompanyIntelligence, url: string): Promise<void> {
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  await db.insert(schema.companyIntel).values({
+    domain,
+    url,
+    companyName: intel.companyName,
+    industry: intel.industry,
+    subIndustry: intel.subIndustry,
+    employeeRange: intel.employeeRange,
+    hqLocation: intel.hqLocation,
+    foundedYear: intel.foundedYear,
+    description: intel.description,
+    techStack: intel.techStack,
+    techStackSources: intel.techStackSources,
+    decisionMakers: intel.decisionMakers,
+    competitors: intel.competitors,
+    fundingSignals: intel.fundingSignals,
+    hiringSignals: intel.hiringSignals,
+    recentNews: intel.recentNews,
+    confidenceScore: intel.confidenceScore,
+    expiresAt,
+  }).onConflictDoUpdate({
+    target: schema.companyIntel.domain,
+    set: {
+      url,
+      companyName: intel.companyName,
+      industry: intel.industry,
+      subIndustry: intel.subIndustry,
+      employeeRange: intel.employeeRange,
+      hqLocation: intel.hqLocation,
+      foundedYear: intel.foundedYear,
+      description: intel.description,
+      techStack: intel.techStack,
+      techStackSources: intel.techStackSources,
+      decisionMakers: intel.decisionMakers,
+      competitors: intel.competitors,
+      fundingSignals: intel.fundingSignals,
+      hiringSignals: intel.hiringSignals,
+      recentNews: intel.recentNews,
+      confidenceScore: intel.confidenceScore,
+      expiresAt,
+    },
+  });
+}
+
+export async function getCompanyIntelligence(
+  companyUrl: string,
+  braveApiKey: string,
+  claudeApiKey: string,
+  fullAccess: boolean,
+): Promise<CompanyIntelligence> {
+  const domain = getDomain(companyUrl);
+  const cached = await getCachedIntel(domain);
+  if (cached) {
+    if (fullAccess) return cached;
+    return { ...cached, techStack: [], techStackSources: [], decisionMakers: [], competitors: [] };
+  }
+
+  const basic = await extractBasicCompanyInfo(companyUrl, braveApiKey, claudeApiKey);
+  const base: CompanyIntelligence = {
+    ...EMPTY_INTEL,
+    companyName: basic.companyName,
+    industry: basic.industry,
+    employeeRange: basic.employeeRange,
+    hqLocation: basic.hqLocation,
+    description: basic.description,
+    foundedYear: basic.foundedYear || null,
+  };
+
+  if (fullAccess) {
+    const companyName = base.companyName || domain;
+    const [tech, roles, competitors] = await Promise.all([
+      detectTechStack(companyName, domain, braveApiKey, claudeApiKey).catch(() => ({ stack: [], sources: [] })),
+      extractDecisionMakers(companyName, domain, braveApiKey, claudeApiKey).catch(() => []),
+      findCompetitors(companyName, base.industry || "", braveApiKey, claudeApiKey).catch(() => []),
+    ]);
+    base.techStack = tech.stack;
+    base.techStackSources = tech.sources;
+    base.decisionMakers = roles;
+    base.competitors = competitors;
+  }
+
+  base.confidenceScore = computeConfidence(base);
+  await setCachedIntel(domain, base, companyUrl);
+
+  if (!fullAccess) {
+    return { ...base, techStack: [], techStackSources: [], decisionMakers: [], competitors: [] };
+  }
+  return base;
+}

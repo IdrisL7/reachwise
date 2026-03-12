@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, lt, sql } from "drizzle-orm";
 import { getTier, type TierId, type Tier } from "@/lib/tiers";
 
 interface TierLimits {
   hooksPerMonth: number;
   batchSize: number;
+  discoverySearchesPerMonth: number;
 }
 
 const TIER_LIMITS: Record<TierId, TierLimits> = {
-  starter: { hooksPerMonth: 200, batchSize: 10 },
-  pro: { hooksPerMonth: 750, batchSize: 75 },
-  concierge: { hooksPerMonth: 10000, batchSize: 75 },
+  starter: { hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 },
+  pro: { hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 },
+  concierge: { hooksPerMonth: 10000, batchSize: 75, discoverySearchesPerMonth: 200 },
 };
 
 export function tierError(message: string, code = "TIER_LIMIT") {
@@ -151,5 +152,50 @@ export function checkBatchSize(tierId: TierId, requestedSize: number): NextRespo
       `Batch size ${requestedSize} exceeds your plan limit of ${limits.batchSize}. Upgrade for larger batches.`,
     );
   }
+  return null;
+}
+
+/** Check monthly discovery quota by counting discovery searches in current month */
+export async function checkDiscoveryQuota(userId: string): Promise<NextResponse | null> {
+  const trialCheck = await checkTrialActive(userId);
+  if (trialCheck) return trialCheck;
+
+  const [user] = await db
+    .select({ tierId: schema.users.tierId })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+
+  if (!user) return tierError("User not found.", "USER_NOT_FOUND");
+
+  const tierId = (user.tierId as TierId) || "starter";
+  const limits = getLimits(tierId);
+
+  if (limits.discoverySearchesPerMonth <= 0) {
+    return tierError("Discovery is not available on your current plan.", "FEATURE_NOT_AVAILABLE");
+  }
+
+  const now = new Date();
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString();
+
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(schema.discoverySearches)
+    .where(
+      and(
+        eq(schema.discoverySearches.userId, userId),
+        gte(schema.discoverySearches.createdAt, start),
+        lt(schema.discoverySearches.createdAt, end),
+      ),
+    );
+
+  const used = Number(countRow?.count ?? 0);
+  if (used >= limits.discoverySearchesPerMonth) {
+    return tierError(
+      `Monthly discovery search limit reached (${limits.discoverySearchesPerMonth}). Upgrade your plan for more.`,
+    );
+  }
+
   return null;
 }

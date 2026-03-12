@@ -14,6 +14,8 @@ const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "auth:hooks-batch": { limit: 20, windowSeconds: 60 },
   "auth:leads": { limit: 100, windowSeconds: 60 },
   "auth:followups": { limit: 30, windowSeconds: 60 },
+  "auth:discover": { limit: 10, windowSeconds: 60 },
+  "auth:company-intel": { limit: 30, windowSeconds: 60 },
   "public:sales-chat": { limit: 10, windowSeconds: 60 },
   "auth:login": { limit: 5, windowSeconds: 300 },
   "auth:register": { limit: 3, windowSeconds: 600 },

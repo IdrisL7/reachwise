@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { checkDiscoveryQuota, checkFeature, featureError } from "@/lib/tier-guard";
+import { discoverCompanies, type DiscoveryCriteria } from "@/lib/discovery";
+
+export async function POST(request: Request) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const rateLimited = await checkRateLimit(getClientIp(request), "auth:discover");
+    if (rateLimited) return rateLimited;
+
+    const tierId = ((session.user as any).tierId || "starter") as "starter" | "pro" | "concierge";
+    if (!checkFeature(tierId, "leadDiscovery")) {
+      return featureError("Lead Discovery");
+    }
+
+    const quotaError = await checkDiscoveryQuota(session.user.id);
+    if (quotaError) return quotaError;
+
+    const body = (await request.json().catch(() => null)) as DiscoveryCriteria | null;
+    if (!body) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+
+    const braveApiKey = process.env.BRAVE_API_KEY;
+    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    if (!braveApiKey || !claudeApiKey) {
+      return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+    }
+
+    const result = await discoverCompanies(body, session.user.id, braveApiKey, claudeApiKey, 20);
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("/api/discover POST failed", error);
+    return NextResponse.json({ error: "Failed to discover companies" }, { status: 500 });
+  }
+}
