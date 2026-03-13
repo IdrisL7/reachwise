@@ -58,6 +58,7 @@ function signalToTriggerType(type: string): string {
     case "tech_change": return "stat";
     case "hiring": return "hiring";
     case "growth": return "expansion";
+    case "ipo": return "ipo";
     default: return "";
   }
 }
@@ -340,6 +341,9 @@ export async function POST(request: Request) {
         highConfidenceIntentCount = rawSignals.filter((s) => s.confidence >= 0.8).length;
         tierACount = sources.filter((s) => s.tier === "A").length;
         intentSignalsLength = rawSignals.length;
+        // Inject high-confidence intent signals into signalCount BEFORE threshold check
+        signalCount += rawSignals.filter((s) => s.confidence >= 0.8).length;
+        console.log('[threshold-fix] tierACount:', tierACount, 'signalCount after intent injection:', signalCount);
         isLowSignal = signalCount < 2 && tierACount < 2;
         hasAnchored = result.hasAnchoredSources;
 

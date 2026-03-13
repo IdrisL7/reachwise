@@ -624,7 +624,14 @@ export const REPUTABLE_PUBLISHER_DOMAINS = new Set([
 export function isFirstPartySource(sourceUrl: string, targetDomain: string): boolean {
   const sourceHost = getDomain(sourceUrl).toLowerCase();
   const td = targetDomain.toLowerCase();
-  return sourceHost === td || sourceHost.endsWith("." + td);
+  if (sourceHost === td || sourceHost.endsWith("." + td)) return true;
+  // Also treat newsroom/press/news path patterns on the target's base domain as first-party.
+  // Handles cases like press.gomotive.com/news/ where subdomain differs but base domain matches.
+  const FIRST_PARTY_PATH_PATTERNS = ['/newsroom/', '/company/news/', '/press/', '/news/'];
+  const baseDomain = td.includes(".") ? td.split(".").slice(-2).join(".") : td;
+  const urlLower = sourceUrl.toLowerCase();
+  return (sourceHost === baseDomain || sourceHost.endsWith("." + baseDomain)) &&
+    FIRST_PARTY_PATH_PATTERNS.some((p) => urlLower.includes(p));
 }
 
 /**
