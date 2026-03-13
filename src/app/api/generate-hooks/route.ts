@@ -289,13 +289,16 @@ export async function POST(request: Request) {
     try {
       const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole);
       if (cachedResult) {
-        // Check rules_version — if stale, still use hooks but flag for re-caching
+        // Check rules_version — if stale, treat as cache miss and regenerate fresh
         if (cachedResult.rulesVersion !== RULES_VERSION) {
           cacheStale = true;
+          // Do NOT use stale hooks: old versions lack the 4-part structure (no "?"),
+          // causing publishGateFinal to drop all hooks and show a false low-signal error.
+        } else {
+          candidateHooks = cachedResult.hooks as Hook[];
+          citations = (cachedResult.citations || []) as Citation[];
+          cached = true;
         }
-        candidateHooks = cachedResult.hooks as Hook[];
-        citations = (cachedResult.citations || []) as Citation[];
-        cached = true;
       }
     } catch {
       // Cache miss or error — continue to generate
