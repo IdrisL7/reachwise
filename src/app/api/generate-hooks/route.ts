@@ -298,6 +298,11 @@ export async function POST(request: Request) {
           candidateHooks = cachedResult.hooks as Hook[];
           citations = (cachedResult.citations || []) as Citation[];
           cached = true;
+          // Restore signal counts from cached citations so threshold check works correctly.
+          // Without this, signalCount and tierACount stay at 0 and isLowSignal always fires.
+          tierACount = citations.filter((c) => c.tier === "A").length;
+          signalCount = tierACount;
+          hasAnchored = tierACount > 0;
         }
       }
     } catch {
@@ -520,8 +525,8 @@ export async function POST(request: Request) {
     const { top, overflow } = rankAndCap(rankInput, 3);
 
     // Build suggestions — short headline, details handled by UI
-    const noAnchorSuggestion = "Need one more source to generate strong hooks.";
-    const lowSignalSuggestion = "Need one more source to generate strong hooks.";
+    const noAnchorSuggestion = "We couldn't confirm these sources are specifically about this company. Paste a URL directly from their press page or newsroom — that gives us verified content to write from.";
+    const lowSignalSuggestion = "We found this company but couldn't find enough recent news to write a strong, evidence-backed hook. Paste a URL from their press page, newsroom, or a recent announcement to continue.";
 
     // Determine final hook list + metadata
     let finalTop = top;

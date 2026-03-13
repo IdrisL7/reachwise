@@ -303,7 +303,7 @@ export default function HooksPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url: url || undefined,
+          url: url ? (url.match(/^https?:\/\//) ? url : `https://${url}`) : undefined,
           companyName: companyName || undefined,
           targetRole: targetRole !== "Not sure / Any role" && targetRole !== "General"
             ? (targetRole === "Custom" ? customRoleInput.trim() || undefined : targetRole)
@@ -555,8 +555,11 @@ export default function HooksPage() {
 
       {suggestion && (
         <div className={`border rounded-xl mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800" : "bg-blue-900/30 border-blue-800"}`}>
-          <div className={`px-4 pt-4 pb-2 font-semibold ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
-            {suggestion}
+          <div className="px-4 pt-4 pb-2">
+            <p className={`font-semibold mb-1 ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
+              We need a better source to write your hooks
+            </p>
+            <p className="text-zinc-400 text-xs leading-relaxed">{suggestion}</p>
           </div>
 
           {linkedinSlug && (
@@ -572,13 +575,16 @@ export default function HooksPage() {
 
           {firstPartyUrls.length > 0 && (
             <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">Found on their site:</p>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">Pages we found on their site — click one to try it:</p>
               <div className="space-y-1">
                 {firstPartyUrls.map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="block text-xs text-emerald-400 hover:text-emerald-300 truncate">
+                  <button
+                    key={i}
+                    onClick={() => runWithUrl(d.url)}
+                    className="block w-full text-left text-xs text-emerald-400 hover:text-emerald-300 truncate"
+                  >
                     {d.title || d.url}
-                    <span className={`ml-1.5 ${d.tier === "A" ? "text-emerald-600" : "text-zinc-600"}`}>Tier {d.tier}</span>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>
@@ -586,13 +592,16 @@ export default function HooksPage() {
 
           {webUrls.length > 0 && (
             <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-500 mb-1.5">Found on the web <span className="text-zinc-600">(not verified as first-party)</span>:</p>
+              <p className="text-xs font-medium text-zinc-500 mb-1.5">Other sources we found — may need verification:</p>
               <div className="space-y-1">
                 {webUrls.map((d, i) => (
-                  <a key={i} href={d.url} target="_blank" rel="noopener noreferrer" className="block text-xs text-zinc-400 hover:text-zinc-300 truncate">
+                  <button
+                    key={i}
+                    onClick={() => runWithUrl(d.url)}
+                    className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-300 truncate"
+                  >
                     {d.title || d.url}
-                    <span className="text-zinc-600 ml-1.5">Tier {d.tier}</span>
-                  </a>
+                  </button>
                 ))}
               </div>
             </div>
@@ -600,12 +609,13 @@ export default function HooksPage() {
 
           {lowSignal && !linkedinSlug && (
             <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">Common pages to try:</p>
+              <p className="text-xs font-medium text-zinc-400 mb-1.5">Try pasting one of these URLs into the field above:</p>
               <div className="text-xs text-zinc-500 space-y-0.5">
-                <p>{companyDomain ? `${companyDomain}` : "company"}/press · /newsroom · /news</p>
-                <p>{companyDomain ? `${companyDomain}` : "company"}/blog · /changelog · /resources</p>
-                <p>{companyDomain ? `${companyDomain}` : "company"}/careers · /jobs</p>
+                <p>{companyDomain ? companyDomain : "theirdomain.com"}/press</p>
+                <p>{companyDomain ? companyDomain : "theirdomain.com"}/newsroom</p>
+                <p>{companyDomain ? companyDomain : "theirdomain.com"}/blog</p>
               </div>
+              <p className="text-xs text-zinc-600 mt-2">Or copy the URL of any recent news article about them.</p>
             </div>
           )}
 

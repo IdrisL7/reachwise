@@ -66,11 +66,11 @@ export function HookForm({
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <Input
-            type="url"
+            type="text"
             label="Company URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://acme.com"
+            placeholder="e.g. techcrunch.com/... or stripe.com/newsroom"
           />
           <Input
             type="text"
@@ -145,7 +145,7 @@ export function HookForm({
           </div>
         </div>
         <p className="text-xs text-zinc-500 mb-4">
-          Best results: paste the company homepage + pick who you&apos;re emailing. Every hook includes receipts (quote + source + date).
+          Best results: use a press page, funding article (TechCrunch, Reuters), or company newsroom. Generic homepages rarely have enough signal.
         </p>
         <button
           type="submit"

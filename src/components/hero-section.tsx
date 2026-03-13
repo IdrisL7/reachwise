@@ -21,14 +21,14 @@ export function HeroSection() {
           </h1>
 
           <p className="mt-6 max-w-xl text-[clamp(1.0625rem,1.5vw,1.3125rem)] leading-[1.55] text-zinc-400">
-            Paste a company URL, pick a buyer role, and get
-            <span className="text-zinc-200"> hooks</span> &mdash; personalized
+            Paste a press page, funding announcement, or newsroom URL. Pick a buyer role, and get
+            <span className="text-zinc-200"> hooks</span> &mdash; personalised
             conversation starters grounded in real evidence with a quote, source,
             and date attached to every one.
           </p>
 
           <p className="mt-3 text-[0.875rem] text-zinc-500/80 tracking-[0.01em]">
-            No invented facts. No stored URLs. Weak evidence is labeled or skipped.
+            Works best on press pages, TechCrunch / Reuters articles, and company newsrooms. Generic homepages rarely carry dateable signals.
           </p>
 
           <div className="mt-10 flex flex-wrap items-center gap-4">

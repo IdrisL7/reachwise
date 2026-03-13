@@ -273,8 +273,12 @@ export function DemoSection() {
       return;
     }
 
+    const normalizedUrl = trimmedUrl
+      ? trimmedUrl.match(/^https?:\/\//) ? trimmedUrl : `https://${trimmedUrl}`
+      : undefined;
+
     await fetchHooks({
-      url: trimmedUrl || undefined,
+      url: normalizedUrl,
       companyName: !trimmedUrl ? trimmedName || undefined : undefined,
       context: pitchContext,
     });
