@@ -429,12 +429,23 @@ const SIGNAL_KEYWORDS = [
 // Company name extraction from URL
 // ---------------------------------------------------------------------------
 
+// Common vanity URL prefixes that obscure the real brand name (e.g. "go" in gomotive.com → Motive)
+const VANITY_PREFIXES = ["go", "my", "get", "try", "use", "the", "hey", "join", "meet", "with"];
+
 export function extractCompanyName(url: string): string {
   try {
     const hostname = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
     // Remove www. and TLD
     const parts = hostname.replace(/^www\./, "").split(".");
-    const name = parts[0] || "";
+    let name = parts[0] || "";
+    // Strip vanity prefixes (e.g. "gomotive" → "motive", "getreachwise" → "reachwise")
+    // Only strip if the remaining word is >= 3 chars so we don't over-strip short names
+    for (const prefix of VANITY_PREFIXES) {
+      if (name.toLowerCase().startsWith(prefix) && name.length > prefix.length + 2) {
+        name = name.slice(prefix.length);
+        break;
+      }
+    }
     // Convert hyphens to spaces, capitalize
     return name
       .split("-")
