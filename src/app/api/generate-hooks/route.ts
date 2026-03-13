@@ -9,6 +9,8 @@ import {
   publishGateFinal,
   roleTokenGate,
   rankAndCap,
+  validateHook,
+  findRoleTokenHit,
   resolveCompanyByName,
   getDomain,
   isFirstPartySource,
@@ -20,6 +22,7 @@ import {
   type ClassifiedSource,
   type Hook,
   type TargetRole,
+  type IntentSignalInput,
   TARGET_ROLES,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
@@ -49,6 +52,69 @@ function enforceCitationTiers(citations: Citation[], companyDomain: string): Cit
   });
 }
 
+function signalToTriggerType(type: string): string {
+  switch (type) {
+    case "funding": return "funding";
+    case "tech_change": return "stat";
+    case "hiring": return "hiring";
+    case "growth": return "expansion";
+    default: return "";
+  }
+}
+
+function diagnosePublishGateFinalDrops(
+  hooks: Hook[],
+  companyDomain: string | undefined,
+  targetRole: TargetRole | null,
+): Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> {
+  const domainLower = (companyDomain || "").toLowerCase();
+  const out: Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> = [];
+
+  hooks.forEach((hook, idx) => {
+    let reason = "pass";
+
+    if (domainLower && hook.source_url) {
+      const sourceHost = getDomain(hook.source_url).toLowerCase();
+      const isOnDomain = sourceHost === domainLower || sourceHost.endsWith("." + domainLower);
+      const titleOrSnippet = ((hook.source_title || "") + " " + (hook.evidence_snippet || "")).toLowerCase();
+      const mentionsDomain = titleOrSnippet.includes(domainLower);
+      const companyName = companyDomain ? new URL(`https://${domainLower}`).hostname.split(".")[0].toLowerCase() : "";
+      const mentionsName = companyName.length > 3 && titleOrSnippet.includes(companyName);
+      const anchored = isOnDomain || mentionsDomain || mentionsName;
+      if (!anchored) reason = "drop:unanchored_source";
+    }
+
+    if (reason === "pass") {
+      const validated = validateHook({
+        news_item: hook.news_item,
+        angle: hook.angle,
+        hook: hook.hook,
+        evidence_snippet: hook.evidence_snippet,
+        source_title: hook.source_title,
+        source_date: hook.source_date,
+        source_url: hook.source_url,
+        evidence_tier: hook.evidence_tier,
+        confidence: hook.confidence,
+        psych_mode: hook.psych_mode,
+        why_this_works: hook.why_this_works,
+      });
+      if (!validated) reason = "drop:validateHook_failed";
+    }
+
+    out.push({
+      idx,
+      reason,
+      news_item: hook.news_item,
+      source_url: hook.source_url || "",
+      angle: hook.angle,
+      evidence_tier: hook.evidence_tier,
+      roleTokenHit: targetRole ? findRoleTokenHit(hook.hook, targetRole) : null,
+    });
+  });
+
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -60,6 +126,8 @@ export async function POST(request: Request) {
       companyName?: string;
       context?: string;
       targetRole?: string;
+      customPain?: string;
+      customPromise?: string;
     } | null;
 
     const rawUrl = body?.url?.trim();
@@ -69,6 +137,19 @@ export async function POST(request: Request) {
       body?.targetRole && TARGET_ROLES.includes(body.targetRole as TargetRole)
         ? (body.targetRole as TargetRole)
         : undefined;
+    const customPain = body?.customPain?.trim();
+    const customPromise = body?.customPromise?.trim();
+
+    const traceId = crypto.randomUUID().slice(0, 8);
+    console.log("[generate-hooks] request start", {
+      traceId,
+      rawUrl,
+      companyName,
+      contextLength: context?.length ?? 0,
+      targetRole: targetRole ?? "General",
+      hasCustomPain: !!customPain,
+      hasCustomPromise: !!customPromise,
+    });
 
     // Validate URL format
     if (rawUrl) {
@@ -189,13 +270,18 @@ export async function POST(request: Request) {
     }
 
     const companyDomain = getDomain(url);
+    const tierId = isDemo ? "starter" : ((session?.user as any)?.tierId || "starter");
 
     // Check cache first (keyed by URL + targetRole)
     let candidateHooks: Hook[] | null = null;
+    let prefetchedSignals: Awaited<ReturnType<typeof researchIntentSignals>> | null = null;
     let citations: Citation[] = [];
     let isLowSignal = false;
     let signalCount = 0;
     let hasAnchored = true;
+    let tierACount = 0;
+    let highConfidenceIntentCount = 0;
+    let intentSignalsLength = 0;
     let cached = false;
     let cacheStale = false;
 
@@ -217,11 +303,58 @@ export async function POST(request: Request) {
     if (!candidateHooks) {
       try {
         // 1. Gather and classify sources with signal gating + anchor scoring
-        const result = await fetchSourcesWithGating(url, tavilyApiKey!);
+        let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
+        let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
+        if (tierId === "pro" || tierId === "concierge") {
+          try {
+            rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey!, claudeApiKey);
+            prefetchedSignals = rawSignals;
+          } catch {
+            rawSignals = [];
+          }
+
+          const gatingIntentSignals: IntentSignalInput[] = rawSignals
+            .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
+            .map((s) => ({
+              triggerType: signalToTriggerType(s.type),
+              summary: s.summary,
+              confidence: s.confidence,
+              sourceUrl: s.sourceUrl,
+              tier: s.confidence >= 0.8 ? ("A" as const) : ("B" as const),
+            }));
+
+          console.log("[generate-hooks] intent signal mapping for source gating", {
+            traceId,
+            rawSignalsCount: rawSignals.length,
+            gatingIntentSignalsCount: gatingIntentSignals.length,
+            gatingIntentSignals: gatingIntentSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
+          });
+
+          result = await fetchSourcesWithGating(url, tavilyApiKey!, gatingIntentSignals);
+        } else {
+          result = await fetchSourcesWithGating(url, tavilyApiKey!);
+        }
         const sources = result.sources;
         signalCount = result.signalCount;
-        isLowSignal = result.lowSignal;
+
+        highConfidenceIntentCount = rawSignals.filter((s) => s.confidence >= 0.8).length;
+        tierACount = sources.filter((s) => s.tier === "A").length;
+        intentSignalsLength = rawSignals.length;
+        isLowSignal = signalCount < 2 && tierACount < 2;
         hasAnchored = result.hasAnchoredSources;
+
+        console.log("[generate-hooks] threshold check:", {
+          traceId,
+          signalCount,
+          tierACount,
+          highConfidenceIntentCount,
+          intentSignalsLength,
+          hasAnchored,
+          lowSignalFromFetch: result.lowSignal,
+          isLowSignal,
+          exactMath: "isLowSignal = signalCount < 2 && tierACount < 2",
+          tierBreakdown: sources.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
+        });
 
         citations = sources.map((s) => ({
           source_title: s.title,
@@ -242,13 +375,41 @@ export async function POST(request: Request) {
           usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
           // 4. Build prompts and call Claude
-          const systemPrompt = buildSystemPrompt(_senderContext, targetRole);
-          const userPrompt = buildUserPrompt(url, sources, context);
+          const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
+          const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona);
+          const promptSignals: IntentSignalInput[] = rawSignals
+            .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
+            .map((s) => ({
+              triggerType: signalToTriggerType(s.type),
+              summary: s.summary,
+              confidence: s.confidence,
+              sourceUrl: s.sourceUrl,
+              tier: s.confidence >= 0.8 ? ("A" as const) : ("B" as const),
+            }));
+
+          console.log("[generate-hooks] intent signal mapping for prompt", {
+            traceId,
+            promptSignalsCount: promptSignals.length,
+            promptSignals: promptSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
+          });
+
+          const userPrompt = buildUserPrompt(url, sources, context, promptSignals.length > 0 ? promptSignals : undefined);
           const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+
+          console.log("[generate-hooks] raw hooks from claude", {
+            traceId,
+            rawHookCount: rawHooks.length,
+            rawHooksPreview: rawHooks.slice(0, 5).map((h) => ({ news_item: h.news_item, angle: h.angle, confidence: h.confidence, evidence_tier: h.evidence_tier })),
+          });
 
           // 5. First pass: publishGate with source lookup (anchored-source filtering)
           candidateHooks = publishGate(rawHooks, sourceLookup, {
             includeMarketContext: false,
+          });
+
+          console.log("[generate-hooks] candidate hooks after publishGate", {
+            traceId,
+            candidateHookCount: candidateHooks.length,
           });
         }
       } catch (error) {
@@ -291,19 +452,65 @@ export async function POST(request: Request) {
     // Rule D: Tier B cap at 1
     // Rule E: tradeoff grounding (inside validateHook)
     // =========================================================================
+    console.log("[generate-hooks] pre publishGateFinal", {
+      traceId,
+      candidateHooksCount: candidateHooks.length,
+      candidateHooksPreview: candidateHooks.slice(0, 10).map((h) => ({
+        news_item: h.news_item,
+        angle: h.angle,
+        evidence_tier: h.evidence_tier,
+        confidence: h.confidence,
+        source_url: h.source_url,
+      })),
+    });
+
+    const publishDiagnostics = diagnosePublishGateFinalDrops(candidateHooks, companyDomain || undefined, targetRole ?? null);
+    console.log("[generate-hooks] publishGateFinal diagnostics", {
+      traceId,
+      diagnostics: publishDiagnostics,
+      droppedAtDiagnosticStage: publishDiagnostics.filter((d) => d.reason !== "pass").length,
+    });
+
     const gated = publishGateFinal(candidateHooks, companyDomain, {
       includeMarketContext: false,
+    });
+
+    console.log("[generate-hooks] after publishGateFinal", {
+      traceId,
+      gatedCount: gated.length,
+      droppedByPublishGateFinal: candidateHooks.length - gated.length,
+      gatedHooksPreview: gated.slice(0, 10).map((h) => ({ news_item: h.news_item, angle: h.angle, evidence_tier: h.evidence_tier, source_url: h.source_url })),
     });
 
     // =========================================================================
     // ROLE TOKEN GATE — enforce persona framing (skip for General)
     // =========================================================================
     const roleGated = roleTokenGate(gated, targetRole ?? null);
+    const roleGateDroppedAll = roleGated.length === 0 && gated.length > 0;
+    const rankInput = roleGateDroppedAll ? gated : roleGated;
+
+    console.log("[generate-hooks] role gate decision", {
+      traceId,
+      targetRole: targetRole ?? "General",
+      gatedCount: gated.length,
+      roleGatedCount: roleGated.length,
+      roleGateDroppedAll,
+      roleTokenHits: gated.map((h) => ({ news_item: h.news_item, hit: (targetRole ? findRoleTokenHit(h.hook, targetRole) : null) })),
+    });
+
+    if (roleGateDroppedAll) {
+      console.warn("[generate-hooks] role token gate removed all hooks, falling back to publish-gated hooks", {
+        traceId,
+        targetRole: targetRole ?? "General",
+        gatedCount: gated.length,
+        roleGatedCount: roleGated.length,
+      });
+    }
 
     // =========================================================================
     // RANK + CAP — score and return top 3 (overflow available via showAll)
     // =========================================================================
-    const { top, overflow } = rankAndCap(roleGated, 3);
+    const { top, overflow } = rankAndCap(rankInput, 3);
 
     // Build suggestions — short headline, details handled by UI
     const noAnchorSuggestion = "Need one more source to generate strong hooks.";
@@ -315,17 +522,39 @@ export async function POST(request: Request) {
     let suggestion: string | undefined;
     let finalLowSignal = isLowSignal;
 
+    console.log("[generate-hooks] suggestion gate pre-check:", {
+      traceId,
+      tierACount,
+      signalCount,
+      lowSignal: isLowSignal,
+      intentSignalsLength,
+      highConfidenceIntentCount,
+      hasAnchored,
+      gatedCount: gated.length,
+      roleGatedCount: roleGated.length,
+      roleGateDroppedAll,
+      topCount: top.length,
+      conditions: {
+        noAnchored: !hasAnchored,
+        isLowSignal,
+        noHooksAfterPublish: gated.length === 0,
+      },
+    });
+
     if (!hasAnchored) {
+      console.log("[generate-hooks] showing suggestion: no anchored sources");
       finalTop = top.slice(0, 1);
       finalOverflow = [];
       suggestion = noAnchorSuggestion;
       finalLowSignal = true;
     } else if (isLowSignal) {
+      console.log("[generate-hooks] showing suggestion: low signal");
       finalTop = top.slice(0, 1);
       finalOverflow = [];
       suggestion = lowSignalSuggestion;
       finalLowSignal = true;
-    } else if (roleGated.length === 0) {
+    } else if (gated.length === 0) {
+      console.log("[generate-hooks] showing suggestion: no hooks survived publish gate");
       suggestion = noAnchorSuggestion;
       finalLowSignal = true;
     }
@@ -355,7 +584,6 @@ export async function POST(request: Request) {
     // - Stale cached results (wrong rules_version): re-cache with corrected payload
     // Generate multi-channel variants for Pro/Concierge
     let hookVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> = [];
-    const tierId = isDemo ? "starter" : ((session!.user as any).tierId || "starter");
 
     if (roleGated.length > 0 && (!cached || cacheStale)) {
       // Generate variants for Pro/Concierge before caching
@@ -399,7 +627,9 @@ export async function POST(request: Request) {
 
     if (tierId === "pro" || tierId === "concierge") {
       const [intentResult, intelResult] = await Promise.allSettled([
-        researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
+        prefetchedSignals !== null
+          ? Promise.resolve(prefetchedSignals)
+          : researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
         getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, true),
       ]);
 
@@ -450,6 +680,9 @@ export async function POST(request: Request) {
             sourceUrl: h.source_url || null,
             sourceTitle: h.source_title || null,
             sourceDate: h.source_date || null,
+            triggerType: h.trigger_type || null,
+            promise: h.promise || null,
+            bridgeQuality: h.bridge_quality || null,
           })),
         ).returning({ id: schema.generatedHooks.id });
 
@@ -461,6 +694,18 @@ export async function POST(request: Request) {
         batchId = undefined;
       }
     }
+
+    console.log("[generate-hooks] response summary", {
+      traceId,
+      finalTopCount: finalTop.length,
+      finalOverflowCount: finalOverflow.length,
+      finalLowSignal,
+      suggestion,
+      signalCount,
+      cached,
+      tierId,
+      targetRole: targetRole || "General",
+    });
 
     return NextResponse.json({
       hooks: finalTop.map((h) => h.hook),

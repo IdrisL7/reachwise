@@ -14,6 +14,10 @@ interface HookFormProps {
   setShowCustomRole: (v: boolean) => void;
   customRoleInput: string;
   setCustomRoleInput: (v: string) => void;
+  customPain: string;
+  setCustomPain: (v: string) => void;
+  customPromise: string;
+  setCustomPromise: (v: string) => void;
   loading: boolean;
   error: string;
   onSubmit: (e: React.FormEvent) => void;
@@ -49,6 +53,10 @@ export function HookForm({
   setShowCustomRole,
   customRoleInput,
   setCustomRoleInput,
+  customPain,
+  setCustomPain,
+  customPromise,
+  setCustomPromise,
   loading,
   error,
   onSubmit,
@@ -97,16 +105,42 @@ export function HookForm({
               <option value="Custom">Custom...</option>
             </select>
             {showCustomRole && (
-              <div className="mt-2">
-                <Input
-                  type="text"
-                  value={customRoleInput}
-                  onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
-                  placeholder="e.g. Head of Partnerships"
-                  error={error && targetRole === "Custom" && !customRoleInput.trim() ? "Enter a role name to continue" : undefined}
-                  className="text-sm"
-                />
-              </div>
+              <>
+                <div className="mt-2">
+                  <Input
+                    type="text"
+                    value={customRoleInput}
+                    onChange={(e) => setCustomRoleInput(e.target.value.slice(0, 30))}
+                    placeholder="e.g. Head of Partnerships"
+                    error={error && targetRole === "Custom" && !customRoleInput.trim() ? "Enter a role name to continue" : undefined}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="mt-2">
+                  <label className="block text-xs text-zinc-500 mb-1">What pain does this role feel?</label>
+                  <textarea
+                    value={customPain}
+                    onChange={(e) => setCustomPain(e.target.value.slice(0, 200))}
+                    placeholder="e.g. Spends too much time on unqualified leads"
+                    maxLength={200}
+                    rows={2}
+                    className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors resize-none"
+                  />
+                  <span className="text-[10px] text-zinc-600">{customPain.length}/200</span>
+                </div>
+                <div className="mt-2">
+                  <label className="block text-xs text-zinc-500 mb-1">What outcome can you promise?</label>
+                  <input
+                    type="text"
+                    value={customPromise}
+                    onChange={(e) => setCustomPromise(e.target.value.slice(0, 80))}
+                    placeholder="e.g. A 10-min audit of your outbound signals"
+                    maxLength={80}
+                    className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors"
+                  />
+                  <span className="text-[10px] text-zinc-600">{customPromise.length}/80</span>
+                </div>
+              </>
             )}
           </div>
         </div>

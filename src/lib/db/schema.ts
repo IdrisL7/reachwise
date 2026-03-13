@@ -206,6 +206,9 @@ export const generatedHooks = sqliteTable("generated_hooks", {
   sourceUrl: text("source_url"),
   sourceTitle: text("source_title"),
   sourceDate: text("source_date"),
+  triggerType: text("trigger_type"),
+  promise: text("promise"),
+  bridgeQuality: text("bridge_quality"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 }, (table) => [
   index("generated_hooks_user_id_idx").on(table.userId),

@@ -452,7 +452,7 @@ describe("question quality validator", () => {
     });
   }
 
-  it("rejects open-ended question without forced-choice structure", () => {
+  it("allows concrete open-ended Tier A question without forced-choice", () => {
     const result = validateHook(
       {
         ...basePayload,
@@ -460,7 +460,7 @@ describe("question quality validator", () => {
       },
       sourceLookup,
     );
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
   });
 
   it("rejects 'holding up as' pattern", () => {
@@ -887,7 +887,7 @@ describe("publishGate", () => {
     expect(result[0].hook).not.toMatch(/\bswitched\b/i);
   });
 
-  it("drops hooks that fail question quality (no forced-choice)", () => {
+  it("keeps Tier A hooks with concrete open-ended questions", () => {
     const rawHooks: ClaudeHookPayload[] = [
       {
         news_item: 1,
@@ -903,7 +903,7 @@ describe("publishGate", () => {
       },
     ];
     const result = publishGate(rawHooks, lookup);
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
   });
 
   it("caps Tier B at 1 even with multiple valid Tier B hooks", () => {
@@ -1130,7 +1130,7 @@ describe("publishGateFinal (last-step enforcement)", () => {
     expect(result).toHaveLength(0);
   });
 
-  it("drops cached hook with vague question (no forced-choice)", () => {
+  it("keeps cached Tier A hook with concrete open-ended question", () => {
     const vagueHook: Hook = {
       news_item: 1,
       angle: "trigger",
@@ -1144,7 +1144,7 @@ describe("publishGateFinal (last-step enforcement)", () => {
     };
 
     const result = publishGateFinal([vagueHook], "sales.co");
-    expect(result).toHaveLength(0);
+    expect(result).toHaveLength(1);
   });
 
   it("passes valid anchored hooks through unchanged", () => {
@@ -1324,7 +1324,7 @@ describe("invented causality ban", () => {
 // Question framing bans
 // ---------------------------------------------------------------------------
 describe("question framing bans", () => {
-  it("rejects 'focusing on' in question", () => {
+  it("rejects 'focusing on' in question for Tier B", () => {
     const result = validateHook({
       news_item: 1,
       angle: "trigger",
@@ -1333,13 +1333,13 @@ describe("question framing bans", () => {
       source_title: "Website",
       source_date: "2026-03-01",
       source_url: "https://test.com",
-      evidence_tier: "A",
+      evidence_tier: "B",
       confidence: "high",
     });
     expect(result).toBeNull();
   });
 
-  it("rejects 'driven by' in question", () => {
+  it("rejects 'driven by' in question for Tier B", () => {
     const result = validateHook({
       news_item: 1,
       angle: "trigger",
@@ -1348,7 +1348,7 @@ describe("question framing bans", () => {
       source_title: "Blog",
       source_date: "2026-03-01",
       source_url: "https://test.com/blog",
-      evidence_tier: "A",
+      evidence_tier: "B",
       confidence: "high",
     });
     expect(result).toBeNull();
@@ -1359,7 +1359,7 @@ describe("question framing bans", () => {
 // Abstract noun overload
 // ---------------------------------------------------------------------------
 describe("abstract noun overload", () => {
-  it("rejects question with 3+ abstract nouns", () => {
+  it("rejects question with 3+ abstract nouns for Tier B", () => {
     const result = validateHook({
       news_item: 1,
       angle: "trigger",
@@ -1368,10 +1368,25 @@ describe("abstract noun overload", () => {
       source_title: "Website",
       source_date: "2026-03-01",
       source_url: "https://test.com",
-      evidence_tier: "A",
+      evidence_tier: "B",
       confidence: "high",
     });
     expect(result).toBeNull();
+  });
+
+  it("passes question with 3 abstract nouns for Tier A", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: 'Your site says "enterprise ready" — what is your compliance engagement methodology today?',
+      evidence_snippet: "Company website says enterprise ready",
+      source_title: "Website",
+      source_date: "2026-03-01",
+      source_url: "https://test.com",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).not.toBeNull();
   });
 
   it("passes question with 2 or fewer abstract nouns", () => {
@@ -1387,6 +1402,41 @@ describe("abstract noun overload", () => {
       confidence: "high",
     });
     expect(result).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Relaxed validation for Tier A high-signal hooks
+// ---------------------------------------------------------------------------
+describe("validateHook — Tier A permissive rules", () => {
+  it("allows Tier A hooks without verbatim quotes when bridge is concrete", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: "You mention webhook retry logic and failure handling, what metric degrades first during traffic spikes?",
+      evidence_snippet: "Stripe Docs: handling webhook delivery failures and retry logic",
+      source_title: "Stripe Docs",
+      source_date: "2026-03-01",
+      source_url: "https://docs.stripe.com",
+      evidence_tier: "A",
+      confidence: "high",
+    });
+    expect(result).not.toBeNull();
+  });
+
+  it("still rejects Tier B hooks without verbatim quotes", () => {
+    const result = validateHook({
+      news_item: 1,
+      angle: "trigger",
+      hook: "You mention webhook retry logic and failure handling, what metric degrades first during traffic spikes?",
+      evidence_snippet: "Industry report: webhook delivery failures are common",
+      source_title: "Industry Blog",
+      source_date: "2026-03-01",
+      source_url: "https://example.com/report",
+      evidence_tier: "B",
+      confidence: "high",
+    });
+    expect(result).toBeNull();
   });
 });
 

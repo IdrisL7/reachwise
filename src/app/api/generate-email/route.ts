@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   callClaudeText,
   containsBannedPhrase,
+  PERSONA_DATA,
   type Hook,
 } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
@@ -106,6 +107,27 @@ function containsEmailBannedPhrase(text: string): string | null {
   return null;
 }
 
+function forcePromiseAtEndOfParagraphOne(body: string, promise?: string): string {
+  if (!promise) return body;
+
+  const paragraphs = body
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) return body;
+
+  const cleanedPromise = promise.trim();
+  const removePromise = (text: string) => text.replace(new RegExp(cleanedPromise.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "").replace(/\s{2,}/g, " ").trim();
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    paragraphs[i] = removePromise(paragraphs[i]);
+  }
+
+  paragraphs[0] = paragraphs[0].replace(/[\s.?!]+$/, "").trim() + ". " + cleanedPromise;
+  return paragraphs.join("\n\n");
+}
+
 // ---------------------------------------------------------------------------
 // Prompt builders
 // ---------------------------------------------------------------------------
@@ -134,17 +156,44 @@ function buildEmailSystemPrompt(
   };
 
   return [
+    "CRITICAL RULE — READ BEFORE GENERATING:",
+    "",
+    "This email is written TO a person whose job title is [PERSONA].",
+    "Their challenges are internal sales team challenges.",
+    "",
+    "Do NOT write about the prospect's product, their customers, or their industry operations.",
+    "The trigger is CONTEXT ONLY.",
+    "Write about their INTERNAL sales team challenges only.",
+    "",
+    "STRUCTURE RULE:",
+    "The closing promise must always be the FINAL sentence of paragraph 1.",
+    "It must not appear in paragraph 2 or later.",
+    "It must match the promise field from the hook JSON output exactly.",
+    "",
+    "CORRECT structure:",
+    "  Paragraph 1: Trigger reference (1 sentence) + bridge to internal pain (1-2 sentences) + [PROMISE — final sentence]",
+    "  Paragraph 2: Question or CTA only",
+    "",
+    "WRONG structure (do not do this):",
+    "  Paragraph 1: About the prospect's product or customers",
+    "  Paragraph 2: Pain elaboration",
+    "  Paragraph 3: Question + promise buried here",
+    "",
     "You are an elite cold email copywriter. You write emails that get replies by being relevant, specific, and respectful of the reader's time.",
     "",
     "## Doctrine (HARD rules)",
-    "- Every email is anchored on the hook's evidence: Signal, then Implication, then Question.",
+    "- You are writing FROM a seller TO the prospect. The prospect's company/product is CONTEXT, not the subject.",
+    "- NEVER sell the prospect's own product back to them. The evidence is a trigger signal — use it to frame a relevant question about the prospect's INTERNAL operations, not about their external product.",
+    "- The email must address the prospect's JOB CHALLENGES (their persona's pain points), not describe what their company does.",
+    "- Every email is anchored on the hook's evidence: Signal → Implication for their role → Promise → Question.",
     "- No invented results or guarantees. Only reference what the hook's evidence_snippet supports.",
     "- BANNED phrases (never use): " + EMAIL_BANNED_PHRASES.join(", ") + ".",
     "- Avoid apologetic or needy language such as: 'bugging you', 'bothering you', 'just checking in', 'just following up', 'touching base', or similar.",
-    "- First line: clearly tie to the signal and evidence snippet. No generic openers.",
-    "- One short paragraph: pull out the implication in the prospect's own language.",
-    "- Close with a simple, concrete question about the problem or next step, derived from the hook's question. Do not default to generic 'jump on a quick call' / 'worth a quick chat' style CTAs.",
+    "- STRUCTURE (2 paragraphs only):",
+    "  P1: Open with the signal/evidence → bridge to an implication for the prospect's role → If a promise line is provided, it MUST appear as the FINAL sentence of P1. The promise is what the sender offers to share/show — place it last.",
+    "  P2: Question or CTA only — derived from the hook's question. Do not default to generic 'jump on a quick call' / 'worth a quick chat' style CTAs.",
     "- Do NOT include any name or signature at the end. End the email body after the last sentence of the message.",
+    "- Each email must be UNIQUE — different signal angle, different implication, different promise placement. Never repeat the same structure or framing across multiple emails for the same prospect.",
     "",
     `## Tone: ${tone}`,
     toneGuide[tone] || toneGuide["direct"],
@@ -168,8 +217,13 @@ function buildEmailUserPrompt(
   const hook = req.hook;
   const sender = req.senderProfile;
 
+  const role = hook.role_used && hook.role_used !== "General" ? hook.role_used : "Custom";
+  const personaPain = role !== "Custom" ? PERSONA_DATA[role].pain_points.join("; ") : "Internal sales team execution, visibility, and performance issues.";
+
   const lines: string[] = [
     `## Prospect company URL: ${req.companyUrl}`,
+    `## PERSONA: ${role}`,
+    `## PERSONA_PAIN: ${personaPain}`,
     "",
     "## Hook to base the email on:",
     `- Angle: ${hook.angle}`,
@@ -178,6 +232,7 @@ function buildEmailUserPrompt(
     `- Source: ${hook.source_title}`,
     `- Confidence: ${hook.confidence}`,
   ];
+  if (hook.promise) lines.push(`- Promise/closing line: ${hook.promise}`);
 
   if (sender) {
     lines.push("", "## Sender info:");
@@ -251,6 +306,9 @@ export async function POST(request: Request) {
         { status: 502 },
       );
     }
+
+    // Ensure promise is always the final sentence of paragraph 1
+    parsed.body = forcePromiseAtEndOfParagraphOne(parsed.body, body.hook.promise);
 
     // Post-generation quality check on banned phrases (global and email-specific)
     const globalBodyBanned = containsBannedPhrase(parsed.body);

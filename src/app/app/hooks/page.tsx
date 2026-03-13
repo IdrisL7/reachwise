@@ -26,6 +26,9 @@ interface Hook {
   source_date?: string;
   psych_mode?: string;
   why_this_works?: string;
+  promise?: string;
+  trigger_type?: string;
+  bridge_quality?: string;
 }
 
 interface GeneratedEmail {
@@ -82,6 +85,8 @@ export default function HooksPage() {
   const hooksGeneratedFirstTracked = useRef(false);
   const [customRoleInput, setCustomRoleInput] = useState("");
   const [showCustomRole, setShowCustomRole] = useState(false);
+  const [customPain, setCustomPain] = useState("");
+  const [customPromise, setCustomPromise] = useState("");
   const [hookVariants, setHookVariants] = useState<Array<{ hook_index: number; variants: ChannelVariant[] }>>([]);
   const [intentData, setIntentData] = useState<{
     score: number;
@@ -195,6 +200,7 @@ export default function HooksPage() {
             evidence_snippet: hook.source_snippet || "",
             source_title: hook.source_title || hook.source_url || "",
             source_url: hook.source_url || "",
+            promise: hook.promise || "",
           },
         }),
       });
@@ -302,6 +308,8 @@ export default function HooksPage() {
           targetRole: targetRole !== "Not sure / Any role" && targetRole !== "General"
             ? (targetRole === "Custom" ? customRoleInput.trim() || undefined : targetRole)
             : undefined,
+          customPain: targetRole === "Custom" && customPain.trim() ? customPain.trim() : undefined,
+          customPromise: targetRole === "Custom" && customPromise.trim() ? customPromise.trim() : undefined,
         }),
       });
 
@@ -329,6 +337,7 @@ export default function HooksPage() {
         generated_hook_id?: string;
         evidence_snippet?: string; source_url?: string; source_title?: string;
         source_date?: string; psych_mode?: string; why_this_works?: string;
+        trigger_type?: string; promise?: string; bridge_quality?: string;
       };
 
       const mapHook = (h: RawHook): Hook => ({
@@ -336,6 +345,7 @@ export default function HooksPage() {
         quality_score: h.quality_score, quality_label: h.quality_label, generated_hook_id: h.generated_hook_id,
         source_snippet: h.evidence_snippet, source_url: h.source_url, source_title: h.source_title,
         source_date: h.source_date, psych_mode: h.psych_mode, why_this_works: h.why_this_works,
+        promise: h.promise, trigger_type: h.trigger_type, bridge_quality: h.bridge_quality,
       });
 
       const structured = data.structured_hooks as RawHook[] | undefined;
@@ -373,7 +383,7 @@ export default function HooksPage() {
     } finally {
       setLoading(false);
     }
-  }, [url, companyName, targetRole, customRoleInput]);
+  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise]);
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -474,6 +484,10 @@ export default function HooksPage() {
         setShowCustomRole={setShowCustomRole}
         customRoleInput={customRoleInput}
         setCustomRoleInput={setCustomRoleInput}
+        customPain={customPain}
+        setCustomPain={setCustomPain}
+        customPromise={customPromise}
+        setCustomPromise={setCustomPromise}
         loading={loading}
         error={error}
         onSubmit={generateHooks}

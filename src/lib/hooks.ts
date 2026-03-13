@@ -11,6 +11,8 @@ export type PsychMode = "relevance" | "curiosity_gap" | "symptom" | "tradeoff_fr
 
 export type TargetRole = "VP Sales" | "RevOps" | "SDR Manager" | "Marketing" | "Founder/CEO" | "General";
 
+export type TriggerType = "award" | "stat" | "case_study" | "hiring" | "funding" | "ipo" | "expansion";
+
 export const TARGET_ROLES: TargetRole[] = [
   "VP Sales", "RevOps", "SDR Manager", "Marketing", "Founder/CEO", "General",
 ];
@@ -47,6 +49,115 @@ export const ROLE_RESPONSIBILITIES: Record<TargetRole, { kpis: string[]; tag: st
   },
 };
 
+export const PERSONA_DATA: Record<TargetRole, {
+  pain_points: string[];
+  bridge_template: string;
+  promise_library: Partial<Record<TriggerType, string>>;
+}> = {
+  "VP Sales": {
+    pain_points: [
+      "Pipeline visibility becomes the constraint before headcount does",
+      "Forecast accuracy erodes without real-time pipeline signals",
+      "Deals at risk surface too late in the quarter",
+    ],
+    bridge_template: "At that growth stage, pipeline visibility usually becomes the constraint before headcount does.",
+    promise_library: {
+      award: "We help VP Sales teams call the quarter with confidence.",
+      stat: "We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
+      case_study: "We help VP Sales teams stop losing deals they didn't know were at risk.",
+      hiring: "We help VP Sales leaders build pipeline visibility that scales with new hires.",
+      funding: "We help VP Sales teams build the pipeline discipline investors expect post-raise.",
+      expansion: "We help VP Sales leaders maintain attainment through geographic expansion.",
+      ipo: "We help VP Sales teams call the quarter with confidence before the pressure arrives.",
+    },
+  },
+  "RevOps": {
+    pain_points: [
+      "Pipeline data doesn't match CRM reality",
+      "Manual reporting layers slow decision-making",
+      "Operational discipline externally doesn't translate to internal pipeline ops",
+    ],
+    bridge_template: "The same operational discipline that drove [X] externally should apply to your pipeline data internally.",
+    promise_library: {
+      award: "We help RevOps teams build one source of truth for pipeline activity.",
+      stat: "We help RevOps eliminate the spreadsheet layer between CRM and reality.",
+      case_study: "We help RevOps teams build one source of truth for pipeline activity.",
+      hiring: "We help RevOps teams scale pipeline ops without scaling headcount.",
+      funding: "We help RevOps teams build the data infrastructure investors expect post-raise.",
+      expansion: "We help RevOps teams build one source of truth before international complexity compounds it.",
+      ipo: "We help RevOps teams build the data infrastructure before the roadshow demands it.",
+    },
+  },
+  "SDR Manager": {
+    pain_points: [
+      "Rep coaching relies on lagging data instead of real-time visibility",
+      "Pipeline coaching still lags behind activity data",
+      "Ramp time extends when coaching is based on weekly reviews not real-time signals",
+    ],
+    bridge_template: "You track [X] externally — curious if your SDR team has the same visibility internally, or if coaching still relies on lagging data.",
+    promise_library: {
+      award: "We help SDR managers get real-time rep visibility without overhauling their stack.",
+      stat: "We help SDR managers coach in real-time instead of reviewing last week.",
+      case_study: "We help SDR managers cut ramp time by closing the gap between activity data and actual performance.",
+      hiring: "We help SDR managers ramp new reps faster with real-time coaching signals.",
+      funding: "We help SDR managers build the rep visibility that scales with post-funding growth.",
+      expansion: "We help SDR managers standardise onboarding across regions before the process breaks.",
+      ipo: "We help SDR managers build the coaching infrastructure before scale exposes the gaps.",
+    },
+  },
+  "Marketing": {
+    pain_points: [
+      "SDR follow-up speed on leads doesn't match campaign quality",
+      "Attribution gap between MQL and booked meeting",
+      "No visibility into what happens to leads after SDR handoff",
+    ],
+    bridge_template: "Winning on [X] externally doesn't always translate to SDR follow-up speed on the leads it generates.",
+    promise_library: {
+      award: "We help marketing teams see exactly what happens to leads after SDR handoff.",
+      stat: "We help marketing teams see exactly what happens to leads after SDR handoff.",
+      case_study: "We help marketing close the attribution gap between MQL and booked meeting.",
+      hiring: "We help marketing teams maintain lead-to-meeting velocity as the SDR team scales.",
+      funding: "We help marketing teams prove campaign ROI all the way through to booked meetings.",
+      expansion: "We help marketing teams measure SDR follow-up speed on every campaign in every market.",
+      ipo: "We help marketing close the attribution gap before GTM efficiency becomes the investor question.",
+    },
+  },
+  "Founder/CEO": {
+    pain_points: [
+      "GTM efficiency — getting more from current team before scaling it",
+      "Revenue per SDR plateaus without operational visibility",
+      "GTM predictability is hard to build at the Series A/B stage",
+    ],
+    bridge_template: "At that recognition level, the next question is usually GTM efficiency — getting more from your current team before scaling it.",
+    promise_library: {
+      award: "We help founders increase revenue per SDR before the next hire.",
+      stat: "We help founders build GTM predictability at the Series A/B stage.",
+      case_study: "We help founders increase revenue per SDR before the next hire.",
+      hiring: "We help founders get more from their current team before adding headcount.",
+      funding: "We help founders build GTM predictability that matches investor expectations.",
+      expansion: "We help founders get more from their current GTM motion before the next growth stage demands it.",
+      ipo: "We help founders build GTM predictability before the roadshow demands it.",
+    },
+  },
+  "General": {
+    pain_points: [
+      "Internal visibility doesn't match external execution quality",
+      "Coaching and pipeline reviews rely on lagging indicators",
+      "Team performance data arrives too late to act on",
+    ],
+    bridge_template: "That level of external execution usually raises the question of whether internal visibility matches.",
+    promise_library: {
+      award: "We help teams get the same real-time visibility internally that they deliver externally.",
+      stat: "We help teams close the gap between activity data and actual performance.",
+      case_study: "We help teams close the gap between activity data and actual performance.",
+      hiring: "We help teams scale performance visibility with headcount growth.",
+      funding: "We help teams build the operational visibility investors expect.",
+      expansion: "We help teams maintain performance visibility across new regions and headcount.",
+      ipo: "We help teams build GTM predictability before the roadshow demands it.",
+    },
+  },
+};
+
 export type Hook = {
   news_item: number;
   angle: Angle;
@@ -66,6 +177,17 @@ export type Hook = {
   role_tag?: string;
   role_token_hit?: string;
   uses_sender_context?: boolean;
+  trigger_type?: TriggerType;
+  promise?: string;
+  bridge_quality?: "strong" | "moderate" | "weak";
+};
+
+export type IntentSignalInput = {
+  triggerType: string;
+  summary: string;
+  confidence: number;
+  sourceUrl: string;
+  tier: "A" | "B";
 };
 
 export type ChannelVariant = {
@@ -122,6 +244,10 @@ export type ClaudeHookPayload = {
   confidence: string;
   psych_mode?: string;
   why_this_works?: string;
+  trigger?: string;
+  trigger_type?: string;
+  promise?: string;
+  bridge_quality?: "strong" | "moderate" | "weak";
 };
 
 // ---------------------------------------------------------------------------
@@ -205,7 +331,7 @@ export const VALID_CONFIDENCES: Confidence[] = ["high", "med"];
 export const VALID_PSYCH_MODES: PsychMode[] = [
   "relevance", "curiosity_gap", "symptom", "tradeoff_frame", "contrarian", "benefit",
 ];
-export const MAX_HOOK_CHARS = 240;
+export const MAX_HOOK_CHARS = 400;
 
 // Vague/philosophical question patterns that get rejected.
 // Hooks must ask forced-choice, ownership, timing, or mechanism questions.
@@ -517,8 +643,13 @@ export function isReputablePublisher(sourceUrl: string): boolean {
 // ---------------------------------------------------------------------------
 
 const TIER_A_URL_PATTERNS = [
+  /\/newsroom\//i,
+  /\/company\/news\//i,
+  /\/press\//i,
+  /\/news\//i,
   /\/press/i,
   /\/newsroom/i,
+  /\/company\/news/i,
   /\/blog\b/i,
   /\/changelog/i,
   /\/release-notes/i,
@@ -702,6 +833,19 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
     return "B";
   }
 
+  // Tier A: URL pattern match
+  for (const pattern of TIER_A_URL_PATTERNS) {
+    if (pattern.test(source.url)) {
+      if (/\/company\/news\//i.test(source.url) || /\/newsroom\//i.test(source.url) || /\/press\//i.test(source.url) || /\/news\//i.test(source.url)) {
+        console.log("[classifySource] newsroom/news URL matched Tier A pattern", {
+          url: source.url,
+          matchedPattern: pattern.toString(),
+        });
+      }
+      return "A";
+    }
+  }
+
   // For company-site sources (prong C): require date + signal content for Tier A
   if (isCompanySite) {
     const hasDate = !!source.date;
@@ -719,11 +863,6 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
     // Only usable if on company domain with concrete claims; otherwise force B
     if (sourceHasConcreteEvidence(source.facts)) return "B"; // B, not A — capped at 1 hook
     return "C";
-  }
-
-  // Tier A: URL pattern match
-  for (const pattern of TIER_A_URL_PATTERNS) {
-    if (pattern.test(source.url)) return "A";
   }
 
   // Tier A: title pattern match
@@ -754,8 +893,13 @@ function applyRecencyDowngrade(source: ClassifiedSource): ClassifiedSource {
     return { ...source, tier: downgraded, stale: true };
   }
 
-  // No date and no specifics → don't assume recency, cap at B
+  // No-date policy:
+  // - Keep Tier A for explicit newsroom/press/changelog/case-study style URLs
+  //   because index/listing pages often omit a top-level publish date.
+  // - Otherwise cap no-date Tier A sources at B to avoid over-trusting vague pages.
   if (noDate && source.tier === "A") {
+    const isExplicitSignalPage = TIER_A_URL_PATTERNS.some((p) => p.test(source.url));
+    if (isExplicitSignalPage) return source;
     return { ...source, tier: "B" };
   }
 
@@ -792,6 +936,11 @@ export function countSignalFacts(sources: ClassifiedSource[]): number {
     }
   }
   return count;
+}
+
+/** Count high-confidence intent signals (>= 80%) used for threshold gating. */
+export function countHighConfidenceIntentSignals(intentSignals: IntentSignalInput[] = []): number {
+  return intentSignals.filter((s) => s.confidence >= 0.8).length;
 }
 
 // ---------------------------------------------------------------------------
@@ -888,6 +1037,10 @@ async function fetchNewsSignals(
       tavilySearch(query, apiKey, { topic: "news", max_results: 15, days, exclude_domains: [domain] })
         .then((results) =>
           results
+            .filter((r) => {
+              const text = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+              return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
+            })
             .map((r) => tavilyResultToSource(r, domain))
             .filter((s): s is Source => s !== null)
             .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
@@ -925,6 +1078,10 @@ async function fetchWebSignals(
       tavilySearch(query, apiKey, { topic: "general", search_depth: "basic", max_results: 10, days, exclude_domains: [domain] })
         .then((results) =>
           results
+            .filter((r) => {
+              const text = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+              return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
+            })
             .map((r) => tavilyResultToSource(r, domain))
             .filter((s): s is Source => s !== null)
             .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
@@ -945,7 +1102,7 @@ async function fetchCompanyOwnSignals(
   apiKey: string,
 ): Promise<ClassifiedSource[]> {
   const signalPaths = [
-    "changelog", "release notes", "press", "newsroom",
+    "changelog", "release notes", "press", "newsroom", "company news", "press release",
     "blog", "careers", "jobs", "partners", "integrations", "case study",
   ].join(" OR ");
 
@@ -1017,6 +1174,7 @@ const SIGNAL_SUBPAGE_PATTERNS = [
   /\/release-notes?\b/i,
   /\/press\b/i,
   /\/newsroom\b/i,
+  /\/company\/news\b/i,
   /\/blog\b/i,
   /\/announcements?\b/i,
 ];
@@ -1212,7 +1370,7 @@ async function fetchDirectCompanyPages(
   const signalPages = homepageHtml ? discoverSignalPages(homepageHtml, baseUrl) : [];
 
   // Also try well-known signal paths that may not be linked from homepage
-  const wellKnownPaths = ["/swipefiles", "/customers", "/case-studies", "/changelog", "/press"];
+  const wellKnownPaths = ["/swipefiles", "/customers", "/case-studies", "/changelog", "/press", "/company/news/", "/newsroom/", "/press/", "/news/"];
   for (const path of wellKnownPaths) {
     const fullUrl = `${baseUrl}${path}`;
     if (!signalPages.includes(fullUrl)) {
@@ -1354,14 +1512,16 @@ export type FetchSourcesResult = {
 export async function fetchSources(
   url: string,
   apiKey: string,
+  intentSignals?: IntentSignalInput[],
 ): Promise<ClassifiedSource[]> {
-  const result = await fetchSourcesWithGating(url, apiKey);
+  const result = await fetchSourcesWithGating(url, apiKey, intentSignals);
   return result.sources;
 }
 
 export async function fetchSourcesWithGating(
   url: string,
   apiKey: string,
+  intentSignals: IntentSignalInput[] = [],
 ): Promise<FetchSourcesResult> {
   const domain = getDomain(url);
   const companyName = extractCompanyName(url);
@@ -1428,14 +1588,32 @@ export async function fetchSourcesWithGating(
     .sort((a, b) => scoreSource(b) - scoreSource(a))
     .slice(0, 10);
 
-  // Count signal facts for gating
-  const signalCount = countSignalFacts(ranked);
+  // Count signal facts for gating (sources + high-confidence intent signals)
+  const sourceSignalCount = countSignalFacts(ranked);
+  const highConfidenceIntentCount = countHighConfidenceIntentSignals(intentSignals);
+  const signalCount = sourceSignalCount + highConfidenceIntentCount;
   const hasAnchoredSources = ranked.some((s) => (s.anchorScore ?? 0) >= 3 && s.tier === "A");
+
+  const tierACount = ranked.filter((s) => s.tier === "A").length;
+  const lowSignal = signalCount < 2 && tierACount < 2;
+
+  console.log("[fetchSourcesWithGating] threshold check (with intent):", {
+    sourceSignalCount,
+    highConfidenceIntentCount,
+    signalCountBeforeIntent: sourceSignalCount,
+    signalCountAfterIntent: signalCount,
+    thresholdMath: "lowSignal = signalCount < 2 && tierACount < 2",
+    tierACount,
+    hasAnchoredSources,
+    lowSignal,
+    intentSignals: intentSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
+    tierBreakdown: ranked.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
+  });
 
   return {
     sources: ranked,
     signalCount,
-    lowSignal: signalCount < 2,
+    lowSignal,
     hasAnchoredSources,
   };
 }
@@ -1561,239 +1739,130 @@ export async function resolveCompanyByName(
 // Build the Claude prompt
 // ---------------------------------------------------------------------------
 
-export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null): string {
+export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }): string {
+  const personaLine = targetRole && targetRole !== "General" ? targetRole : "Custom";
   return [
-    "You are an elite SDR copywriter who uses sales psychology to craft cold email opening hooks.",
-    "Your hooks earn attention fast, center the prospect (never 'we/us'), create productive tension,",
-    "and ask questions that are easy to answer — all backed by real evidence.",
+    "You are generating a sales hook for an outbound SDR email.",
     "",
-    "## MANDATORY: Verbatim Evidence Quote Rule",
-    "Every hook MUST include a verbatim quote of 5–12 words copied directly from the source facts.",
-    'Wrap the quote in double quotes inside the hook text.',
-    "If you cannot find a quoteable phrase of 5–12 words in the source facts, do NOT generate a hook for that source.",
-    'The "evidence_snippet" field must contain the EXACT full sentence/fact from which you pulled the quote.',
+    "CRITICAL RULE — READ BEFORE GENERATING:",
+    "This email is written TO a person whose job title is [PERSONA]. Their challenges are [PERSONA_PAIN]. Do NOT write about the prospect's product, their customers, or their industry operations. The trigger is CONTEXT ONLY. Write about their INTERNAL sales team challenges only.",
     "",
-    "## Psychology Mode Framework",
-    "For each Tier A source, generate exactly 3 hooks using 3 DIFFERENT psychology modes from the 6 below.",
-    "Rotate modes across sources so the output set has variety. Each hook uses ONE mode.",
+    "STRUCTURE RULE: The closing promise must always be the FINAL sentence of paragraph 1. It must not appear in paragraph 2 or later.",
+    "Correct structure:",
+    "Paragraph 1: Trigger reference + bridge to their internal pain + [PROMISE as final sentence]",
+    "Paragraph 2: Question or CTA only",
     "",
-    "### Mode A — relevance (you-first framing)",
-    "Center the prospect with second-person framing. No self-references (we/our/us).",
-    'Pattern: Saw your "{QUOTE}" — is your team optimizing for [A] or [B]?',
-    'Example: Saw your "3.2X reply rate vs templates" claim — is the main lever list quality, or the 1:1 personalization layer?',
+    "A hook is 2-3 sentences maximum. Follow this exact 4-part structure:",
     "",
-    "### Mode B — curiosity_gap (credible knowledge gap)",
-    "Create a gap between a claim and the underlying mechanism. Make them want to explain.",
-    'Pattern: "{QUOTE}" is a bold claim — is that driven by [lever1] or [lever2]?',
-    'Example: "100% unique email to every prospect" is a bold claim — is that human-written end-to-end, or programmatic personalization with human QA?',
+    "1. TRIGGER: Reference something specific and real about the prospect's company (award, stat, case study, funding, expansion, hiring). Start with \"Saw\" or \"Noticed\" — never \"I\".",
     "",
-    "### Mode C — symptom (buyer self-diagnosis)",
-    "Ask about a symptom tied to the signal. Make it fast to answer (binary or specific).",
-    'Pattern: When "{QUOTE}" shows up, the usual bottleneck is [X]. Is that true for you, or is it [Y]?',
-    'Example: When "820 interested replies from ~94,000 emails" shows up, the usual bottleneck is booking rate. Are you optimizing for booked meetings, or qualified reply volume?',
+    "2. BRIDGE: Connect their external achievement to an internal pain their persona experiences. Use the persona pain map below. The bridge must feel like a natural consequence, not a leap.",
     "",
-    "### Mode D — tradeoff_frame (decision, not discussion)",
-    "Force a real operational choice. Speed vs quality, breadth vs accuracy, automation vs control.",
-    'Pattern: With "{QUOTE}" — do you prioritize [A], or [B]?',
-    'Example: You price at "$250/reply" — is that mainly to de-risk clients, or to push higher standards on list + offer quality?',
+    "3. QUESTION: One question that surfaces their current priority. Prefer open questions over binary ones. Do not use leading questions.",
     "",
-    "### Mode E — contrarian (pattern interrupt)",
-    "Go against the grain, but must be defensible from the evidence. No unsourced claims.",
-    'Pattern: Most teams assume [common belief]. "{QUOTE}" suggests the opposite — is that how you approach it?',
-    `Example: Most outreach tools optimize for volume. You say "99% of cold email is digital spam" — do you fix that first with list hygiene, or with offer/messaging changes?`,
-    "CONSTRAINT: The contrarian statement must be derivable from the evidence. If not, use a different mode.",
+    "4. PROMISE: One closing sentence stating an outcome you deliver — not a feature. This must be the FINAL sentence. It must end with a full stop, not a question mark. Reference a result (ramp time, forecast accuracy, pipeline visibility) not a product (dashboards, alerts, reports).",
     "",
-    "### Mode F — benefit (what's in it for them)",
-    "Tie the signal to a concrete business benefit. Make the upside specific.",
-    'Pattern: If "{QUOTE}" holds, the upside is [benefit]. Is your priority [benefit1] or [benefit2] this quarter?',
-    'Example: If "24/7 deliverability management" holds, the upside is inbox-rate stability. Is infra dedicated per client, or shared pools with strict throttling?',
+    "---",
     "",
-    "## Evidence tier rules",
-    "Each source is classified into a tier. Follow strictly:",
+    "PERSONA PAIN MAPS:",
     "",
-    "### Tier A sources (primary/authoritative, company-anchored)",
-    "These are the company's own pages (press releases, blog, changelog, careers) OR",
-    "major publications (Reuters, Bloomberg, WSJ, TechCrunch front-page) with original reporting.",
-    "Generate exactly 3 hooks per source using 3 DIFFERENT psychology modes (A–F).",
-    "Each hook must also specify one of these angles:",
-    "- trigger: a SPECIFIC company action/change. HARD RULE: if no action exists in evidence, skip this angle.",
-    "- risk: what breaks if something is ignored → forced-choice question.",
-    "- tradeoff: two valid paths → specific question about direction.",
-    "Each hook MUST contain a verbatim quote from the source.",
+    "SDR Manager:",
+    "- Bridge: \"You track [X] externally — curious if your SDR team has the same visibility internally, or if coaching still relies on lagging data.\"",
+    "- Promises:",
+    "  - award: \"We help SDR managers get real-time rep visibility without overhauling their stack.\"",
+    "  - stat: \"We help SDR managers coach in real-time instead of reviewing last week.\"",
+    "  - funding: \"We help SDR managers build the coaching infrastructure before scale exposes the gaps.\"",
+    "  - expansion: \"We help SDR managers standardise onboarding across regions before the process breaks.\"",
+    "  - hiring: \"We help SDR managers cut ramp time without relying on senior reps to carry new hires.\"",
+    "  - IPO: \"We help SDR managers build pipeline visibility that holds up to investor scrutiny.\"",
     "",
-    "### Tier B sources (secondary commentary / verification-only)",
-    "These are third-party blogs, agency commentary, newsletters, or opinion pieces that",
-    "REPORT ON or COMMENT ABOUT the target company. They are NOT primary announcements.",
-    "Generate exactly 1 hook per source. Rules:",
-    "- Angle MUST be 'trigger'. Psychology mode MUST be 'relevance' (mode A).",
-    "- VERIFICATION-ONLY: Do NOT use 'launch' or 'announce' language. The source is commentary, not the company speaking.",
-    "- Frame as reading/seeing a report, NOT as the company doing something:",
-    '  BAD: "LinkedIn launched conversational search" (secondary source cannot confirm this)',
-    '  GOOD: "Read a Feb 2026 breakdown of LinkedIn\'s Jan–Feb updates" (attributes to what you actually read)',
-    "- Do NOT assert pain, implications, or outcomes. ONLY verify the signal.",
-    "- The question must ask about a workflow tradeoff implied by the signal, NOT about channel preference or strategy.",
-    "- If no quoteable phrase exists, skip this source entirely.",
+    "VP Sales:",
+    "- Bridge: \"At that growth stage, pipeline visibility usually becomes the constraint before headcount does.\"",
+    "- Promises:",
+    "  - award: \"We help VP Sales teams call the quarter with confidence.\"",
+    "  - stat: \"We help VP Sales leaders surface pipeline risk before it shows up in the forecast.\"",
+    "  - funding: \"We help VP Sales teams build forecast confidence before the pressure arrives.\"",
+    "  - expansion: \"We help VP Sales leaders maintain attainment through geographic expansion.\"",
+    "  - IPO: \"We help VP Sales teams build the forecast discipline that IPO scrutiny demands.\"",
     "",
-    "### Tier C sources",
-    "Skip entirely. Generate nothing.",
+    "Founder/CEO:",
+    "- Bridge: \"At that recognition level, the next question is usually GTM efficiency — getting more from your current team before scaling it.\"",
+    "- Promises:",
+    "  - award: \"We help founders increase revenue per SDR before the next hire.\"",
+    "  - funding: \"We help founders get more from their current GTM motion before the next growth stage demands it.\"",
+    "  - IPO: \"We help founders build GTM predictability before the roadshow demands it.\"",
+    "  - expansion: \"We help founders scale GTM into new markets without losing pipeline visibility.\"",
     "",
-    "## Date discipline (HARD constraint)",
-    "- Dates in hooks MUST match what the source actually says. If the source says 'January 2026' or 'Feb 2026', use those exact dates.",
-    "- Do NOT generalize to 'early 2026', 'recently', 'this year', or 'in 2026' unless the source uses that exact wording.",
-    "- If the source references multiple specific dates (e.g., Jan and Feb updates), list them: 'Jan–Feb 2026'.",
-    "- If the source has no date, do NOT invent one. Omit the date from the hook.",
+    "RevOps:",
+    "- Bridge: \"The same operational discipline that drove [X] externally should apply to your pipeline data internally.\"",
+    "- Promises:",
+    "  - award: \"We help RevOps teams build one source of truth for pipeline activity.\"",
+    "  - stat: \"We help RevOps eliminate the spreadsheet layer between CRM and reality.\"",
+    "  - funding: \"We help RevOps teams build one source of truth before growth complexity compounds it.\"",
+    "  - expansion: \"We help RevOps teams consolidate pipeline data across regions into one view.\"",
+    "  - IPO: \"We help RevOps teams build the reporting infrastructure that audit-readiness requires.\"",
     "",
-    "## Question quality (HARD constraint — hooks rejected if violated)",
-    "Every hook must end with an ANSWERABLE question. Acceptable types:",
-    "- Forced choice: [A] or [B]? (two specific, operational, mutually exclusive alternatives)",
-    "- Ownership: is this owned by [team X] or [team Y]?",
-    "- Timing: is this a priority now, or next quarter?",
-    "- Mechanism: is that driven by [X] or [Y]?",
+    "Marketing:",
+    "- Bridge: \"Winning on [X] externally doesn't always translate to SDR follow-up speed on the leads it generates.\"",
+    "- Promises:",
+    "  - award: \"We help marketing teams see exactly what happens to leads after SDR handoff.\"",
+    "  - stat: \"We help marketing close the attribution gap between MQL and booked meeting.\"",
+    "  - funding: \"We help marketing teams measure SDR follow-up speed on every campaign.\"",
+    "  - expansion: \"We help marketing teams measure SDR follow-up speed on every campaign in every market.\"",
     "",
-    "REJECTED question types (hook will be filtered out):",
-    "- Vague: 'Are you seeing this shift?', 'Is this on your radar?'",
-    "- Philosophical: 'How are you thinking about…?', 'What's your take on…?'",
-    "- Open-ended: 'What are you doing about…?', 'How are you handling…?'",
-    "- Yes/no without specificity: 'Have you considered…?', 'Are you concerned?'",
+    "Custom:",
+    "- User provides free-text pain and promise",
+    "- System still enforces 4-part structure",
     "",
-    "## Emotion modifiers (safe, evidence-gated)",
-    "Apply these ONLY when evidence supports them:",
-    "- Curiosity: use mechanism questions (driven by X or Y?) — always safe",
-    "- Urgency: ONLY when evidence includes a time-bound trigger (launch date, deadline, Q1 target)",
-    "- Social proof: ONLY when evidence names specific customers, partners, or case studies",
-    "- Humor: OFF — do not use humor in hooks",
+    "---",
     "",
-    "## Newsjacking (gated — Tier A only)",
-    "When a Tier A source is dated within 90 days AND the company is named in the source:",
-    'Pattern: Saw the news on "{QUOTE}" — does this change your priority between [A] and [B]?',
-    "Only use for actual news events (launches, funding, partnerships, hires). Not for marketing pages.",
-    "NEVER use newsjacking language ('Saw the news', 'Saw the launch') for Tier B sources.",
+    "BRIDGE QUALITY RULES:",
+    "- Bridge must share a domain with the trigger (operational → operational, growth → growth)",
+    "- If trigger is a product metric (e.g. ELD count, unit deployments), flag bridge_quality: weak and regenerate using a company-level signal instead",
+    "- Never bridge a fleet/logistics metric directly to SDR team management without an explicit intermediate step",
+    "- Hooks with bridge_quality: weak must be capped at score 79 and must not appear in position 1 or 2 of results",
     "",
-    "## Unsourced Claims Blocklist (HARD constraint)",
-    "NEVER include these claims unless the EXACT words appear in the source facts:",
-    "- redesign / revamp / hiring / job postings",
-    "- performance lift / conversion lift / pipeline strength",
-    "- any percentage stat (X% better/faster/more)",
-    "- any benchmark or industry comparison",
-    "If generated without source backing, drop the hook entirely.",
+    "---",
     "",
-    "## No implied-change verbs (HARD constraint)",
-    "NEVER use verbs that imply a company change/transition (switched, revamped, recently changed,",
-    "moved to, pivoted, adopted, shifted, transitioned, started using) UNLESS the source evidence",
-    "contains an explicit time marker or change statement (a date, 'announced', 'launched', etc.).",
-    "If the source describes a CURRENT state, use present-tense neutral framing:",
-    "  BAD: 'You switched to $250/reply pricing'",
-    "  GOOD: 'You price at $250/reply'",
+    "TRIGGER PRIORITY + SCORING GUIDANCE:",
+    "- ipo: score 95+ (best personas: Founder/CEO, VP Sales, RevOps)",
+    "- funding: score 90-94 (best personas: all)",
+    "- expansion: score 80-89 (best personas: RevOps, SDR Manager, Marketing)",
+    "- hiring (100+): score 80-85 (best personas: SDR Manager, VP Sales)",
     "",
-    "## No-assumptions rule (HARD constraint)",
-    "- NEVER assert internal problems unless the source EXPLICITLY says so.",
-    "- NEVER use generic benchmarks ('teams lose 20–30%...', 'X% of companies...').",
-    "- If a claim is not in the evidence, drop the hook.",
+    "CHARACTER LIMIT: 400 characters maximum. Write concisely — the 4-part structure should fit naturally within this limit.",
     "",
-    "## No fake stats (HARD constraint)",
-    "Numbers in hooks are ONLY allowed if they appear in the evidence snippet.",
-    "Do NOT invent, round, or extrapolate statistics. If the evidence says '820 replies',",
-    "you may say '820 replies' — not '~800 replies' or 'hundreds of replies'.",
+    "---",
     "",
-    "## Quality rules (violating any one = hook rejected)",
-    "- Max 240 characters per hook. 1–2 sentences.",
-    "- Must end with a question mark.",
-    "- No raw URLs in hook text.",
-    "- Always use second-person (you/your). Never first-person (we/our/us/I).",
-    "- BANNED phrases: curious, worth a quick, just checking in, hope you're well, touching base,",
-    "  I'd love to, quick question, quick chat, I came across, I noticed your company,",
-    "  game-changing, innovative solution, disrupting the space, cutting-edge,",
-    "  interested in, teams like you, on your radar, teams lose, usually lose,",
-    "  industry average, industry benchmark, compared to peers.",
-    "",
-    "## Skip vague sources (HARD constraint)",
-    "If a source's facts do NOT contain at least one of: a number, a named tool/integration,",
-    "a named customer/partner, or a concrete feature/offer term, skip it entirely.",
-    "",
-    "## Confidence scoring",
-    "- high: source fact is specific and recent (named event, metric, date within 6 months).",
-    "- med: fact is real but generic or older.",
-    "Only output hooks where confidence is high or med.",
-    "",
-    ...(senderContext
-      ? [
-          "## SENDER CONTEXT",
-          `The sender sells: ${senderContext.whatYouSell}`,
-          `ICP: ${senderContext.icpIndustry}, ${senderContext.icpCompanySize} employees, targeting ${senderContext.buyerRoles.join(", ")}`,
-          `Primary outcome: ${senderContext.primaryOutcome}`,
-          `Category: ${senderContext.offerCategory}`,
-          ...(senderContext.proof ? [`Proof points: ${senderContext.proof.join("; ")}`] : []),
-          "",
-          "## RELEVANCE BRIDGE RULES (only when sender context is provided)",
-          "- Add at most ONE sentence tying the prospect's signal to the sender's outcome.",
-          '- Template: "[Signal verb] + [prospect noun] — [sender outcome] for [buyer role]. [Binary question]?"',
-          "- Max 80 characters for the bridge portion. Total hook still max 240 characters.",
-          "- Never name the sender's product directly. Reference their outcome category only.",
-          '- Never claim "we help teams like you" or similar generic framing.',
-          "- The bridge must follow logically from the evidence. If no natural connection exists, omit it.",
-          "",
-        ]
-      : [
-          "## VERIFICATION-ONLY MODE",
-          "Do NOT reference the sender's product or offer. Generate signal-verification hooks only.",
-          "Do NOT attempt a relevance bridge sentence.",
-          "Hooks should verify the prospect's signal and ask a narrow operational question.",
-          "",
-        ]),
-    // Role-aware framing section
-    ...(targetRole && targetRole !== "General"
-      ? [
-          `## TARGET ROLE: ${targetRole}`,
-          "",
-          "## ROLE RESPONSIBILITIES",
-          `This person's KPIs/decisions: ${ROLE_RESPONSIBILITIES[targetRole].kpis.join(", ")}.`,
-          "",
-          "## ROLE-FRAMING CONSTRAINT",
-          "- Frame the final question around what this role owns (from the KPIs above).",
-          "- The question should feel relevant to their day-to-day decisions, not generic strategy.",
-          "- Do NOT invent pains or assert problems. Only use evidence for claims.",
-          "- If the evidence doesn't naturally connect to this role's KPIs, ask a verification question instead.",
-          `- Example for ${targetRole}: frame around ${ROLE_RESPONSIBILITIES[targetRole].kpis.slice(0, 2).join(" or ")} — but only if the signal supports it.`,
-          "",
-        ]
-      : targetRole === "General"
-        ? [
-            "## TARGET ROLE: General",
-            "Frame questions around process, priority, or decision tradeoffs.",
-            "Use neutral framing that works for any buyer role.",
-            "",
-          ]
-        : []),
-
-    // Humanizer instruction for high-confidence Tier A hooks
-    "## TONE (human, not robotic)",
-    "- Write like a sharp colleague, not a template engine.",
-    "- Shorten sentences. Cut formal connectors (therefore, as a result, consequently).",
-    "- Do not echo marketing taglines from the source. Paraphrase in your own words outside the quote.",
-    "- Keep the question tight, specific, and answerable in under 5 seconds.",
-    "- The hook should sound like something a well-prepared human would say after reading the source.",
-    "",
-    "## Output format",
-    "Return ONLY a JSON array. No markdown fences, no commentary. Each element:",
-    '{  "news_item": <1-indexed source number>,',
-    '   "angle": "trigger" | "risk" | "tradeoff",',
-    '   "psych_mode": "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit",',
-    '   "hook": "<the hook text — MUST contain a verbatim quote in double quotes>",',
-    '   "evidence_snippet": "<the EXACT full fact/sentence you quoted from>",',
-    '   "source_title": "<title of the source>",',
-    '   "source_date": "<date of the source, or empty string>",',
-    '   "source_url": "<URL of the source>",',
-    '   "evidence_tier": "A" | "B",',
-    '   "confidence": "high" | "med",',
-    '   "why_this_works": "<1 short phrase: e.g. curiosity gap, tradeoff frame, symptom self-diagnosis>"',
+    "OUTPUT FORMAT — always return JSON, never plain text:",
+    "{",
+    "  \"hook\": \"[full 2-3 sentence hook]\",",
+    "  \"trigger\": \"[the specific thing referenced]\",",
+    "  \"bridge_quality\": \"strong | moderate | weak\",",
+    "  \"promise\": \"[the closing promise sentence isolated]\",",
+    "  \"trigger_type\": \"award | stat | case_study | hiring | funding | IPO | expansion\"",
     "}",
-  ].join("\n");
+    "",
+    
+    "Selected persona: " + personaLine + ".",
+    ...(customPersona ? [
+      "Custom persona inputs:",
+      "- Pain: " + customPersona.pain,
+      "- Promise: " + customPersona.promise,
+    ] : []),
+    ...(senderContext ? [
+      "Sender context (reference only):",
+      "- Outcome: " + senderContext.primaryOutcome,
+      "- Buyer roles: " + senderContext.buyerRoles.join(', '),
+    ] : []),
+  ].join("\\n");
 }
 
 export function buildUserPrompt(
   url: string,
   sources: ClassifiedSource[],
   context?: string,
+  intentSignals?: IntentSignalInput[],
 ): string {
   // Filter out Tier C sources before sending to Claude
   const usableSources = sources.filter((s) => s.tier !== "C");
@@ -1821,6 +1890,19 @@ export function buildUserPrompt(
     ? `\n\n### Salesperson context\n${context}`
     : "";
 
+  const signalsBlock =
+    intentSignals && intentSignals.length > 0
+      ? [
+          "",
+          "### Intent Signals",
+          "Use these as additional hook triggers alongside the sources above. Each maps to the indicated trigger_type.",
+          ...intentSignals.map(
+            (s) =>
+              `- [Tier ${s.tier}] [trigger_type: ${s.triggerType}] ${s.summary} (confidence: ${Math.round(s.confidence * 100)}%, source: ${s.sourceUrl})`,
+          ),
+        ].join("\n")
+      : "";
+
   const allTierC = usableSources.length === 0;
 
   if (allTierC) {
@@ -1830,6 +1912,7 @@ export function buildUserPrompt(
       "### Sources",
       "No usable sources found. All sources were classified as Tier C (insufficient evidence).",
       "Return an empty JSON array: []",
+      signalsBlock,
       contextBlock,
     ].join("\n");
   }
@@ -1839,6 +1922,7 @@ export function buildUserPrompt(
     "",
     "### Sources",
     sourcesBlock,
+    signalsBlock,
     contextBlock,
     "",
     "Generate hooks now following the tier rules. Return a JSON array and nothing else.",
@@ -1860,11 +1944,12 @@ export async function callClaude(
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "prompt-caching-2024-07-31",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4096,
-      system: systemPrompt,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     }),
   });
@@ -1922,7 +2007,10 @@ export async function callClaude(
   }
 
   if (!Array.isArray(parsed)) {
-    throw new Error("Claude did not return a JSON array");
+    if (parsed && typeof parsed === "object") {
+      return [parsed as ClaudeHookPayload];
+    }
+    throw new Error("Claude did not return valid JSON");
   }
 
   return parsed as ClaudeHookPayload[];
@@ -1944,11 +2032,12 @@ export async function callClaudeText(
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "prompt-caching-2024-07-31",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: maxTokens,
-      system: systemPrompt,
+      system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     }),
   });
@@ -2130,9 +2219,9 @@ function hasVagueQuestion(hook: string): boolean {
  * Returns true if the question structure is valid.
  */
 export function hasValidQuestionStructure(hook: string): boolean {
-  // Extract question portion (after last em-dash, or the whole hook)
-  const parts = hook.split(/\s*—\s*/);
-  const questionPart = parts.length > 1 ? parts[parts.length - 1] : hook;
+  // Extract the sentence containing the question mark
+  const questionMatch = hook.match(/[^.!]*\?/);
+  const questionPart = questionMatch ? questionMatch[0] : hook;
   // Forced choice / mechanism / ownership: contains "or"
   if (/\bor\b/i.test(questionPart)) return true;
   // Comparison: contains "vs"
@@ -2219,21 +2308,56 @@ function sourceHasConcreteEvidence(facts: string[]): boolean {
   return false;
 }
 
+/**
+ * Assess bridge quality by checking domain overlap between the bridge portion
+ * and the evidence. Looks for shared terms (company name, product terms, role keywords).
+ */
+function assessBridgeQuality(hookText: string, evidenceSnippet: string): "strong" | "moderate" | "weak" {
+  // Extract bridge: text between the closing quote mark and the question mark
+  const quoteEnd = hookText.search(/["\u201D]\s*—?\s*/);
+  const questionStart = hookText.lastIndexOf("?");
+  if (quoteEnd === -1 || questionStart === -1 || quoteEnd >= questionStart) return "weak";
+
+  const bridge = hookText.slice(quoteEnd + 1, questionStart).toLowerCase();
+  const evidenceLower = evidenceSnippet.toLowerCase();
+
+  // Extract meaningful terms (3+ char words, excluding stop words)
+  const stopWords = new Set(["the", "and", "for", "are", "but", "not", "you", "your", "all", "can", "had", "her", "was", "one", "our", "out", "has", "his", "how", "its", "may", "new", "now", "old", "see", "way", "who", "did", "get", "let", "say", "she", "too", "use", "with", "from", "this", "that", "what", "when", "will", "than", "been", "have", "into", "each", "make", "like", "over", "such", "take", "them", "then", "they", "some", "more", "most", "only", "very", "just", "about", "being", "could", "other", "their", "there", "these", "which", "would", "after", "first", "where"]);
+
+  const bridgeTerms = bridge.match(/\b[a-z]{3,}\b/g)?.filter(w => !stopWords.has(w)) || [];
+  const evidenceTerms = new Set(evidenceLower.match(/\b[a-z]{3,}\b/g)?.filter(w => !stopWords.has(w)) || []);
+
+  let overlap = 0;
+  for (const term of bridgeTerms) {
+    if (evidenceTerms.has(term)) overlap++;
+  }
+
+  if (overlap >= 2) return "strong";
+  if (overlap >= 1) return "moderate";
+  return "weak";
+}
+
 export function validateHook(
   raw: ClaudeHookPayload,
   sourceLookup?: Map<number, ClassifiedSource>,
 ): Hook | null {
-  const angle = raw.angle?.toLowerCase() as Angle;
+  const angle = (raw.angle || "trigger").toLowerCase() as Angle;
   if (!VALID_ANGLES.includes(angle)) return null;
 
-  const confidence = raw.confidence?.toLowerCase() as Confidence;
+  const confidence = (raw.confidence || "med").toLowerCase() as Confidence;
   if (!VALID_CONFIDENCES.includes(confidence)) return null;
 
   let hook = (raw.hook || "").trim();
   if (hook.length === 0 || hook.length > MAX_HOOK_CHARS) return null;
-  if (!hook.endsWith("?")) return null;
+  // Hook must contain a question (but may end with a promise statement)
+  if (!hook.includes("?")) return null;
   if (containsBannedPhrase(hook) !== null) return null;
   if (!hasSpecificityToken(hook)) return null;
+
+  const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
+  const validTier = tier === "A" || tier === "B" ? tier : (
+    sourceLookup?.get(raw.news_item)?.tier ?? "B"
+  );
 
   // Question quality: reject vague/philosophical/open-ended questions
   if (hasVagueQuestion(hook)) return null;
@@ -2241,18 +2365,26 @@ export function validateHook(
   // Invented causality ban: reject hooks with ungrounded causal claims
   if (INVENTED_CAUSALITY_PATTERNS.some((p) => p.test(hook))) return null;
 
-  // Question framing bans: reject consultant-speak question patterns
-  const questionPart = hook.split(/\s*—\s*/).pop() || hook;
-  if (QUESTION_FRAMING_BANS.some((p) => p.test(questionPart))) return null;
+  // Question framing bans: reject consultant-speak question patterns.
+  // Keep strict for Tier B, but be more permissive for Tier A where first-party
+  // evidence can still justify otherwise solid hooks.
+  const questionMatch = hook.match(/[^.!]*\?/);
+  const questionPart = questionMatch ? questionMatch[0] : hook;
+  if (QUESTION_FRAMING_BANS.some((p) => p.test(questionPart)) && validTier === "B") return null;
 
-  // Abstract noun overload: reject questions with 3+ abstract nouns
+  // Abstract noun overload: keep strict for secondary evidence, relax slightly for Tier A.
   const abstractCount = ABSTRACT_NOUNS.filter((noun) =>
     new RegExp(`\\b${noun}\\b`, "i").test(questionPart)
   ).length;
-  if (abstractCount >= 3) return null;
+  if ((validTier === "B" && abstractCount >= 3) || (validTier === "A" && abstractCount >= 4)) return null;
 
-  // Positive question structure: must be forced-choice/mechanism/ownership/timing
-  if (!hasValidQuestionStructure(hook)) return null;
+  // Positive question structure: Tier B requires forced-choice/mechanism framing,
+  // Tier A can pass with a concrete direct question.
+  if (!hasValidQuestionStructure(hook)) {
+    const wordsInQuestion = questionPart.trim().split(/\s+/).filter(Boolean).length;
+    const hasConcreteQuestion = /\b(how|what|which|where|when|who)\b/i.test(questionPart) && wordsInQuestion >= 6;
+    if (validTier === "B" || !hasConcreteQuestion) return null;
+  }
 
   // You-first framing: reject hooks that use first-person (we/our/us/I)
   if (hasFirstPersonFraming(hook)) return null;
@@ -2264,11 +2396,6 @@ export function validateHook(
   if (hasMarketStatMisframing(hook, raw.evidence_snippet || "", sourceLookup?.get(raw.news_item))) {
     return null;
   }
-
-  const tier = (raw.evidence_tier || "").toUpperCase() as EvidenceTier;
-  const validTier = tier === "A" || tier === "B" ? tier : (
-    sourceLookup?.get(raw.news_item)?.tier ?? "B"
-  );
 
   // Tier B: ONLY trigger angle allowed, no risk/tradeoff
   if (validTier === "B" && angle !== "trigger") return null;
@@ -2303,10 +2430,23 @@ export function validateHook(
 
   const evidenceSnippet = (raw.evidence_snippet || "").trim();
 
-  // MANDATORY: Hook must contain a verbatim quote from evidence (5+ words in double quotes)
+  // Quote grounding: keep quote checks strict when quotes are present.
+  // Relax hard requirement for Tier A so strong first-party hooks without direct
+  // quotation marks can still survive when evidence alignment is strong enough.
   const quote = extractQuoteFromHook(hook);
-  if (!quote) return null; // No quote found → reject
-  if (!quoteExistsInEvidence(quote, evidenceSnippet)) return null; // Quote not in evidence → reject
+  if (quote) {
+    if (!quoteExistsInEvidence(quote, evidenceSnippet)) return null;
+  } else if (validTier === "B") {
+    return null;
+  } else {
+    const bridgeStrength = assessBridgeQuality(hook, evidenceSnippet);
+    if (bridgeStrength === "weak") {
+      const hookTerms = new Set((hook.toLowerCase().match(/[a-z]{5,}/g) || []).filter((t) => !["which", "their", "there", "where", "would", "could", "should", "during"].includes(t)));
+      const evidenceTerms = new Set(evidenceSnippet.toLowerCase().match(/[a-z]{5,}/g) || []);
+      const overlap = [...hookTerms].filter((t) => evidenceTerms.has(t)).length;
+      if (overlap < 1) return null;
+    }
+  }
 
   // No fake stats: numbers outside the verbatim quote must appear in evidence
   // (numbers inside the quote are already validated by quoteExistsInEvidence)
@@ -2347,6 +2487,27 @@ export function validateHook(
   const rawMode = (raw.psych_mode || "").toLowerCase().replace(/-/g, "_") as PsychMode;
   const psychMode = VALID_PSYCH_MODES.includes(rawMode) ? rawMode : undefined;
 
+  // Normalize trigger_type (optional — graceful degradation)
+  const VALID_TRIGGER_TYPES: TriggerType[] = ["award", "stat", "case_study", "hiring", "funding", "ipo", "expansion"];
+  const rawTriggerType = ((raw as any).trigger_type || "").toLowerCase().replace(/-/g, "_") as TriggerType;
+  const triggerType = VALID_TRIGGER_TYPES.includes(rawTriggerType) ? rawTriggerType : undefined;
+
+  // Normalize promise (optional — graceful degradation)
+  const rawPromise = ((raw as any).promise || "").trim();
+  const promise: string | undefined = rawPromise.length > 0 ? rawPromise : undefined;
+
+  // Assess bridge quality (prefer model-provided value when valid)
+  const rawBridgeQuality = ((raw as any).bridge_quality || "").toLowerCase();
+  const bridgeQuality = rawBridgeQuality === "strong" || rawBridgeQuality === "moderate" || rawBridgeQuality === "weak"
+    ? rawBridgeQuality as "strong" | "moderate" | "weak"
+    : assessBridgeQuality(hook, evidenceSnippet);
+
+  // Downgrade weak-bridge high-confidence hooks to "med"
+  let finalConfidence = confidence;
+  if (bridgeQuality === "weak" && confidence === "high") {
+    finalConfidence = "med";
+  }
+
   // Mode E (contrarian) gate: require company-anchored + recent source
   if (psychMode === "contrarian" && sourceLookup) {
     const source = sourceLookup.get(raw.news_item);
@@ -2366,9 +2527,12 @@ export function validateHook(
     source_date: (raw.source_date || "").trim(),
     source_url: (raw.source_url || "").trim(),
     evidence_tier: validTier,
-    confidence,
+    confidence: finalConfidence,
     psych_mode: psychMode,
     why_this_works: (raw.why_this_works || "").trim() || undefined,
+    trigger_type: triggerType,
+    promise: promise || undefined,
+    bridge_quality: bridgeQuality,
   };
 }
 
@@ -2407,13 +2571,23 @@ export function publishGate(
     filteredLookup.set(idx, source);
   }
 
+  const diagnostics: Array<{ idx: number; news_item: number; status: string; tier?: string; anchorScore?: number }> = [];
+
   // Step 2: Validate each hook through full pipeline (includes rewrite-or-drop)
   const validHooks: Hook[] = [];
-  for (const raw of rawHooks) {
+  for (const [idx, raw] of rawHooks.entries()) {
     // Reject hooks from sources that were filtered out
-    if (!filteredLookup.has(raw.news_item)) continue;
+    if (!filteredLookup.has(raw.news_item)) {
+      diagnostics.push({ idx, news_item: raw.news_item, status: "drop:source_filtered_out" });
+      continue;
+    }
     const validated = validateHook(raw, filteredLookup);
-    if (validated) validHooks.push(validated);
+    if (validated) {
+      diagnostics.push({ idx, news_item: raw.news_item, status: "pass:validateHook", tier: validated.evidence_tier, anchorScore: filteredLookup.get(raw.news_item)?.anchorScore });
+      validHooks.push(validated);
+    } else {
+      diagnostics.push({ idx, news_item: raw.news_item, status: "drop:validateHook_failed", tier: (raw.evidence_tier || "").toUpperCase(), anchorScore: filteredLookup.get(raw.news_item)?.anchorScore });
+    }
   }
 
   // Step 3: Enforce Tier B cap — max 1 total (or 0 if market context off and unanchored)
@@ -2421,16 +2595,25 @@ export function publishGate(
   const cappedHooks: Hook[] = [];
   for (const hook of validHooks) {
     if (hook.evidence_tier === "B") {
-      if (tierBCount >= 1) continue;
-      // In market-context mode, label unanchored Tier B
-      const source = filteredLookup.get(hook.news_item);
-      if (source && (source.anchorScore ?? 0) < 3 && includeMarketContext) {
-        // Allowed but capped — this is the 1 market context hook
+      if (tierBCount >= 1) {
+        diagnostics.push({ idx: -1, news_item: hook.news_item, status: "drop:tier_b_cap", tier: hook.evidence_tier });
+        continue;
       }
       tierBCount++;
     }
     cappedHooks.push(hook);
   }
+
+  console.log("[publishGate] decision trace", {
+    includeMarketContext,
+    rawHookCount: rawHooks.length,
+    sourceLookupCount: sourceLookup.size,
+    filteredLookupCount: filteredLookup.size,
+    validHookCount: validHooks.length,
+    finalHookCount: cappedHooks.length,
+    tierBCount,
+    diagnostics,
+  });
 
   return cappedHooks;
 }
@@ -2477,8 +2660,9 @@ export function publishGateFinal(
 
   const gated: Hook[] = [];
   let tierBCount = 0;
+  const diagnostics: Array<{ idx: number; news_item: number; status: string; source_url: string; tier: string; anchor?: boolean }> = [];
 
-  for (const hook of hooks) {
+  for (const [idx, hook] of hooks.entries()) {
     // Rule B: Unanchored source exclusion
     if (domainLower && hook.source_url) {
       const sourceHost = getDomain(hook.source_url).toLowerCase();
@@ -2491,9 +2675,15 @@ export function publishGateFinal(
 
       const anchored = isOnDomain || mentionsDomain || mentionsName;
       if (!anchored) {
-        if (!includeMarketContext) continue; // Drop entirely
+        if (!includeMarketContext) {
+          diagnostics.push({ idx, news_item: hook.news_item, status: "drop:unanchored_source", source_url: hook.source_url || "", tier: hook.evidence_tier, anchor: anchored });
+          continue;
+        }
         // Market context mode: allow max 1, force Tier B
-        if (tierBCount >= 1) continue;
+        if (tierBCount >= 1) {
+          diagnostics.push({ idx, news_item: hook.news_item, status: "drop:market_context_cap", source_url: hook.source_url || "", tier: hook.evidence_tier, anchor: anchored });
+          continue;
+        }
       }
     }
 
@@ -2512,16 +2702,32 @@ export function publishGateFinal(
       why_this_works: hook.why_this_works,
     };
     const validated = validateHook(payload);
-    if (!validated) continue;
+    if (!validated) {
+      diagnostics.push({ idx, news_item: hook.news_item, status: "drop:validateHook_failed", source_url: hook.source_url || "", tier: hook.evidence_tier });
+      continue;
+    }
 
     // Rule D: Tier B cap
     if (validated.evidence_tier === "B") {
-      if (tierBCount >= 1) continue;
+      if (tierBCount >= 1) {
+        diagnostics.push({ idx, news_item: hook.news_item, status: "drop:tier_b_cap", source_url: validated.source_url || "", tier: validated.evidence_tier });
+        continue;
+      }
       tierBCount++;
     }
 
+    diagnostics.push({ idx, news_item: validated.news_item, status: "pass", source_url: validated.source_url || "", tier: validated.evidence_tier });
     gated.push(validated);
   }
+
+  console.log("[publishGateFinal] decision trace", {
+    companyDomain,
+    includeMarketContext,
+    inputHookCount: hooks.length,
+    finalHookCount: gated.length,
+    tierBCount,
+    diagnostics,
+  });
 
   return gated;
 }
@@ -2581,14 +2787,30 @@ export function roleTokenGate(
   hooks: Hook[],
   targetRole: TargetRole | null,
 ): Hook[] {
-  if (!targetRole || targetRole === "General") return hooks;
-  return hooks.reduce<Hook[]>((acc, hook) => {
+  if (!targetRole || targetRole === "General") {
+    console.log("[roleTokenGate] skipped", { targetRole: targetRole ?? "General", inputHookCount: hooks.length });
+    return hooks;
+  }
+
+  const diagnostics: Array<{ news_item: number; matched: boolean; token: string | null }> = [];
+  const out = hooks.reduce<Hook[]>((acc, hook) => {
     const hit = findRoleTokenHit(hook.hook, targetRole);
+    diagnostics.push({ news_item: hook.news_item, matched: !!hit, token: hit });
     if (hit) {
       acc.push({ ...hook, role_token_hit: hit });
     }
     return acc;
   }, []);
+
+  console.log("[roleTokenGate] decision trace", {
+    targetRole,
+    inputHookCount: hooks.length,
+    outputHookCount: out.length,
+    droppedCount: hooks.length - out.length,
+    diagnostics,
+  });
+
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -2702,6 +2924,12 @@ export function scoreHookQuality(hook: Hook, companyDomain?: string): number {
     else recency = 4;
   }
 
+  // Trigger-type weighting (requested ranges)
+  if (hook.trigger_type === "ipo") relevance = Math.max(relevance, 35);
+  if (hook.trigger_type === "funding") relevance = Math.max(relevance, 30);
+  if (hook.trigger_type === "expansion") relevance = Math.max(relevance, 24);
+  if (hook.trigger_type === "hiring") relevance = Math.max(relevance, 22);
+
   let specificity = 4;
   if (/\d/.test(hook.hook)) specificity += 4;
   if (/['"“”]/.test(hook.hook)) specificity += 3;
@@ -2709,7 +2937,10 @@ export function scoreHookQuality(hook: Hook, companyDomain?: string): number {
   if (companyDomain && (`${hook.hook} ${hook.evidence_snippet}`).toLowerCase().includes(companyDomain.toLowerCase())) specificity += 1;
 
   const raw = evidence + relevance + recency + Math.min(specificity, 15);
-  return Math.max(1, Math.min(100, Math.round(raw)));
+  const score = Math.max(1, Math.min(100, Math.round(raw)));
+  // Hard cap: weak-bridge hooks never score above 79
+  if (hook.bridge_quality === "weak" && score > 79) return 79;
+  return score;
 }
 
 // ---------------------------------------------------------------------------
@@ -2768,10 +2999,47 @@ export function rankAndCap(
   const scored = hooks.map((h) => ({ hook: h, score: scoreHook(h) }));
   scored.sort((a, b) => b.score - a.score);
   const sorted = scored.map((s) => s.hook);
-  return {
-    top: sorted.slice(0, maxHooks),
-    overflow: sorted.slice(maxHooks),
+
+  // Weak-bridge hooks must never appear in positions 1-2
+  const strongAll = sorted.filter((h) => h.bridge_quality !== "weak");
+  const weakAll = sorted.filter((h) => h.bridge_quality === "weak");
+
+  const reservedTop = strongAll.slice(0, Math.min(2, maxHooks));
+  const remainingStrong = strongAll.slice(reservedTop.length);
+
+  // If we cannot fill the first two positions with strong hooks, keep weak hooks out of top results.
+  if (strongAll.length < Math.min(2, maxHooks)) {
+    const out = {
+      top: strongAll.slice(0, maxHooks),
+      overflow: weakAll,
+    };
+    console.log("[rankAndCap] decision trace", {
+      inputHookCount: hooks.length,
+      maxHooks,
+      strongCount: strongAll.length,
+      weakCount: weakAll.length,
+      topCount: out.top.length,
+      overflowCount: out.overflow.length,
+      weakSuppressedFromTop: true,
+    });
+    return out;
+  }
+
+  const ordered = [...reservedTop, ...remainingStrong, ...weakAll];
+  const out = {
+    top: ordered.slice(0, maxHooks),
+    overflow: ordered.slice(maxHooks),
   };
+  console.log("[rankAndCap] decision trace", {
+    inputHookCount: hooks.length,
+    maxHooks,
+    strongCount: strongAll.length,
+    weakCount: weakAll.length,
+    topCount: out.top.length,
+    overflowCount: out.overflow.length,
+    weakSuppressedFromTop: false,
+  });
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -2870,6 +3138,19 @@ export async function generateHooksForUrl(opts: {
 
   // Signal vs Fundamental gate
   if (lowSignal) {
+    const tierACount = sources.filter((s) => s.tier === "A").length;
+    console.log("[generateHooksForUrl] showing suggestion: low signal", {
+      tierACount,
+      signalCount,
+      lowSignal,
+      intentSignalsLength: 0,
+      hasAnchoredSources,
+      gatedCount: gated.length,
+      conditions: {
+        noAnchored: !hasAnchoredSources,
+        isLowSignal: lowSignal,
+      },
+    });
     const withMeta = attachRoleMeta(gated, _targetRole, !!_senderContext);
     return {
       hooks: withMeta.slice(0, 1),
@@ -2889,10 +3170,30 @@ export async function generateHooksForUrl(opts: {
 
   // Apply role token gate
   const roleGated = roleTokenGate(gated, _targetRole);
+  
+  // Debug logging with all counts
+  const tierACount = sources.filter((s) => s.tier === "A").length;
+  console.log("[generateHooksForUrl] role gating decision:", {
+    tierACount,
+    signalCount,
+    lowSignal,
+    gatedCount: gated.length,
+    roleGatedCount: roleGated.length,
+    targetRole: _targetRole,
+    roleGatingRemoved: gated.length - roleGated.length,
+  });
+
+  // Safety fallback: if role gating removes everything but hooks exist, use original hooks
+  const finalHooks = roleGated.length === 0 && gated.length > 0 ? gated : roleGated;
+  
+  console.log("[generateHooksForUrl] final hook selection:", {
+    usingFallback: roleGated.length === 0 && gated.length > 0,
+    finalHookCount: finalHooks.length,
+  });
 
   // Rank and cap
   const limit = opts.count ?? 3;
-  const { top } = rankAndCap(roleGated, limit);
+  const { top } = rankAndCap(finalHooks, limit);
 
   const withMeta = attachRoleMeta(top, _targetRole, !!_senderContext);
   return { hooks: withMeta, lowSignal: false };

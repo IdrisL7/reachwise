@@ -16,6 +16,9 @@ interface Hook {
   source_date?: string;
   psych_mode?: string;
   why_this_works?: string;
+  promise?: string;
+  trigger_type?: string;
+  bridge_quality?: string;
 }
 
 interface GeneratedEmail {
@@ -185,6 +188,16 @@ export function HookCard({
             {psychModeLabels[hook.psych_mode] || hook.psych_mode}
           </Badge>
         )}
+        {hook.trigger_type && (
+          <Badge variant="trigger" className="text-[10px]">
+            {hook.trigger_type.replace(/_/g, " ")}
+          </Badge>
+        )}
+        {hook.bridge_quality === "weak" && (
+          <Badge variant="older" className="text-[10px]" title="Bridge has weak connection to evidence">
+            weak bridge
+          </Badge>
+        )}
         <span className="text-xs text-zinc-600">{hook.confidence} confidence</span>
         {targetRole && targetRole !== "Not sure / Any role" && targetRole !== "General" && (
           <Badge variant="role" className="text-[10px]">
@@ -221,6 +234,12 @@ export function HookCard({
 
       {/* Hook text */}
       <p className="text-zinc-200 mb-3">{displayText}</p>
+
+      {hook.promise && (
+        <p className="text-xs text-emerald-400/80 mt-1 mb-3 flex items-center gap-1.5">
+          <span className="font-medium">🎯 Promise:</span> {hook.promise}
+        </p>
+      )}
 
       {/* Evidence */}
       {hook.source_snippet && (
