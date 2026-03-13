@@ -247,7 +247,11 @@ export function DemoSection() {
       }
 
       if (!data.hooks || data.hooks.length === 0) {
-        setError("No hooks were generated. Try again with a different company.");
+        setError(
+          data.suggestion
+            ? data.suggestion
+            : "No hooks were generated. Try again with a different company.",
+        );
       }
     } catch (err) {
       const message =
