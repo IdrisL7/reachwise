@@ -214,6 +214,7 @@ export type ClassifiedSource = Source & {
   entity_hit_score?: number;
   entity_matched_term?: string | null;
   entity_mismatch?: boolean;
+  tier_reason?: string;
 };
 
 export type CompanyCandidate = {
@@ -621,12 +622,16 @@ export const REPUTABLE_PUBLISHER_DOMAINS = new Set([
   // Major press
   "reuters.com", "apnews.com", "bloomberg.com", "wsj.com",
   "nytimes.com", "ft.com", "bbc.com", "bbc.co.uk", "cnbc.com",
+  "forbes.com", "businessinsider.com", "fortune.com", "inc.com",
   // Tech press
   "techcrunch.com", "theverge.com", "wired.com", "arstechnica.com",
+  "venturebeat.com", "zdnet.com", "techtarget.com", "infoworld.com",
+  "saastr.com",
   // Financial filings / official
   "sec.gov", "gov.uk", "europa.eu",
   // Industry-specific authoritative
   "prnewswire.com", "businesswire.com", "globenewswire.com",
+  "marketwatch.com",
 ]);
 
 /**
@@ -864,8 +869,15 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
     }
   }
 
-  // For company-site sources (prong C): require date + signal content for Tier A
+  // For company-site sources (prong C): press/newsroom/blog on company domain = Tier A
+  // if facts exist, even without date (undated pages are flagged for ranking penalty)
   if (isCompanySite) {
+    if (source.facts.length > 0 && TIER_A_URL_PATTERNS.some((p) => p.test(source.url))) {
+      if (!source.date) {
+        (source as any)._freshnessUnknown = true;
+      }
+      return "A";
+    }
     const hasDate = !!source.date;
     const hasSignalContent = factsContainSignals(source.facts);
     if (hasDate && hasSignalContent && factsHaveSpecifics(source.facts)) return "A";
@@ -917,7 +929,7 @@ function applyRecencyDowngrade(source: ClassifiedSource): ClassifiedSource {
   // - Otherwise cap no-date Tier A sources at B to avoid over-trusting vague pages.
   if (noDate && source.tier === "A") {
     const isExplicitSignalPage = TIER_A_URL_PATTERNS.some((p) => p.test(source.url));
-    if (isExplicitSignalPage) return source;
+    if (isExplicitSignalPage) return { ...source, _freshnessUnknown: true } as ClassifiedSource;
     return { ...source, tier: "B" };
   }
 
@@ -1127,10 +1139,11 @@ async function fetchCompanyOwnSignals(
   const query = `${signalPaths}`;
 
   try {
+    // Use 365-day window — we're searching the company's own content, freshness matters less than coverage
     const results = await tavilySearch(query, apiKey, {
       topic: "general",
       max_results: 10,
-      days: 30,
+      days: 365,
       include_domains: [domain],
     });
 
@@ -1388,7 +1401,7 @@ async function fetchDirectCompanyPages(
   const signalPages = homepageHtml ? discoverSignalPages(homepageHtml, baseUrl) : [];
 
   // Also try well-known signal paths that may not be linked from homepage
-  const wellKnownPaths = ["/swipefiles", "/customers", "/case-studies", "/changelog", "/press", "/company/news/", "/newsroom/", "/press/", "/news/"];
+  const wellKnownPaths = ["/swipefiles", "/customers", "/case-studies", "/changelog", "/blog", "/press", "/company/news/", "/newsroom/", "/press/", "/news/"];
   for (const path of wellKnownPaths) {
     const fullUrl = `${baseUrl}${path}`;
     if (!signalPages.includes(fullUrl)) {
@@ -1413,6 +1426,60 @@ async function fetchDirectCompanyPages(
   }
 
   return sources;
+}
+
+// ---------------------------------------------------------------------------
+// First-party recovery: Tavily-powered fallback when direct fetches fail (RC-2)
+// ---------------------------------------------------------------------------
+
+async function runFirstPartyRecovery(
+  domain: string,
+  companyName: string,
+  apiKey: string,
+  alreadyAttemptedUrls: Set<string>,
+): Promise<{ sources: ClassifiedSource[]; diagnostics: RecoveryDiagnostic[] }> {
+  const queries = [
+    `${companyName} press OR newsroom OR release OR announcement`,
+    `${companyName} changelog OR product update OR new feature OR integration`,
+  ];
+
+  const allResults: TavilyResult[] = [];
+  for (const query of queries) {
+    const results = await tavilySearch(query, apiKey, {
+      include_domains: [domain],
+      search_depth: "basic",
+      max_results: 5,
+      days: 365,
+    }).catch(() => [] as TavilyResult[]);
+    allResults.push(...results);
+  }
+
+  const seen = new Set<string>();
+  const sources: ClassifiedSource[] = [];
+  const diagnostics: RecoveryDiagnostic[] = [];
+
+  for (const r of allResults) {
+    if (!r.url || alreadyAttemptedUrls.has(r.url) || seen.has(r.url)) continue;
+    seen.add(r.url);
+    const rawSource = tavilyResultToSource(r, domain);
+    if (!rawSource) continue;
+    const tier = classifySource(rawSource, true, domain);
+    const freshnessUnknown = tier === "A" && !rawSource.date;
+    const classified = applyRecencyDowngrade({
+      ...rawSource,
+      tier,
+      ...(freshnessUnknown ? { _freshnessUnknown: true } : {}),
+    } as ClassifiedSource);
+    sources.push(classified);
+    diagnostics.push({
+      url: r.url,
+      tier: classified.tier,
+      snippetCount: rawSource.facts.length,
+      via: "tavily-recovery",
+    });
+  }
+
+  return { sources, diagnostics };
 }
 
 // ---------------------------------------------------------------------------
@@ -1513,6 +1580,9 @@ function scoreSource(source: ClassifiedSource): number {
     score += 15; // Strong boost for company pages with specific content
   }
 
+  // Penalty for undated first-party press/newsroom pages (freshness unknown)
+  if ((source as any)._freshnessUnknown) score -= 5;
+
   return score;
 }
 
@@ -1520,11 +1590,34 @@ function scoreSource(source: ClassifiedSource): number {
 // Main fetchSources: three-pronged, merged, deduplicated, gated
 // ---------------------------------------------------------------------------
 
+type RecoveryDiagnostic = {
+  url: string;
+  tier: EvidenceTier;
+  snippetCount: number;
+  via: "tavily-recovery";
+};
+
 export type FetchSourcesResult = {
   sources: ClassifiedSource[];
   signalCount: number;
   lowSignal: boolean;
   hasAnchoredSources: boolean;
+  _diagnostics: {
+    targetDomain: string;
+    prongSummary: { news: number; web: number; company: number; direct: number };
+    tierBreakdown: Array<{
+      url: string;
+      tier: string;
+      anchorScore: number | undefined;
+      entityHitScore: number | undefined;
+      tierReason: string | null;
+      isFirstParty: boolean;
+      freshnessUnknown: boolean;
+    }>;
+    lowSignalReason: string | null;
+    recoveryAttempted: boolean;
+    recoveryResults: RecoveryDiagnostic[];
+  };
 };
 
 export async function fetchSources(
@@ -1564,21 +1657,41 @@ export async function fetchSourcesWithGating(
     const entityMatch = computeEntityHitScore(source, companyName, domain);
 
     // ENTITY MATCH GATE: if evidence is NOT about the target entity → force Tier C
+    // Exception: confirmed first-party sources with minimum extractable evidence pass through.
     if (entityMatch.entity_hit_score === 0) {
-      return {
-        ...source,
-        tier: "C" as EvidenceTier,
-        anchorScore,
-        entity_hit_score: 0,
-        entity_matched_term: null,
-        entity_mismatch: true,
-      };
+      const isConfirmedFirstParty = !!domain && isFirstPartySource(source.url, domain);
+
+      if (isConfirmedFirstParty) {
+        const totalTextLength = source.facts.join(" ").length;
+        const hasMinimumEvidence = source.facts.length >= 2 || totalTextLength >= 200;
+        const companyToken = domain.split(".")[0].toLowerCase();
+        const hasCompanyToken = companyToken.length >= 2 && source.facts.join(" ").toLowerCase().includes(companyToken);
+
+        if (!hasMinimumEvidence || !hasCompanyToken) {
+          return {
+            ...source,
+            tier: "C" as EvidenceTier,
+            anchorScore,
+            entity_hit_score: 0,
+            entity_matched_term: null,
+            entity_mismatch: false,
+            tier_reason: "NO_QUOTEABLE_TEXT",
+          };
+        }
+        // Falls through with original tier from classifySource
+      } else {
+        return {
+          ...source,
+          tier: "C" as EvidenceTier,
+          anchorScore,
+          entity_hit_score: 0,
+          entity_matched_term: null,
+          entity_mismatch: true,
+          tier_reason: "ENTITY_MISMATCH",
+        };
+      }
     }
 
-    // If anchor score < 3, force to Tier B (market context) regardless of previous tier
-    if (anchorScore < 3 && source.tier === "A") {
-      return { ...source, tier: "B" as EvidenceTier, anchorScore, entity_hit_score: entityMatch.entity_hit_score, entity_matched_term: entityMatch.entity_matched_term };
-    }
     // Promote company-owned pages with high anchor score + specificity from B to A
     // This allows homepage/swipefile pages with quantified claims to generate full hook sets
     const sourceHost = getDomain(source.url).toLowerCase();
@@ -1610,29 +1723,73 @@ export async function fetchSourcesWithGating(
   const sourceSignalCount = countSignalFacts(ranked);
   const highConfidenceIntentCount = countHighConfidenceIntentSignals(intentSignals);
   const signalCount = sourceSignalCount + highConfidenceIntentCount;
-  const hasAnchoredSources = ranked.some((s) => (s.anchorScore ?? 0) >= 3 && s.tier === "A");
+  let hasAnchoredSources = ranked.some((s) => s.tier === "A");
+  let tierACount = ranked.filter((s) => s.tier === "A").length;
 
-  const tierACount = ranked.filter((s) => s.tier === "A").length;
-  const lowSignal = signalCount < 2 && tierACount < 2;
+  // RECOVERY PASS: when all prongs found zero Tier A sources, run targeted Tavily queries
+  // against the company domain using press/newsroom/changelog keywords.
+  // Tavily handles JS-heavy pages (gong.io/press, etc.) that direct fetching can't access.
+  let recoveryDiagnostics: RecoveryDiagnostic[] = [];
+  let finalRanked: ClassifiedSource[] = ranked;
+
+  if (tierACount === 0 && domain && companyName) {
+    const attempted = new Set(ranked.map((s) => s.url));
+    const recovery = await runFirstPartyRecovery(domain, companyName, apiKey, attempted);
+
+    if (recovery.sources.length > 0) {
+      finalRanked = deduplicateSources([...recovery.sources, ...ranked])
+        .sort((a, b) => scoreSource(b) - scoreSource(a))
+        .slice(0, 10);
+      tierACount = finalRanked.filter((s) => s.tier === "A").length;
+      hasAnchoredSources = finalRanked.some((s) => s.tier === "A");
+    }
+    recoveryDiagnostics = recovery.diagnostics;
+  }
+
+  const lowSignal = tierACount < 1;
+
+  const _diagnostics: FetchSourcesResult["_diagnostics"] = {
+    targetDomain: domain,
+    prongSummary: {
+      news: newsResults.length,
+      web: webResults.length,
+      company: companyResults.length,
+      direct: directPageResults.length,
+    },
+    tierBreakdown: finalRanked.map((s) => ({
+      url: s.url,
+      tier: s.tier,
+      anchorScore: s.anchorScore,
+      entityHitScore: s.entity_hit_score,
+      tierReason: (s as any).tier_reason ?? null,
+      isFirstParty: isFirstPartySource(s.url, domain),
+      freshnessUnknown: (s as any)._freshnessUnknown ?? false,
+    })),
+    lowSignalReason: tierACount === 0 ? "zero_tier_a" : null,
+    recoveryAttempted: recoveryDiagnostics.length > 0,
+    recoveryResults: recoveryDiagnostics,
+  };
 
   console.log("[fetchSourcesWithGating] threshold check (with intent):", {
     sourceSignalCount,
     highConfidenceIntentCount,
     signalCountBeforeIntent: sourceSignalCount,
     signalCountAfterIntent: signalCount,
-    thresholdMath: "lowSignal = signalCount < 2 && tierACount < 2",
+    thresholdMath: "lowSignal = tierACount < 1",
     tierACount,
     hasAnchoredSources,
     lowSignal,
+    recoveryAttempted: recoveryDiagnostics.length > 0,
     intentSignals: intentSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
-    tierBreakdown: ranked.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
+    tierBreakdown: finalRanked.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
   });
 
   return {
-    sources: ranked,
+    sources: finalRanked,
     signalCount,
     lowSignal,
     hasAnchoredSources,
+    _diagnostics,
   };
 }
 

@@ -309,6 +309,8 @@ export async function POST(request: Request) {
       // Cache miss or error — continue to generate
     }
 
+    let sourceDiagnostics: Awaited<ReturnType<typeof fetchSourcesWithGating>>["_diagnostics"] | null = null;
+
     if (!candidateHooks) {
       try {
         // 1. Gather and classify sources with signal gating + anchor scoring
@@ -345,6 +347,7 @@ export async function POST(request: Request) {
         }
         const sources = result.sources;
         signalCount = result.signalCount;
+        sourceDiagnostics = result._diagnostics;
 
         highConfidenceIntentCount = rawSignals.filter((s) => s.confidence >= 0.8).length;
         tierACount = sources.filter((s) => s.tier === "A").length;
@@ -352,7 +355,7 @@ export async function POST(request: Request) {
         // Inject high-confidence intent signals into signalCount BEFORE threshold check
         signalCount += rawSignals.filter((s) => s.confidence >= 0.8).length;
         console.log('[threshold-fix] tierACount:', tierACount, 'signalCount after intent injection:', signalCount);
-        isLowSignal = signalCount < 2 && tierACount < 2;
+        isLowSignal = tierACount < 1;
         hasAnchored = result.hasAnchoredSources;
 
         console.log("[generate-hooks] threshold check:", {
@@ -364,7 +367,7 @@ export async function POST(request: Request) {
           hasAnchored,
           lowSignalFromFetch: result.lowSignal,
           isLowSignal,
-          exactMath: "isLowSignal = signalCount < 2 && tierACount < 2",
+          exactMath: "isLowSignal = tierACount < 1",
           tierBreakdown: sources.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
         });
 
@@ -740,6 +743,7 @@ export async function POST(request: Request) {
       intent: intentData,
       companyIntel,
       isBasicIntel: tierId === "starter",
+      _diagnostics: sourceDiagnostics ?? undefined,
     });
   } catch (error) {
     Sentry.captureException(error);
