@@ -79,6 +79,9 @@ export default function HooksPage() {
   const [discovering, setDiscovering] = useState(false);
   const [hooksUsed, setHooksUsed] = useState<number | null>(null);
   const [userTier, setUserTier] = useState<string>("starter");
+  const [findingContacts, setFindingContacts] = useState(false);
+  const [contactsResult, setContactsResult] = useState<{ created: number; skipped: number } | null>(null);
+  const [contactsError, setContactsError] = useState<string | null>(null);
   const [skippedGate, setSkippedGate] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
   const pendingGenerate = useRef(false);
@@ -241,6 +244,31 @@ export default function HooksPage() {
       setError((err as Error).message);
     } finally {
       setPushingHook(null);
+    }
+  }
+
+  async function findContacts() {
+    if (!companyDomain) return;
+    setFindingContacts(true);
+    setContactsResult(null);
+    setContactsError(null);
+    try {
+      const res = await fetch("/api/find-contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain: companyDomain }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setContactsError(data.error || "Something went wrong.");
+      } else {
+        setContactsResult({ created: data.created, skipped: data.skipped });
+        trackEvent("contacts_found");
+      }
+    } catch {
+      setContactsError("Network error — please try again.");
+    } finally {
+      setFindingContacts(false);
     }
   }
 
@@ -738,6 +766,50 @@ export default function HooksPage() {
           </div>
         );
       })()}
+
+      {hooks.length > 0 && companyDomain && (
+        <div className="mt-2 pt-4 border-t border-zinc-800/60">
+          {userTier === "starter" ? (
+            <p className="text-xs text-zinc-500">
+              <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company and save them to your leads list.{" "}
+              <a href="/pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
+            </p>
+          ) : contactsResult ? (
+            <p className="text-xs text-zinc-400">
+              Saved <span className="text-emerald-400 font-medium">{contactsResult.created}</span> new contact{contactsResult.created !== 1 ? "s" : ""} to your leads
+              {contactsResult.skipped > 0 && <span className="text-zinc-600"> ({contactsResult.skipped} already in list)</span>}
+              {" — "}
+              <a href="/app/leads" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">View leads</a>
+            </p>
+          ) : (
+            <button
+              onClick={findContacts}
+              disabled={findingContacts}
+              className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+            >
+              {findingContacts ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Finding contacts…
+                </>
+              ) : (
+                <>
+                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                  </svg>
+                  Find contacts at {companyDomain}
+                </>
+              )}
+            </button>
+          )}
+          {contactsError && (
+            <p className="text-xs text-red-400 mt-1">{contactsError}</p>
+          )}
+        </div>
+      )}
 
       {intentData && <IntentSignals data={intentData} />}
 
