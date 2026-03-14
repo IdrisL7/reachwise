@@ -1818,6 +1818,37 @@ export async function fetchSourcesWithGating(
     recoveryDiagnostics = recovery.diagnostics;
   }
 
+  // INTENT SIGNAL FALLBACK: if Tavily + recovery both returned no Tier A sources,
+  // synthesize high-confidence intent signals as Tier A sources so Claude has
+  // anchored evidence to write from. Intent signals have explicit sourceUrls
+  // pointing to job postings, funding pages, etc. — they ARE company-specific.
+  if (tierACount === 0 && intentSignals.length > 0) {
+    const intentSources: ClassifiedSource[] = intentSignals
+      .filter((s) => s.confidence >= 0.8 && s.summary)
+      .map((s): ClassifiedSource => ({
+        title: `${s.triggerType} signal — ${domain}`,
+        publisher: s.sourceUrl ? getDomain(s.sourceUrl) : domain,
+        date: "",
+        url: s.sourceUrl || `https://${domain}`,
+        facts: [s.summary],
+        tier: "A" as EvidenceTier,
+        anchorScore: 4,
+        entity_hit_score: 2,
+        entity_matched_term: domain,
+      }));
+    if (intentSources.length > 0) {
+      finalRanked = deduplicateSources([...intentSources, ...finalRanked])
+        .sort((a, b) => scoreSource(b) - scoreSource(a))
+        .slice(0, 10);
+      tierACount = finalRanked.filter((s) => s.tier === "A").length;
+      hasAnchoredSources = finalRanked.some((s) => s.tier === "A");
+      console.log("[fetchSourcesWithGating] intent signal fallback activated", {
+        intentSourcesAdded: intentSources.length,
+        tierACount,
+      });
+    }
+  }
+
   const lowSignal = tierACount < 1;
 
   const _diagnostics: FetchSourcesResult["_diagnostics"] = {
