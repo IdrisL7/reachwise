@@ -614,7 +614,7 @@ export function computeAnchorScore(
     if (hasSpecific) score += 2;
   }
 
-  // +1 if source is within 90 days
+  // +1 if source is within 365 days (matches staleness window)
   if (source.date && !isStale(source.date)) {
     score += 1;
   }
@@ -818,14 +818,14 @@ function factsHaveSpecifics(facts: string[]): boolean {
   return false;
 }
 
-/** Check if a source's date makes it stale (>90 days old). */
+/** Check if a source's date makes it stale (>365 days old). */
 function isStale(dateStr: string): boolean {
   if (!dateStr) return false; // Unknown date ≠ stale (handled separately)
   try {
     const date = new Date(dateStr);
     if (isNaN(date.getTime())) return false;
-    const ninetyDaysAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
-    return date.getTime() < ninetyDaysAgo;
+    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+    return date.getTime() < oneYearAgo;
   } catch {
     return false;
   }
@@ -923,14 +923,16 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
 }
 
 /**
- * Apply stale downgrade: A→B, B→C for sources older than 90 days.
+ * Apply stale downgrade: A→B, B→C for sources older than 365 days.
+ * Exception: reputable publishers (Reuters, TechCrunch, etc.) are never downgraded —
+ * a funding round article is valid evidence regardless of age within the Tavily window.
  * Sources with no date get capped at Tier B.
  */
 function applyRecencyDowngrade(source: ClassifiedSource): ClassifiedSource {
   const stale = isStale(source.date);
   const noDate = !source.date;
 
-  if (stale) {
+  if (stale && !isReputablePublisher(source.url)) {
     const downgraded: EvidenceTier = source.tier === "A" ? "B" : "C";
     return { ...source, tier: downgraded, stale: true };
   }
