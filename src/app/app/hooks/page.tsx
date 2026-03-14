@@ -774,7 +774,7 @@ export default function HooksPage() {
           {userTier === "starter" ? (
             <p className="text-xs text-zinc-500">
               <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company and save them to your leads list.{" "}
-              <a href="/pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
+              <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
             </p>
           ) : contactsResult ? (
             <p className="text-xs text-zinc-400">

@@ -68,9 +68,11 @@ export async function POST(request: NextRequest) {
     );
     if (res.ok) {
       apifyItems = (await res.json()) as ApifyLead[];
+    } else {
+      return NextResponse.json({ error: "Contact lookup service unavailable. Please try again." }, { status: 502 });
     }
   } catch {
-    return NextResponse.json({ leads: [], created: 0, skipped: 0 });
+    return NextResponse.json({ error: "Contact lookup timed out. Please try again." }, { status: 502 });
   }
 
   // 6. Filter valid leads
