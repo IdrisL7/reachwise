@@ -2919,7 +2919,8 @@ export function publishGateFinal(
       const isGenericName = GENERIC_NAME_WORDS.has(companyName) || companyName.length <= 3;
       const mentionsName = !isGenericName && titleOrSnippet.includes(companyName);
 
-      const anchored = isOnDomain || mentionsDomain || mentionsName;
+      const sourceMatchesDomain = sourceHost === domainLower || sourceHost.endsWith("." + domainLower);
+      const anchored = isOnDomain || mentionsDomain || mentionsName || sourceMatchesDomain;
       if (!anchored) {
         if (!includeMarketContext) {
           diagnostics.push({ idx, news_item: hook.news_item, status: "drop:unanchored_source", source_url: hook.source_url || "", tier: hook.evidence_tier, anchor: anchored });
