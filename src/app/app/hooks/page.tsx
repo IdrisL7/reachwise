@@ -78,6 +78,7 @@ export default function HooksPage() {
   const [companyDomain, setCompanyDomain] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [hooksUsed, setHooksUsed] = useState<number | null>(null);
+  const [userTier, setUserTier] = useState<string>("starter");
   const [skippedGate, setSkippedGate] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
   const pendingGenerate = useRef(false);
@@ -132,6 +133,7 @@ export default function HooksPage() {
       if (profileData.profile) setHasProfile(true);
       const used = statsData.hooksUsed ?? 0;
       setHooksUsed(used);
+      setUserTier(statsData.tier ?? "starter");
       if (used === 0 && !localStorage.getItem("gsh_onboarding_done")) {
         setOnboardingStep(0);
       }
