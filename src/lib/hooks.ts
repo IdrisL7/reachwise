@@ -1016,7 +1016,7 @@ async function tavilySearch(
     topic: options.topic ?? "general",
     max_results: options.max_results ?? 10,
     search_depth: options.search_depth ?? "basic",
-    include_raw_content: false,
+    include_raw_content: true,
   };
   if (options.days) body.days = options.days;
   if (options.include_domains?.length) body.include_domains = options.include_domains;
