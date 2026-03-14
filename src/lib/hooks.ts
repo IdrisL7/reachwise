@@ -434,12 +434,23 @@ const SIGNAL_KEYWORDS = [
 // Common vanity URL prefixes that obscure the real brand name (e.g. "go" in gomotive.com → Motive)
 const VANITY_PREFIXES = ["go", "my", "get", "try", "use", "the", "hey", "join", "meet", "with"];
 
+// Generic subdomains that are NOT the brand name (e.g. community.hubspot.com → hubspot)
+const GENERIC_SUBDOMAINS = new Set([
+  "community", "press", "blog", "news", "newsroom", "support", "help",
+  "docs", "api", "app", "mail", "www", "cdn", "static", "assets",
+  "developers", "dev", "learn", "academy", "university", "forum", "forums",
+  "status", "careers", "jobs", "shop", "store", "portal", "login", "auth",
+]);
+
 export function extractCompanyName(url: string): string {
   try {
     const hostname = new URL(url.startsWith("http") ? url : `https://${url}`).hostname;
     // Remove www. and TLD
     const parts = hostname.replace(/^www\./, "").split(".");
-    let name = parts[0] || "";
+    // If the first part is a generic subdomain (e.g. community.hubspot.com → use "hubspot")
+    let name = (parts.length >= 3 && GENERIC_SUBDOMAINS.has(parts[0].toLowerCase()))
+      ? (parts[1] || parts[0])
+      : (parts[0] || "");
     // Strip vanity prefixes (e.g. "gomotive" → "motive", "getreachwise" → "reachwise")
     // Only strip if the remaining word is >= 3 chars so we don't over-strip short names
     for (const prefix of VANITY_PREFIXES) {
