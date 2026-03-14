@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, index } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, index, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 import type { TierId } from "@/lib/tiers";
 
@@ -71,7 +71,7 @@ export const usageEvents = sqliteTable("usage_events", {
 export const leads = sqliteTable("leads", {
   userId: text("user_id").references(() => users.id), // null = legacy/unassigned
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
-  email: text("email").notNull().unique(),
+  email: text("email").notNull(),
   name: text("name"),
   title: text("title"),
   companyName: text("company_name"),
@@ -86,6 +86,7 @@ export const leads = sqliteTable("leads", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 }, (table) => [
+  uniqueIndex("leads_user_email_idx").on(table.userId, table.email),
   index("leads_user_id_idx").on(table.userId),
   index("leads_status_idx").on(table.status),
   index("leads_created_at_idx").on(table.createdAt),
