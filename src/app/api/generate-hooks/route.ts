@@ -163,6 +163,26 @@ export async function POST(request: Request) {
           );
         }
 
+        // News/media publisher detection — user pasted an article URL, not a company URL
+        const inputDomain = parsed.hostname.replace(/^www\./, "");
+        const MEDIA_PUBLISHERS = new Set([
+          "techcrunch.com", "reuters.com", "bloomberg.com", "forbes.com", "wsj.com",
+          "ft.com", "businessinsider.com", "wired.com", "venturebeat.com", "theverge.com",
+          "inc.com", "fastcompany.com", "fortune.com", "cnbc.com", "axios.com",
+          "prnewswire.com", "businesswire.com", "globenewswire.com", "marketwatch.com",
+          "crunchbase.com", "pitchbook.com",
+        ]);
+        if (MEDIA_PUBLISHERS.has(inputDomain) && parsed.pathname.length > 1) {
+          return NextResponse.json({
+            hooks: [],
+            structured_hooks: [],
+            overflow_hooks: [],
+            status: "ok" as CompanyResolutionStatus,
+            lowSignal: true,
+            suggestion: `That looks like a news article on ${inputDomain}. Paste the company's own website URL instead (e.g. acme.com) — the article will be found automatically as a signal source.`,
+          });
+        }
+
         // LinkedIn posts feed detection — these are inaccessible to automated fetchers
         if (
           parsed.hostname.includes("linkedin.com") &&
@@ -341,7 +361,9 @@ export async function POST(request: Request) {
             gatingIntentSignals: gatingIntentSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
           });
 
-          result = await fetchSourcesWithGating(url, tavilyApiKey!, gatingIntentSignals);
+          const apifyToken = process.env.APIFY_API_TOKEN;
+          const linkedinSlug = companyDomain ? companyDomain.split(".")[0] : undefined;
+          result = await fetchSourcesWithGating(url, tavilyApiKey!, gatingIntentSignals, apifyToken, linkedinSlug);
         } else {
           result = await fetchSourcesWithGating(url, tavilyApiKey!);
         }
