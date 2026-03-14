@@ -1047,6 +1047,13 @@ function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | nu
       facts.push(text);
     }
   }
+  // Fallback: if content is empty but title is meaningful, use title as the fact.
+  // This prevents discarding sources like "Gong raises $250M Series E" just because
+  // Tavily returned an empty snippet — the title alone is enough for tier classification.
+  if (facts.length === 0 && r.title?.trim() && r.title.trim().length > 20) {
+    facts.push(r.title.trim());
+  }
+
   if (facts.length === 0) return null;
 
   let publisher = "";
