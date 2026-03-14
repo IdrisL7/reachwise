@@ -4,6 +4,7 @@
 
 import type { EvidenceTier } from "./types";
 import type { SenderContext } from "./workspace";
+import { fetchCrunchbaseSignals, fetchLinkedInPostSignals } from "./apify-signals";
 
 export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
@@ -1329,7 +1330,41 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 
     // Extract claim-rich sentences as facts
     const facts = extractClaimSentences(plainText);
-    if (facts.length === 0) return null;
+    if (facts.length === 0) {
+      // If direct fetch yielded no extractable text AND this looks like a signal page,
+      // fall back to Jina AI Reader which handles JS-heavy SPAs
+      const isSignalUrl = SIGNAL_SUBPAGE_PATTERNS.some((p) => p.test(pageUrl))
+        || TIER_A_URL_PATTERNS.some((p) => p.test(pageUrl));
+
+      if (isSignalUrl) {
+        try {
+          const jinaController = new AbortController();
+          const jinaTimeout = setTimeout(() => jinaController.abort(), 10_000);
+          const jinaRes = await fetch(`https://r.jina.ai/${pageUrl}`, {
+            headers: { Accept: "text/plain" },
+            signal: jinaController.signal,
+          });
+          clearTimeout(jinaTimeout);
+
+          if (jinaRes.ok) {
+            const markdown = await jinaRes.text();
+            const jinaText = markdown.slice(0, 300_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
+            if (jinaText.length >= 50) {
+              const jinaTitleMatch = markdown.match(/^#\s+(.+)/m);
+              const jinaTitle = jinaTitleMatch ? jinaTitleMatch[1].trim() : title;
+              const jinaFacts = extractClaimSentences(jinaText);
+              if (jinaFacts.length > 0) {
+                console.log("[fetchPageAsSource] Jina fallback succeeded for", pageUrl);
+                return { title: jinaTitle, publisher: domain, date: "", url: pageUrl, facts: jinaFacts };
+              }
+            }
+          }
+        } catch {
+          // Jina fallback failed
+        }
+      }
+      return null;
+    }
 
     return {
       title,
@@ -1604,7 +1639,7 @@ export type FetchSourcesResult = {
   hasAnchoredSources: boolean;
   _diagnostics: {
     targetDomain: string;
-    prongSummary: { news: number; web: number; company: number; direct: number };
+    prongSummary: { news: number; web: number; company: number; direct: number; crunchbase: number; linkedin: number };
     tierBreakdown: Array<{
       url: string;
       tier: string;
@@ -1633,20 +1668,43 @@ export async function fetchSourcesWithGating(
   url: string,
   apiKey: string,
   intentSignals: IntentSignalInput[] = [],
+  apifyToken?: string,
+  linkedinSlug?: string,
 ): Promise<FetchSourcesResult> {
   const domain = getDomain(url);
   const companyName = extractCompanyName(url);
 
-  // Run all four prongs in parallel
-  const [newsResults, webResults, companyResults, directPageResults] = await Promise.all([
+  // If the user provided a specific subpage URL (not just a domain), fetch it directly.
+  // fetchDirectCompanyPages only fetches the homepage and discovers links from it —
+  // but JS-heavy SPAs (like gong.io) render links in JS, so subpages are never discovered.
+  // Fetching the user-provided URL directly ensures Jina fallback fires for SPA press pages etc.
+  let inputPagePromise: Promise<ClassifiedSource[]> = Promise.resolve([] as ClassifiedSource[]);
+  try {
+    const parsedInput = new URL(url.startsWith("http") ? url : `https://${url}`);
+    if (parsedInput.pathname && parsedInput.pathname !== "/" && parsedInput.pathname.length > 1) {
+      inputPagePromise = fetchPageAsSource(parsedInput.href, domain)
+        .then((src) => {
+          if (!src) return [] as ClassifiedSource[];
+          const tier = classifySource(src, true, domain);
+          return [{ ...src, tier }] as ClassifiedSource[];
+        })
+        .catch(() => [] as ClassifiedSource[]);
+    }
+  } catch { /* invalid URL — skip */ }
+
+  // Run all prongs in parallel (Apify prongs are optional, Pro/Concierge only)
+  const [newsResults, webResults, companyResults, directPageResults, crunchbaseResults, linkedInResults, inputPageResults] = await Promise.all([
     fetchNewsSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchWebSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchCompanyOwnSignals(domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchDirectCompanyPages(domain).catch(() => [] as ClassifiedSource[]),
+    apifyToken ? fetchCrunchbaseSignals(domain, companyName, apifyToken).catch(() => [] as ClassifiedSource[]) : Promise.resolve([] as ClassifiedSource[]),
+    (apifyToken && linkedinSlug) ? fetchLinkedInPostSignals(linkedinSlug, domain, apifyToken).catch(() => [] as ClassifiedSource[]) : Promise.resolve([] as ClassifiedSource[]),
+    inputPagePromise,
   ]);
 
-  // Merge all sources (direct pages first for dedup priority)
-  const allSources = [...directPageResults, ...newsResults, ...webResults, ...companyResults];
+  // Merge all sources (input page first — highest dedup priority as user-specified signal source)
+  const allSources = [...inputPageResults, ...directPageResults, ...newsResults, ...webResults, ...companyResults, ...crunchbaseResults, ...linkedInResults];
 
   // Deduplicate
   const deduped = deduplicateSources(allSources);
@@ -1755,6 +1813,8 @@ export async function fetchSourcesWithGating(
       web: webResults.length,
       company: companyResults.length,
       direct: directPageResults.length,
+      crunchbase: crunchbaseResults.length,
+      linkedin: linkedInResults.length,
     },
     tierBreakdown: finalRanked.map((s) => ({
       url: s.url,
