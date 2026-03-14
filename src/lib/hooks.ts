@@ -1037,13 +1037,14 @@ async function tavilySearch(
 
 function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | null {
   const facts: string[] = [];
-  if (r.content?.trim()) {
-    // Split long content into sentences for better fact extraction
-    const sentences = r.content.trim().split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
+  // Prefer raw_content (full page text when include_raw_content: true) over the short snippet
+  const text = (r.raw_content?.trim() || r.content?.trim() || "").slice(0, 8000);
+  if (text) {
+    const sentences = text.split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
     if (sentences.length > 1) {
-      facts.push(...sentences.slice(0, 3));
+      facts.push(...sentences.slice(0, 8));
     } else {
-      facts.push(r.content.trim());
+      facts.push(text);
     }
   }
   if (facts.length === 0) return null;
