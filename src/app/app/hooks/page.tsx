@@ -327,6 +327,8 @@ export default function HooksPage() {
     setFirstPartyUrls([]);
     setWebUrls([]);
     setCompanyDomain("");
+    setContactsResult(null);
+    setContactsError(null);
 
     try {
       const res = await fetch("/api/generate-hooks", {
@@ -785,6 +787,7 @@ export default function HooksPage() {
             <button
               onClick={findContacts}
               disabled={findingContacts}
+              aria-busy={findingContacts}
               className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
             >
               {findingContacts ? (
