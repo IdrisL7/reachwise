@@ -60,6 +60,7 @@ export async function POST(request: NextRequest) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ domain, maxLeads: 20 }),
+        signal: AbortSignal.timeout(30_000),
       },
     );
     if (res.ok) {
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
   // 7. Insert into leads table
   let created = 0;
   let skipped = 0;
+  const insertedLeads: typeof validLeads = [];
 
   for (const lead of validLeads) {
     const email = lead.email!.trim().toLowerCase();
@@ -97,6 +99,7 @@ export async function POST(request: NextRequest) {
     try {
       await db.insert(schema.leads).values(values);
       created++;
+      insertedLeads.push(lead);
     } catch (err: any) {
       if (err?.message?.includes("UNIQUE")) {
         skipped++;
@@ -108,5 +111,5 @@ export async function POST(request: NextRequest) {
   }
 
   // 8. Return
-  return NextResponse.json({ leads: validLeads.slice(0, created), created, skipped });
+  return NextResponse.json({ leads: insertedLeads, created, skipped });
 }
