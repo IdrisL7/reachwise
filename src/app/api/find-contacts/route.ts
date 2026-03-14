@@ -55,10 +55,13 @@ export async function POST(request: NextRequest) {
   let apifyItems: ApifyLead[] = [];
   try {
     const res = await fetch(
-      `https://api.apify.com/v2/acts/blitzapi~linkedin-leads-scraper/run-sync-get-dataset-items?token=${token}&timeout=30`,
+      `https://api.apify.com/v2/acts/blitzapi~linkedin-leads-scraper/run-sync-get-dataset-items?timeout=30`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
         body: JSON.stringify({ domain, maxLeads: 20 }),
         signal: AbortSignal.timeout(30_000),
       },
@@ -80,34 +83,39 @@ export async function POST(request: NextRequest) {
   let skipped = 0;
   const insertedLeads: typeof validLeads = [];
 
-  for (const lead of validLeads) {
-    const email = lead.email!.trim().toLowerCase();
-    const name =
-      [lead.firstName, lead.lastName].filter(Boolean).join(" ") || null;
+  try {
+    for (const lead of validLeads) {
+      const email = lead.email!.trim().toLowerCase();
+      const name =
+        [lead.firstName, lead.lastName].filter(Boolean).join(" ") || null;
 
-    const values = {
-      userId: session.user.id,
-      email,
-      name,
-      title: lead.title || lead.headline || null,
-      companyName: lead.companyName || null,
-      companyWebsite: lead.companyWebsite || `https://${domain}`,
-      linkedinUrl: lead.linkedinUrl || null,
-      source: "apify-linkedin" as const,
-    };
+      const values = {
+        userId: session.user.id,
+        email,
+        name,
+        title: lead.title || lead.headline || null,
+        companyName: lead.companyName || null,
+        companyWebsite: lead.companyWebsite || `https://${domain}`,
+        linkedinUrl: lead.linkedinUrl || null,
+        source: "apify-linkedin" as const,
+      };
 
-    try {
-      await db.insert(schema.leads).values(values);
-      created++;
-      insertedLeads.push(lead);
-    } catch (err: any) {
-      if (err?.message?.includes("UNIQUE")) {
-        skipped++;
-        continue;
+      try {
+        await db.insert(schema.leads).values(values);
+        created++;
+        insertedLeads.push(lead);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("UNIQUE")) {
+          skipped++;
+        } else {
+          // Unexpected DB error — surface it
+          throw err;
+        }
       }
-      // Non-unique errors: skip this lead but continue processing
-      skipped++;
     }
+  } catch {
+    return NextResponse.json({ error: "Failed to save contacts." }, { status: 500 });
   }
 
   // 8. Return
