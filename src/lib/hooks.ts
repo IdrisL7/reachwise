@@ -850,9 +850,9 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
   if (source.facts.every((f) => f.trim().length < 20)) return "C";
 
   // Secondary commentary cap: third-party blog/agency/newsletter → max Tier B
-  // These sources are reporting on or commenting about the target company,
-  // NOT primary announcements from the company itself.
-  if (isSecondaryCommentary(source.url, targetDomain)) {
+  // Exception: reputable publishers (Reuters, Bloomberg, TechCrunch, etc.) can still reach Tier A
+  // because they're authoritative sources, not opinion commentary.
+  if (isSecondaryCommentary(source.url, targetDomain) && !isReputablePublisher(source.url)) {
     // Even with strong facts, secondary sources cap at B
     if (source.facts.length > 0 && sourceHasConcreteEvidence(source.facts)) return "B";
     return factsHaveSpecifics(source.facts) ? "B" : "C";
