@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GetSignalHooks</title>
+    <style>
+      body { margin:0; background:#080808; color:#f4f4f5; font-family: Inter, system-ui, sans-serif; width:360px; }
+      .wrap { padding:14px; }
+      input { width:100%; margin-bottom:8px; background:#111113; border:1px solid #27272a; color:#f4f4f5; border-radius:10px; padding:9px; }
+      button { width:100%; background:#7c3aed; color:white; border:0; border-radius:10px; padding:10px; font-weight:600; cursor:pointer; }
+      button:disabled { opacity:.6; cursor:not-allowed; }
+      .hint { color:#a1a1aa; font-size:12px; margin:6px 0 10px; }
+      .card { background:#111113; border:1px solid #27272a; border-left:3px solid #8b5cf6; border-radius:12px; padding:10px; margin-top:8px; }
+      .meta { font-size:11px; color:#a1a1aa; margin-bottom:4px; }
+      .copy { margin-top:8px; font-size:12px; border:1px solid #3f3f46; background:#18181b; border-radius:8px; padding:6px 8px; cursor:pointer; }
+      .error { color:#fda4af; font-size:12px; margin-top:8px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <input id="apiBase" placeholder="API base (e.g. http://localhost:3000)" />
+      <input id="token" placeholder="API key or bearer token (optional)" />
+      <button id="generateBtn">Generate Hooks</button>
+      <p class="hint" id="profileHint">Open a LinkedIn profile tab first.</p>
+      <div id="results"></div>
+      <p class="error" id="error"></p>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

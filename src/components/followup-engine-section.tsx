@@ -6,9 +6,9 @@ const featured = {
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 16.875h3.375m0 0h3.375m-3.375 0V13.5m0 3.375v3.375M6 10.5h2.25a2.25 2.25 0 002.25-2.25V6a2.25 2.25 0 00-2.25-2.25H6A2.25 2.25 0 003.75 6v2.25A2.25 2.25 0 006 10.5zm0 9.75h2.25A2.25 2.25 0 0010.5 18v-2.25a2.25 2.25 0 00-2.25-2.25H6a2.25 2.25 0 00-2.25 2.25V18A2.25 2.25 0 006 20.25zm9.75-9.75H18a2.25 2.25 0 002.25-2.25V6A2.25 2.25 0 0018 3.75h-2.25A2.25 2.25 0 0013.5 6v2.25a2.25 2.25 0 002.25 2.25z" />
     </svg>
   ),
-  title: "Works on top of Apollo / CRM / Sheets",
+  title: "Drop into Apollo, Clay, Outreach, or any CRM via CSV",
   description:
-    "Export hooks + evidence anywhere. We layer on top of your existing stack — no migration, no lock-in. Connect via CSV export, API, or direct integrations with tools you already use.",
+    "Export hooks + evidence anywhere. We layer on top of your existing stack — no migration, no lock-in. Single-company or batch mode (up to 20 URLs), full CSV with hook text, evidence snippet, source, date, and tier.",
 };
 
 const others = [
@@ -35,12 +35,12 @@ const others = [
   {
     icon: (
       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
       </svg>
     ),
-    title: "Guardrailed automation",
+    title: "Confidence scoring on every hook",
     description:
-      "Approvals, daily caps, stop-on-reply, auto-pause on OOO/bounce, and a full audit trail.",
+      "Tier A = first-party, fresh, anchored to the company. Tier B = secondary. Weak signals are labeled or skipped — never dressed up as strong ones.",
   },
 ];
 
@@ -107,7 +107,7 @@ export function FollowUpEngineSection() {
         {/* Availability */}
         <div className="mx-auto mt-16 max-w-lg rounded-xl border border-zinc-700/20 bg-[#0c0c16]/60 px-6 py-5 text-center">
           <p className="text-[0.9375rem] text-zinc-400">
-            Autonomous execution with guardrails is included in:
+            Hook generation + CSV export available on all plans.
           </p>
           <div className="mt-3 flex items-center justify-center gap-4">
             <span className="rounded-full border border-violet-500/30 bg-violet-600/10 px-4 py-1.5 text-[0.875rem] font-semibold text-violet-300">

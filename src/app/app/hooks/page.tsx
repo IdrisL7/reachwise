@@ -107,6 +107,7 @@ export default function HooksPage() {
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelligence | null>(null);
   const [isBasicIntel, setIsBasicIntel] = useState(false);
   const [activeChannel, setActiveChannel] = useState<Record<number, string>>({});
+  const [rightTab, setRightTab] = useState<"intel" | "intent">("intel");
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
   } | null>(null);
@@ -299,6 +300,15 @@ export default function HooksPage() {
 
   function runWithUrl(newUrl: string) {
     setUrl(newUrl);
+    setTimeout(() => {
+      const form = document.getElementById("hooks-form") as HTMLFormElement;
+      form?.requestSubmit();
+    }, 50);
+  }
+
+  function onSourceSelected(sourceUrl: string, name: string) {
+    setUrl(sourceUrl);
+    setCompanyName(name);
     setTimeout(() => {
       const form = document.getElementById("hooks-form") as HTMLFormElement;
       form?.requestSubmit();
@@ -508,8 +518,7 @@ export default function HooksPage() {
       </div>
 
       <HookForm
-        url={url}
-        setUrl={setUrl}
+        onSourceSelected={onSourceSelected}
         companyName={companyName}
         setCompanyName={setCompanyName}
         targetRole={targetRole}
@@ -545,33 +554,29 @@ export default function HooksPage() {
         />
       )}
 
-      {companyIntel && (
-        <CompanyIntelPanel
-          intel={companyIntel}
-          isBasic={isBasicIntel}
-        />
-      )}
-
-      {/* Loading skeleton */}
+      {/* Loading skeleton — two-column */}
       {loading && (
-        <div className="space-y-4 mb-6">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 border-l-[3px] border-l-zinc-700">
-              <div className="flex items-center gap-1.5 mb-3">
-                <Skeleton className="h-5 w-14 rounded-full" />
-                <Skeleton className="h-5 w-16 rounded-full" />
-                <Skeleton className="h-5 w-12 rounded-full" />
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 mb-6">
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 border-l-[3px] border-l-zinc-700">
+                <div className="flex items-center gap-1.5 mb-3">
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-5 w-12 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-4/5 mb-3" />
+                <Skeleton className="h-12 w-full rounded mb-3" />
+                <div className="flex gap-2 pt-2 border-t border-zinc-800">
+                  <Skeleton className="h-7 w-20 rounded-lg" />
+                  <Skeleton className="h-7 w-28 rounded-lg" />
+                  <Skeleton className="h-7 w-28 rounded-lg" />
+                </div>
               </div>
-              <Skeleton className="h-4 w-full mb-2" />
-              <Skeleton className="h-4 w-4/5 mb-3" />
-              <Skeleton className="h-12 w-full rounded mb-3" />
-              <div className="flex gap-2 pt-2 border-t border-zinc-800">
-                <Skeleton className="h-7 w-20 rounded-lg" />
-                <Skeleton className="h-7 w-28 rounded-lg" />
-                <Skeleton className="h-7 w-28 rounded-lg" />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <Skeleton className="h-64 rounded-xl" />
         </div>
       )}
 
@@ -693,12 +698,12 @@ export default function HooksPage() {
                 onClick={() => {
                   setUrl(""); setCompanyName(""); setSuggestion(""); setLowSignal(false);
                   setLinkedinSlug(null); setFirstPartyUrls([]); setWebUrls([]);
-                  const input = document.querySelector<HTMLInputElement>("input[type='url']");
+                  const input = document.querySelector<HTMLInputElement>("input[placeholder*='Gong']");
                   input?.focus();
                 }}
                 className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
               >
-                + Add another URL
+                + Search another company
               </button>
             </div>
           )}
@@ -709,130 +714,161 @@ export default function HooksPage() {
         const visibleHooks = showAll ? [...hooks, ...overflowHooks] : hooks;
         const totalCount = hooks.length + overflowHooks.length;
         return (
-          <div className="space-y-4">
-            <div className="flex items-center gap-3 justify-between">
-              <h2 className="text-lg font-semibold">
-                Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
-                {totalCount > hooks.length && !showAll && (
-                  <span className="text-zinc-500 text-sm font-normal ml-1">of {totalCount}</span>
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+            {/* Left: hooks list */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 justify-between">
+                <h2 className="text-lg font-semibold">
+                  Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
+                  {totalCount > hooks.length && !showAll && (
+                    <span className="text-zinc-500 text-sm font-normal ml-1">of {totalCount}</span>
+                  )}
+                  {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
+                </h2>
+                {batchId && crmConnected && (
+                  <button
+                    onClick={pushBatchToCrm}
+                    disabled={pushingBatch}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                  >
+                    {pushingBatch ? "Pushing all..." : "Push batch to CRM"}
+                  </button>
                 )}
-                {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
-              </h2>
-              {batchId && crmConnected && (
+              </div>
+              {visibleHooks.map((hook, i) => (
+                <HookCard
+                  key={i}
+                  hook={hook}
+                  index={i}
+                  companyDomain={companyDomain}
+                  targetRole={targetRole}
+                  customRoleInput={customRoleInput}
+                  hookVariants={hookVariants}
+                  activeChannel={activeChannel}
+                  setActiveChannel={setActiveChannel}
+                  copied={copied}
+                  copiedEvidence={copiedEvidence}
+                  generatingEmail={generatingEmail}
+                  generatedEmails={generatedEmails}
+                  copiedEmail={copiedEmail}
+                  pushingCrm={!!hook.generated_hook_id && pushingHook === hook.generated_hook_id}
+                  pushedToCrm={!!(hook.generated_hook_id && pushedHookIds[hook.generated_hook_id])}
+                  showCrmPush={crmConnected}
+                  onCopyHook={copyHook}
+                  onCopyHookWithEvidence={copyHookWithEvidence}
+                  onGenerateEmail={generateEmail}
+                  onCopyEmail={copyEmail}
+                  onPushToCrm={pushSingleHookToCrm}
+                />
+              ))}
+              {overflowHooks.length > 0 && !showAll && (
                 <button
-                  onClick={pushBatchToCrm}
-                  disabled={pushingBatch}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                  onClick={() => setShowAll(true)}
+                  className="w-full py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
                 >
-                  {pushingBatch ? "Pushing all..." : "Push batch to CRM"}
+                  Show {overflowHooks.length} more hook{overflowHooks.length !== 1 ? "s" : ""}
+                </button>
+              )}
+              {showAll && overflowHooks.length > 0 && (
+                <button
+                  onClick={() => setShowAll(false)}
+                  className="w-full py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Show less
                 </button>
               )}
             </div>
-            {visibleHooks.map((hook, i) => (
-              <HookCard
-                key={i}
-                hook={hook}
-                index={i}
-                companyDomain={companyDomain}
-                targetRole={targetRole}
-                customRoleInput={customRoleInput}
-                hookVariants={hookVariants}
-                activeChannel={activeChannel}
-                setActiveChannel={setActiveChannel}
-                copied={copied}
-                copiedEvidence={copiedEvidence}
-                generatingEmail={generatingEmail}
-                generatedEmails={generatedEmails}
-                copiedEmail={copiedEmail}
-                pushingCrm={!!hook.generated_hook_id && pushingHook === hook.generated_hook_id}
-                pushedToCrm={!!(hook.generated_hook_id && pushedHookIds[hook.generated_hook_id])}
-                showCrmPush={crmConnected}
-                onCopyHook={copyHook}
-                onCopyHookWithEvidence={copyHookWithEvidence}
-                onGenerateEmail={generateEmail}
-                onCopyEmail={copyEmail}
-                onPushToCrm={pushSingleHookToCrm}
-              />
-            ))}
-            {overflowHooks.length > 0 && !showAll && (
-              <button
-                onClick={() => setShowAll(true)}
-                className="w-full py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
-              >
-                Show {overflowHooks.length} more hook{overflowHooks.length !== 1 ? "s" : ""}
-              </button>
-            )}
-            {showAll && overflowHooks.length > 0 && (
-              <button
-                onClick={() => setShowAll(false)}
-                className="w-full py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Show less
-              </button>
-            )}
-          </div>
-        );
-      })()}
 
-      {hooks.length > 0 && companyDomain && (
-        <div className="mt-2 pt-4 border-t border-zinc-800/60">
-          {userTier === "starter" ? (
-            <p className="text-xs text-zinc-500">
-              <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company and save them to your leads list.{" "}
-              <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
-            </p>
-          ) : contactsResult ? (
-            <p className="text-xs text-zinc-400">
-              Saved <span className="text-emerald-400 font-medium">{contactsResult.created}</span> new contact{contactsResult.created !== 1 ? "s" : ""} to your leads
-              {contactsResult.skipped > 0 && <span className="text-zinc-600"> ({contactsResult.skipped} already in list)</span>}
-              {" — "}
-              <a href="/app/leads" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">View leads</a>
-            </p>
-          ) : (
-            <button
-              onClick={findContacts}
-              disabled={findingContacts}
-              aria-busy={findingContacts}
-              className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-            >
-              {findingContacts ? (
+            {/* Right: sticky intel/intent panel */}
+            <div className="lg:sticky lg:top-20 space-y-4">
+              {companyIntel && intentData ? (
                 <>
-                  <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                  </svg>
-                  Finding contacts…
+                  <div className="flex gap-0 bg-[#0e0f10] rounded-lg p-0.5 w-fit mb-2">
+                    {(["intel", "intent"] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        onClick={() => setRightTab(tab)}
+                        className={`text-xs px-3 py-1 rounded-md transition-all capitalize ${
+                          rightTab === tab ? "bg-[#1c1e20] text-white shadow-inner-glow" : "text-zinc-500"
+                        }`}
+                      >
+                        {tab === "intel" ? "Company" : "Signals"}
+                      </button>
+                    ))}
+                  </div>
+                  {rightTab === "intel" && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
+                  {rightTab === "intent" && <IntentSignals data={intentData} />}
                 </>
               ) : (
                 <>
-                  <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                  </svg>
-                  Find contacts at {companyDomain}
+                  {companyIntel && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
+                  {intentData && <IntentSignals data={intentData} />}
                 </>
               )}
-            </button>
-          )}
-          {contactsError && (
-            <p className="text-xs text-red-400 mt-1">{contactsError}</p>
-          )}
-        </div>
-      )}
 
-      {intentData && <IntentSignals data={intentData} />}
+              {/* Find contacts */}
+              {companyDomain && (
+                <div className="pt-3 border-t border-zinc-800/60">
+                  {userTier === "starter" ? (
+                    <p className="text-xs text-zinc-500">
+                      <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company.{" "}
+                      <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
+                    </p>
+                  ) : contactsResult ? (
+                    <p className="text-xs text-zinc-400">
+                      Saved <span className="text-emerald-400 font-medium">{contactsResult.created}</span> new contact{contactsResult.created !== 1 ? "s" : ""} to your leads
+                      {contactsResult.skipped > 0 && <span className="text-zinc-600"> ({contactsResult.skipped} already in list)</span>}
+                      {" — "}
+                      <a href="/app/leads" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">View leads</a>
+                    </p>
+                  ) : (
+                    <button
+                      onClick={findContacts}
+                      disabled={findingContacts}
+                      aria-busy={findingContacts}
+                      className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                    >
+                      {findingContacts ? (
+                        <>
+                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                          </svg>
+                          Finding contacts…
+                        </>
+                      ) : (
+                        <>
+                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                          </svg>
+                          Find contacts at {companyDomain}
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {contactsError && (
+                    <p className="text-xs text-red-400 mt-1">{contactsError}</p>
+                  )}
+                </div>
+              )}
 
-      {hooks.length > 0 && !hasProfile && !shouldGate && (
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 mt-6 text-sm text-zinc-400">
-          Want hooks that connect to your pitch?{" "}
-          <button
-            onClick={() => setShowProfileModal(true)}
-            className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors"
-          >
-            Add your 60-second profile
-          </button>
-          .
-        </div>
-      )}
+              {/* Profile nudge */}
+              {!hasProfile && !shouldGate && (
+                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-400">
+                  Want hooks that connect to your pitch?{" "}
+                  <button
+                    onClick={() => setShowProfileModal(true)}
+                    className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors"
+                  >
+                    Add your 60-second profile
+                  </button>
+                  .
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Profile-required gate modal */}
       {showGateModal && (
@@ -895,9 +931,9 @@ export default function HooksPage() {
 
 const ONBOARDING_STEPS = [
   {
-    target: "input[type='url']",
+    target: "input[placeholder*='Gong']",
     title: "Start here",
-    body: "Paste any company URL — their homepage works best. We'll scan public signals like earnings, hiring, and tech changes.",
+    body: "Type a company name and click 'Find sources' — we'll surface the best URLs to scan for signals.",
     position: "bottom" as const,
   },
   {

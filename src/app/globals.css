@@ -15,6 +15,11 @@
   --animate-slide-in-bottom: slideInFromBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-scale-in: scaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-slide-in-right: slideInFromRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --color-canvas: #0a0a0b;
+  --color-surface: #141416;
+  --color-brand: #7c3aed;
+  --shadow-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
+  --shadow-accent-glow: 0 0 20px -5px rgba(124, 58, 237, 0.2);
 }
 
 @media (prefers-color-scheme: dark) {

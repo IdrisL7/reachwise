@@ -140,6 +140,7 @@ Rules:
 - Only include signals with clear evidence (no speculation)
 - Confidence reflects how certain the evidence is (0.9+ = explicit mention, 0.5-0.8 = implied)
 - If no signals found, return an empty array: []
+- CRITICAL: Only extract signals where the subject IS the queried company. Reject any signal about a different company that merely appeared in the same article.
 - Return ONLY valid JSON array, no markdown or extra text`;
 
 async function extractSignals(
@@ -168,7 +169,7 @@ async function extractSignals(
       messages: [
         {
           role: "user",
-          content: `Company: ${companyName}\nQuery type: ${queryType}\n\nSearch results:\n${context}`,
+          content: `Company: ${companyName}\nQuery type: ${queryType}\n\nIMPORTANT: Only extract signals that are directly about "${companyName}". Reject signals about other companies (e.g. IBM, OpenAI) even if they appear in the same article.\n\nSearch results:\n${context}`,
         },
       ],
     }),

@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 
 interface Hook {
@@ -122,6 +124,8 @@ export function HookCard({
   onCopyEmail,
   onPushToCrm,
 }: HookCardProps) {
+  const [showDetails, setShowDetails] = useState(false);
+
   const variantEntry = hookVariants.find((v) => v.hook_index === index);
   const active = activeChannel[index] || "email";
 
@@ -152,59 +156,88 @@ export function HookCard({
     { key: "video_script", label: "Video" },
   ];
 
+  // Confidence dot color
+  const confColor = hook.confidence === "high"
+    ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
+    : hook.confidence === "med"
+    ? "bg-amber-400"
+    : "bg-rose-400";
+
   return (
     <div
       className={`bg-[#14161a] border border-[#252830] rounded-xl p-5 border-l-[3px] ${angleBorderColor[hook.angle] || "border-l-zinc-700"} transition-all duration-200 hover:border-[#353840] animate-slide-in-bottom`}
       style={{ animationDelay: `${index * 80}ms` }}
     >
-      {/* Badges row */}
+      {/* Badges row — always visible: Tier, Source type, Angle + confidence dot */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
         <Badge variant={tierVariant(hook.evidence_tier)}>Tier {hook.evidence_tier}</Badge>
         {srcType && <Badge variant={srcVariant} className="text-[10px]">{srcType}</Badge>}
-        {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
         <Badge variant={angleVariant(hook.angle)}>{hook.angle}</Badge>
-        {typeof hook.quality_score === "number" && (
-          <Badge
-            variant={
-              hook.quality_score >= 90
-                ? "fresh"
-                : hook.quality_score >= 70
-                  ? "trigger"
-                  : hook.quality_score >= 50
-                    ? "older"
-                    : "risk"
-            }
-            className="text-[10px]"
-          >
-            {hook.quality_label || "Score"} {hook.quality_score}
-          </Badge>
-        )}
-        {hook.psych_mode && (
-          <Badge
-            variant="psych"
-            title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
-            className="cursor-help"
-          >
-            {psychModeLabels[hook.psych_mode] || hook.psych_mode}
-          </Badge>
-        )}
-        {hook.trigger_type && (
-          <Badge variant="trigger" className="text-[10px]">
-            {hook.trigger_type.replace(/_/g, " ")}
-          </Badge>
-        )}
-        {hook.bridge_quality === "weak" && (
-          <Badge variant="older" className="text-[10px]" title="Bridge has weak connection to evidence">
-            weak bridge
-          </Badge>
-        )}
-        <span className="text-xs text-zinc-600">{hook.confidence} confidence</span>
+        <span className="flex items-center gap-1 text-xs text-zinc-500">
+          <span className={`w-2 h-2 rounded-full shrink-0 ${confColor}`} />
+          {hook.confidence}
+        </span>
         {targetRole && targetRole !== "Not sure / Any role" && targetRole !== "General" && (
           <Badge variant="role" className="text-[10px]">
             {targetRole === "Custom" ? customRoleInput || "Custom" : targetRole}
           </Badge>
         )}
+        <button
+          onClick={() => setShowDetails(v => !v)}
+          className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors ml-auto"
+        >
+          {showDetails ? "▴ Less" : "▾ Details"}
+        </button>
       </div>
+
+      {/* Collapsible detail badges */}
+      <AnimatePresence>
+        {showDetails && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden mb-3"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
+              {typeof hook.quality_score === "number" && (
+                <Badge
+                  variant={
+                    hook.quality_score >= 90 ? "fresh"
+                      : hook.quality_score >= 70 ? "trigger"
+                      : hook.quality_score >= 50 ? "older"
+                      : "risk"
+                  }
+                  className="text-[10px]"
+                >
+                  {hook.quality_label || "Score"} {hook.quality_score}
+                </Badge>
+              )}
+              {hook.psych_mode && (
+                <Badge
+                  variant="psych"
+                  title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                  className="cursor-help"
+                >
+                  {psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                </Badge>
+              )}
+              {hook.trigger_type && (
+                <Badge variant="trigger" className="text-[10px]">
+                  {hook.trigger_type.replace(/_/g, " ")}
+                </Badge>
+              )}
+              {hook.bridge_quality === "weak" && (
+                <Badge variant="older" className="text-[10px]" title="Bridge has weak connection to evidence">
+                  weak bridge
+                </Badge>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Role sharpening prompt */}
       {(targetRole === "Not sure / Any role" || targetRole === "General") && (
@@ -213,17 +246,17 @@ export function HookCard({
         </p>
       )}
 
-      {/* Channel switcher */}
+      {/* Channel switcher — pill segmented control */}
       {variantEntry && variantEntry.variants.length > 0 && (
-        <div className="flex gap-1 mb-2 flex-wrap">
+        <div className="flex gap-0 mb-3 bg-[#0e0f10] rounded-lg p-0.5 w-fit">
           {channels.map((ch) => (
             <button
               key={ch.key}
               onClick={() => setActiveChannel((prev) => ({ ...prev, [index]: ch.key }))}
-              className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
+              className={`text-[10px] px-2.5 py-1 rounded-md transition-all ${
                 active === ch.key
-                  ? "bg-emerald-900/40 border-emerald-700 text-emerald-300"
-                  : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:text-zinc-300"
+                  ? "bg-[#1c1e20] text-white shadow-inner-glow"
+                  : "text-zinc-500 hover:text-zinc-300"
               }`}
             >
               {ch.label}

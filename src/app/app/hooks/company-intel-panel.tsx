@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Building, Tag, Users, MapPin, Calendar } from "lucide-react";
+import { LockedDataField } from "@/components/ui/locked-data-field";
 import type { CompanyIntelligence } from "@/lib/company-intel";
 
 interface CompanyIntelPanelProps {
@@ -9,72 +10,74 @@ interface CompanyIntelPanelProps {
   onGenerateHooks?: (url: string) => void;
 }
 
-export function CompanyIntelPanel({ intel, isBasic, onGenerateHooks }: CompanyIntelPanelProps) {
-  const [open, setOpen] = useState(true);
+export function CompanyIntelPanel({ intel, isBasic }: CompanyIntelPanelProps) {
+  const cells = [
+    { icon: <Building size={14} strokeWidth={1.5} />, label: "Company", value: intel.companyName },
+    { icon: <Tag size={14} strokeWidth={1.5} />, label: "Industry", value: intel.industry },
+    { icon: <Users size={14} strokeWidth={1.5} />, label: "Size", value: intel.employeeRange },
+    { icon: <MapPin size={14} strokeWidth={1.5} />, label: "HQ", value: intel.hqLocation },
+    { icon: <Calendar size={14} strokeWidth={1.5} />, label: "Founded", value: intel.foundedYear ? String(intel.foundedYear) : null },
+  ];
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mb-6 animate-slide-in-bottom">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-zinc-200">Company Intelligence</h3>
-        <button onClick={() => setOpen((v) => !v)} className="text-xs text-zinc-400 hover:text-zinc-200">
-          {open ? "Collapse ↑" : "Expand ↓"}
-        </button>
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 animate-slide-in-bottom">
+      <h3 className="text-sm font-semibold text-zinc-200 mb-4">Company Intelligence</h3>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        {cells.map((cell) => (
+          <div key={cell.label} className="flex items-start gap-2">
+            <span className="text-zinc-600 mt-0.5 shrink-0">{cell.icon}</span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600">{cell.label}</p>
+              <p className="text-sm text-zinc-300">{cell.value || "—"}</p>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {open && (
-        <div className="space-y-3 text-sm">
-          <div className="grid sm:grid-cols-3 gap-2 text-zinc-300">
-            <div>{intel.companyName || "Unknown company"}</div>
-            <div>{intel.industry || "Unknown industry"}</div>
-            <div>{intel.employeeRange || "Unknown size"}</div>
+      {intel.description && (
+        <p className="text-sm text-zinc-400 mb-4 leading-relaxed">{intel.description}</p>
+      )}
+
+      {isBasic ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <LockedDataField label="Tech Stack" />
+          <LockedDataField label="Key Roles" />
+          <LockedDataField label="Competitors" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 mb-1">Tech Stack</p>
+            <p className="text-sm text-zinc-300">{intel.techStack.length ? intel.techStack.join(", ") : "No strong evidence"}</p>
           </div>
-          <div className="text-zinc-400 text-xs">
-            {intel.hqLocation || "HQ unknown"}
-            {intel.foundedYear ? ` · Founded ${intel.foundedYear}` : ""}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 mb-1">Key Roles</p>
+            <p className="text-sm text-zinc-300">
+              {intel.decisionMakers.length ? intel.decisionMakers.map((x) => x.title).join(", ") : "No roles found"}
+            </p>
           </div>
-          {intel.description && <p className="text-zinc-300">{intel.description}</p>}
-
-          {!isBasic ? (
-            <>
-              <div>
-                <p className="text-zinc-500 text-xs mb-1">Tech Stack</p>
-                <p className="text-zinc-300">{intel.techStack.length ? intel.techStack.join(", ") : "No strong evidence"}</p>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <p className="text-zinc-500 text-xs mb-1">Key Roles</p>
-                  <p className="text-zinc-300">
-                    {intel.decisionMakers.length
-                      ? intel.decisionMakers.map((x) => x.title).join(", ")
-                      : "No roles found"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-zinc-500 text-xs mb-1">Competitors</p>
-                  <p className="text-zinc-300">
-                    {intel.competitors.length ? intel.competitors.map((x) => x.name).join(", ") : "No competitors found"}
-                  </p>
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="bg-zinc-800/60 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-400">
-              Upgrade to Pro to see tech stack, decision makers, and competitors.
-            </div>
-          )}
-
-          <div className="text-xs text-zinc-500">Confidence: {Math.round((intel.confidenceScore || 0) * 100)}%</div>
-
-          {onGenerateHooks && intel.companyName && (
-            <button
-              onClick={() => onGenerateHooks(`https://${intel.companyName}`)}
-              className="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg"
-            >
-              Generate hooks
-            </button>
-          )}
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-600 mb-1">Competitors</p>
+            <p className="text-sm text-zinc-300">
+              {intel.competitors.length ? intel.competitors.map((x) => x.name).join(", ") : "No competitors found"}
+            </p>
+          </div>
         </div>
       )}
+
+      <div>
+        <div className="flex justify-between text-[10px] text-zinc-600 mb-1">
+          <span>Data confidence</span>
+          <span>{Math.round((intel.confidenceScore || 0) * 100)}%</span>
+        </div>
+        <div className="h-1 w-full bg-zinc-800 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-emerald-500/70 rounded-full transition-all"
+            style={{ width: `${Math.round((intel.confidenceScore || 0) * 100)}%` }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

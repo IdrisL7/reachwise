@@ -11,18 +11,18 @@ const steps = [
   },
   {
     step: "3",
-    title: "Build multi-channel sequences (optional)",
-    desc: "Turn hooks into sequences across email, LinkedIn, calls, and video. Start from templates (Email-only, Multi-channel, LinkedIn-first) or build your own in the sequence builder.",
+    title: "Generate a full email from any hook in one click",
+    desc: "Every hook comes with a \u201cDraft email\u201d button. One click turns the hook and its evidence into a short, ready-to-send cold email you can copy straight into your outbound tool.",
   },
   {
     step: "4",
-    title: "Prioritize + execute safely",
-    desc: "Intent scoring highlights which accounts are heating up. Then your follow-ups run with guardrails: draft approval (optional), daily caps, quiet hours, stop-on-reply, auto-pause on OOO, and full audit logs.",
+    title: "Export hooks + evidence to CSV, Apollo, Clay, or your CRM",
+    desc: "Single-company or batch mode (up to 20 URLs at once). Export the full set\u2014hook text, evidence snippet, source, date, and tier\u2014as a CSV you can drop into any tool you already use.",
   },
   {
     step: "5",
-    title: "Learn what works",
-    desc: "Reply classification and analytics show what hooks, angles, and sequences drive replies \u2014 so teams improve without guessing.",
+    title: "Send with receipts \u2014 and defend every message you send",
+    desc: "Every hook ships with a quote, source, and date attached. Your reps know exactly what they\u2019re citing and why it\u2019s relevant. No invented claims, no hallucinations, no awkward follow-ups.",
   },
 ];
 

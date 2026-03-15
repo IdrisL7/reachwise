@@ -26,7 +26,7 @@ export function IntentSignals({ data }: { data: IntentData }) {
   const tempVariant = data.temperature === "hot" ? "hot" as const : data.temperature === "warm" ? "warm" as const : "cold" as const;
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 mt-6 animate-slide-in-bottom">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 animate-slide-in-bottom">
       <div className="flex items-center justify-between mb-3">
         <h3 className="text-sm font-semibold text-zinc-200">Intent Signals</h3>
         <Badge variant={tempVariant} className="text-[10px]">
@@ -46,13 +46,13 @@ export function IntentSignals({ data }: { data: IntentData }) {
               news: "text-zinc-400 bg-zinc-800 border-zinc-700",
             };
             return (
-              <div key={i} className="flex items-start gap-2 bg-black/30 rounded-lg px-3 py-2">
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 mt-0.5 ${typeColors[signal.type] || typeColors.news}`}>
+              <div key={i} className="flex items-start gap-2 bg-black/30 rounded-lg px-4 py-3">
+                <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border shrink-0 mt-0.5 ${typeColors[signal.type] || typeColors.news}`}>
                   {signal.type.replace("_", " ")}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-zinc-300">{signal.summary}</p>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1.5">
                     <span className="text-[10px] text-zinc-600">
                       {Math.round(signal.confidence * 100)}% confidence
                     </span>

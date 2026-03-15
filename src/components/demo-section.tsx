@@ -3,6 +3,14 @@
 import { FormEvent, useState } from "react";
 import type { StructuredHook, HookResponse } from "@/lib/types";
 
+type SourceResult = {
+  url: string;
+  title: string;
+  label: string;
+  domain: string;
+  priority: number;
+};
+
 type GeneratedEmail = {
   subject: string;
   body: string;
@@ -104,57 +112,42 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
 // Shows the full 4-part structure: trigger → bridge → question → promise
 // Targeting VP Sales at Gong, pitch context: "We help outbound teams book more demos using buying signals"
 const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string; sourceUrl: string; targetRole: string; pitchContext: string } = {
-  company: "Gong",
-  sourceUrl: "https://getlatka.com/blog/gong-revenue/",
+  company: "Shopify",
+  sourceUrl: "https://www.modernretail.co/technology/shopify-says-purchases-are-coming-inside-chatgpt-through-agentic-storefronts-as-openai-retreats-on-instant-checkout/",
   targetRole: "VP Sales",
-  pitchContext: "We help outbound teams turn more first replies into booked demos without doubling headcount.",
+  pitchContext: "We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
   hooks: [
-    "Gong scaled ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. With that kind of trajectory, is net revenue expansion from existing accounts keeping pace with new logo acquisition, or is one starting to pull ahead? Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
-    "You crossed 4,000 customers by 2022 at an implied ~$71K ACV. At that density, are your reps surfacing expansion signals before the QBR — or are those conversations still reactive? We can show you how teams like yours get ahead of that window.",
-    "Gong positions itself as Revenue Intelligence rather than a sales tool, which means your champions are often quota-carrying reps while your economic buyers are CFOs. Does that split create friction in your deal cycles, or has it helped you land bigger contracts? I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
+    "Saw Shopify's announcement about ChatGPT purchases integration. At that growth stage, pipeline visibility usually becomes the constraint before headcount does. How predictable is your sales team's ability to convert AI-driven commerce leads? We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
+    "Noticed Shopify's move into ChatGPT commerce infrastructure. At that growth stage, pipeline visibility usually becomes the constraint before headcount does. What's your current confidence level on next quarter's numbers? We help VP Sales teams call the quarter with confidence.",
   ],
   structured: [
     {
-      hook: "Gong scaled ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. With that kind of trajectory, is net revenue expansion from existing accounts keeping pace with new logo acquisition, or is one starting to pull ahead? Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
+      hook: "Saw Shopify's announcement about ChatGPT purchases integration. At that growth stage, pipeline visibility usually becomes the constraint before headcount does. How predictable is your sales team's ability to convert AI-driven commerce leads? We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
       angle: "trigger",
-      confidence: "high",
+      confidence: "med",
       evidence_tier: "A",
-      evidence_snippet: "Gong reached $285M ARR in 2022, up from $5M in 2018 — a 57x increase in four years.",
-      source_title: "GetLatka — Gong Revenue Data",
-      source_date: "2022",
-      source_url: "https://getlatka.com/blog/gong-revenue/",
+      evidence_snippet: "Shopify tells merchants purchases will soon be available 'inside ChatGPT' through agentic storefronts as OpenAI retreats on instant checkout.",
+      source_title: "Shopify tells merchants purchases will soon be available 'inside ChatGPT'",
+      source_date: "2025",
+      source_url: "https://www.modernretail.co/technology/shopify-says-purchases-are-coming-inside-chatgpt-through-agentic-storefronts-as-openai-retreats-on-instant-checkout/",
       news_item: 1,
-      psych_mode: "curiosity_gap",
-      why_this_works: "ARR trajectory creates a natural expansion question for a VP Sales buyer",
-      promise: "Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
-    },
-    {
-      hook: "You crossed 4,000 customers by 2022 at an implied ~$71K ACV. At that density, are your reps surfacing expansion signals before the QBR — or are those conversations still reactive? We can show you how teams like yours get ahead of that window.",
-      angle: "risk",
-      confidence: "high",
-      evidence_tier: "A",
-      evidence_snippet: "Gong reported 4,000+ customers as of 2022 with ARR at $285M, implying ~$71K average contract value.",
-      source_title: "GetLatka — Gong Revenue Data",
-      source_date: "2022",
-      source_url: "https://getlatka.com/blog/gong-revenue/",
-      news_item: 2,
       psych_mode: "relevance",
-      why_this_works: "Scale milestone surfaces a proactive vs reactive tension that resonates with VP Sales",
-      promise: "We can show you how teams like yours get ahead of that window.",
+      why_this_works: "Major platform shift creates urgency around pipeline predictability for VP Sales",
+      promise: "We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
     },
     {
-      hook: "Gong positions itself as Revenue Intelligence rather than a sales tool, which means your champions are often quota-carrying reps while your economic buyers are CFOs. Does that split create friction in your deal cycles, or has it helped you land bigger contracts? I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
-      angle: "tradeoff",
-      confidence: "high",
+      hook: "Noticed Shopify's move into ChatGPT commerce infrastructure. At that growth stage, pipeline visibility usually becomes the constraint before headcount does. What's your current confidence level on next quarter's numbers? We help VP Sales teams call the quarter with confidence.",
+      angle: "trigger",
+      confidence: "med",
       evidence_tier: "A",
-      evidence_snippet: "Gong describes itself as a Revenue Intelligence platform, targeting VP Sales, RevOps, and CFO buyers.",
-      source_title: "GetLatka — Gong Overview",
-      source_date: "2022",
-      source_url: "https://getlatka.com/blog/gong-revenue/",
-      news_item: 3,
-      psych_mode: "tradeoff_frame",
-      why_this_works: "Positioning tradeoff is a genuine internal tension — the promise offers a concrete next step",
-      promise: "I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
+      evidence_snippet: "Shopify tells merchants purchases will soon be available 'inside ChatGPT' through agentic storefronts as OpenAI retreats on instant checkout.",
+      source_title: "Shopify tells merchants purchases will soon be available 'inside ChatGPT'",
+      source_date: "2025",
+      source_url: "https://www.modernretail.co/technology/shopify-says-purchases-are-coming-inside-chatgpt-through-agentic-storefronts-as-openai-retreats-on-instant-checkout/",
+      news_item: 2,
+      psych_mode: "curiosity_gap",
+      why_this_works: "Ties major industry signal to the VP Sales pain point of forecast accuracy",
+      promise: "We help VP Sales teams call the quarter with confidence.",
     },
   ],
 };
@@ -181,6 +174,12 @@ export function DemoSection() {
     HookResponse["candidates"]
   >();
   const [companyStatus, setCompanyStatus] = useState<HookResponse["status"]>();
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SourceResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [showUrlInput, setShowUrlInput] = useState(false);
 
   const [batchInput, setBatchInput] = useState("");
   const [batchResults, setBatchResults] = useState<BatchItemResult[] | null>(
@@ -269,6 +268,28 @@ export function DemoSection() {
       setError(message);
     } finally {
       setIsLoading(false);
+    }
+  }
+
+  async function searchSources(query: string) {
+    if (!query.trim()) return;
+    setSearching(true);
+    setSearchError(null);
+    setSearchResults([]);
+    try {
+      const res = await fetch("/api/search-sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName: query.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Search failed");
+      setSearchResults(data.sources ?? []);
+      if (!data.sources?.length) setSearchError("No sources found. Try a different company name or paste a URL directly.");
+    } catch (err) {
+      setSearchError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setSearching(false);
     }
   }
 
@@ -478,31 +499,83 @@ export function DemoSection() {
 
             {mode === "single" && (
               <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
-                      Company URL or article about them
-                    </label>
+                {/* Company search */}
+                <div>
+                  <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
+                    Who are you targeting?
+                  </label>
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      inputMode="url"
-                      placeholder="acme.com, or a TechCrunch / GetLatka article about them"
-                      value={companyUrl}
-                      onChange={(event) => setCompanyUrl(event.target.value)}
-                      className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
+                      placeholder="e.g. Gong, Shopify, HubSpot..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); searchSources(searchQuery); } }}
+                      className="h-12 flex-1 rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30"
                     />
+                    <button
+                      type="button"
+                      onClick={() => searchSources(searchQuery)}
+                      disabled={searching || !searchQuery.trim()}
+                      className="h-12 px-5 rounded-lg bg-[#1a1a2e] border border-zinc-700/50 text-zinc-300 hover:border-violet-500/40 hover:text-white transition-all disabled:opacity-50 text-sm font-medium"
+                    >
+                      {searching ? "Searching..." : "Find sources"}
+                    </button>
                   </div>
-                  <div>
-                    <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
-                      Company name <span className="text-zinc-600">(if you do not have the URL)</span>
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Acme Inc."
-                      value={companyName}
-                      onChange={(event) => setCompanyName(event.target.value)}
-                      className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
-                    />
+
+                  {/* Search results */}
+                  {searchResults.length > 0 && (
+                    <div className="mt-2 flex flex-col gap-1.5">
+                      <p className="text-[0.75rem] text-zinc-500 mb-1">Pick a source — we ranked these by signal quality:</p>
+                      {searchResults.map((source) => (
+                        <button
+                          key={source.url}
+                          type="button"
+                          onClick={() => {
+                            const url = source.url;
+                            const name = searchQuery.trim();
+                            setCompanyUrl(url);
+                            setCompanyName(name);
+                            setSearchResults([]);
+                            fetchHooks({ url, companyName: name, context: pitchContext });
+                          }}
+                          className="flex items-center gap-3 w-full rounded-lg border border-zinc-700/30 bg-[#0e0e18] hover:border-violet-500/40 hover:bg-[#12101e] px-4 py-2.5 text-left transition-all group"
+                        >
+                          <span className="shrink-0 rounded-md bg-violet-600/10 border border-violet-500/20 px-2 py-0.5 text-[0.6875rem] font-semibold text-violet-400 whitespace-nowrap">
+                            {source.label}
+                          </span>
+                          <span className="text-[0.8125rem] text-zinc-400 group-hover:text-zinc-200 transition-colors truncate flex-1">
+                            {source.domain}
+                          </span>
+                          <svg className="h-3.5 w-3.5 text-zinc-600 group-hover:text-violet-400 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {searchError && <p className="mt-2 text-[0.8125rem] text-red-400">{searchError}</p>}
+
+                  {/* Power user escape hatch */}
+                  <div className="mt-2">
+                    {!showUrlInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowUrlInput(true)}
+                        className="text-[0.75rem] text-zinc-600 hover:text-zinc-400 transition-colors underline underline-offset-2"
+                      >
+                        Already have a URL? Paste it directly
+                      </button>
+                    ) : (
+                      <input
+                        type="text"
+                        placeholder="https://techcrunch.com/..."
+                        value={companyUrl}
+                        onChange={(e) => setCompanyUrl(e.target.value)}
+                        className="mt-1 h-10 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-3 text-[0.875rem] text-zinc-300 outline-none transition-all placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30"
+                      />
+                    )}
                   </div>
                 </div>
 
