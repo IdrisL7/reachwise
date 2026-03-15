@@ -469,9 +469,9 @@ export default function HooksPage() {
   ];
 
   const EXAMPLE_COMPANIES = [
-    { url: "https://gong.io", name: "Gong", role: "VP Sales" },
-    { url: "https://hubspot.com", name: "HubSpot", role: "Marketing" },
-    { url: "https://stripe.com", name: "Stripe", role: "Founder/CEO" },
+    { url: "https://www.linkedin.com/company/gong-io/about/", name: "Gong", role: "VP Sales" },
+    { url: "https://www.linkedin.com/company/hubspot/about/", name: "HubSpot", role: "Marketing" },
+    { url: "https://www.linkedin.com/company/notion/about/", name: "Notion", role: "Founder/CEO" },
   ];
 
   return (
