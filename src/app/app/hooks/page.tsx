@@ -91,6 +91,7 @@ export default function HooksPage() {
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [customPain, setCustomPain] = useState("");
   const [customPromise, setCustomPromise] = useState("");
+  const [pitchContext, setPitchContext] = useState("");
   const [hookVariants, setHookVariants] = useState<Array<{ hook_index: number; variants: ChannelVariant[] }>>([]);
   const [intentData, setIntentData] = useState<{
     score: number;
@@ -342,6 +343,7 @@ export default function HooksPage() {
             : undefined,
           customPain: targetRole === "Custom" && customPain.trim() ? customPain.trim() : undefined,
           customPromise: targetRole === "Custom" && customPromise.trim() ? customPromise.trim() : undefined,
+          context: userTier !== "starter" && pitchContext.trim() ? pitchContext.trim() : undefined,
         }),
       });
 
@@ -415,7 +417,7 @@ export default function HooksPage() {
     } finally {
       setLoading(false);
     }
-  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise]);
+  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise, pitchContext, userTier]);
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -520,6 +522,9 @@ export default function HooksPage() {
         setCustomPain={setCustomPain}
         customPromise={customPromise}
         setCustomPromise={setCustomPromise}
+        pitchContext={pitchContext}
+        setPitchContext={setPitchContext}
+        isPaidUser={userTier !== "starter"}
         loading={loading}
         error={error}
         onSubmit={generateHooks}
