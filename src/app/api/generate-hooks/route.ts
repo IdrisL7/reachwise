@@ -364,7 +364,7 @@ export async function POST(request: Request) {
                   news_item: h.news_item ?? 1,
                   angle: (["trigger", "risk", "tradeoff"].includes(h.angle) ? h.angle : "trigger") as Hook["angle"],
                   hook: h.hook.trim(),
-                  evidence_snippet: h.evidence_snippet || "",
+                  evidence_snippet: h.evidence_snippet || userSrc.facts[0] || "",
                   source_title: h.source_title || userSrc.title,
                   source_date: h.source_date || "",
                   source_url: h.source_url || userSrc.url,

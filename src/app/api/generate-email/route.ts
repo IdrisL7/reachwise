@@ -268,9 +268,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!body.hook.hook || !body.hook.evidence_snippet) {
+    if (!body.hook.hook) {
       return NextResponse.json(
-        { error: "Hook must include 'hook' text and 'evidence_snippet'." },
+        { error: "Hook must include 'hook' text." },
         { status: 400 },
       );
     }
