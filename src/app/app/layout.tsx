@@ -52,9 +52,9 @@ export default async function AppLayout({
             <Image
               src="/logo.png"
               alt="GetSignalHooks"
-              width={32}
-              height={32}
-              className="rounded-md"
+              width={40}
+              height={40}
+              className="rounded-full"
               priority
             />
           </Link>
