@@ -1409,6 +1409,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 export async function fetchUserProvidedSource(
   url: string,
   domain: string,
+  tavilyApiKey?: string,
 ): Promise<ClassifiedSource | null> {
   // 1. Try direct fetch first
   let src: Source | null = await fetchPageAsSource(url, domain).catch(() => null);
@@ -1441,6 +1442,27 @@ export async function fetchUserProvidedSource(
         }
       }
     } catch { /* Jina blocked or timed out */ }
+  }
+
+  // 3. Tavily fallback — for bot-blocking sites (e.g. gong.io) where direct + Jina both fail.
+  // Search for the specific URL using Tavily's own scraper which bypasses many bot protections.
+  if (!src && tavilyApiKey) {
+    try {
+      const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+      const results = await tavilySearch(
+        `site:${domain}`,
+        tavilyApiKey,
+        { max_results: 5, search_depth: "basic", include_domains: [domain] },
+      );
+      for (const r of results) {
+        const s = tavilyResultToSource(r, normalizedUrl);
+        if (s && s.facts.length >= 1) {
+          src = { ...s, url: r.url || normalizedUrl };
+          console.log("[fetchUserProvidedSource] Tavily fallback succeeded", { url, resultUrl: r.url });
+          break;
+        }
+      }
+    } catch { /* Tavily fallback failed */ }
   }
 
   if (!src) return null;

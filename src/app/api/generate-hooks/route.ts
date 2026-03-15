@@ -347,7 +347,7 @@ export async function POST(request: Request) {
           const hasSubpath = parsedInput.pathname.length > 1 && parsedInput.pathname !== "/";
 
           if (hasSubpath) {
-            const userSrc = await fetchUserProvidedSource(url, companyDomain).catch(() => null);
+            const userSrc = await fetchUserProvidedSource(url, companyDomain, tavilyApiKey).catch(() => null);
 
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
