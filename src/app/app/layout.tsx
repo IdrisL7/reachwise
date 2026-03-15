@@ -129,7 +129,7 @@ export default async function AppLayout({
         {/* Top bar */}
         <header className="h-12 sticky top-0 z-30 backdrop-blur-md bg-[#0a0a0b]/80 border-b border-white/[0.06] flex items-center px-4 sm:px-6">
           {/* Mobile: logo + nav */}
-          <div className="flex lg:hidden items-center gap-0.5 flex-1">
+          <div className="flex lg:hidden items-center gap-0.5 flex-1 min-w-0">
             <Link href="/app" className="mr-2 shrink-0">
               <Image
                 src="/logo.png"
@@ -140,7 +140,7 @@ export default async function AppLayout({
                 priority
               />
             </Link>
-            <nav className="flex items-center gap-0.5">
+            <nav className="flex items-center gap-0.5 mr-3">
               {primaryNav.map((item) => (
                 <Link
                   key={item.href}
@@ -155,17 +155,17 @@ export default async function AppLayout({
           </div>
 
           {/* Right side */}
-          <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <span className="text-xs text-[#878a8f] hidden sm:block">
               {session.user.email}
             </span>
-            <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded capitalize">
+            <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded capitalize lg:px-2">
               {tierId}
             </span>
             {tierId !== "concierge" && (
               <Link
                 href="/#pricing"
-                className="text-xs bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-0.5 rounded transition-colors"
+                className="text-xs bg-violet-600 hover:bg-violet-500 text-white px-2 py-0.5 rounded transition-colors lg:px-2.5"
               >
                 Upgrade
               </Link>
