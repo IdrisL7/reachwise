@@ -440,6 +440,12 @@ export async function POST(request: Request) {
           });
 
           // 5. First pass: publishGate with source lookup (anchored-source filtering)
+          // DEBUG: capture raw hook news_item numbers and source lookup keys
+          (sourceDiagnostics as any) = {
+            ...(sourceDiagnostics || {}),
+            _debug_rawHooks: rawHooks.slice(0, 10).map((h) => ({ news_item: h.news_item, angle: h.angle, hook_preview: (h.hook || "").slice(0, 80) })),
+            _debug_sourceLookupKeys: Array.from(sourceLookup.keys()),
+          };
           candidateHooks = publishGate(rawHooks, sourceLookup, {
             includeMarketContext: false,
           });
