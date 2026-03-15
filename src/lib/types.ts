@@ -16,6 +16,7 @@ export type StructuredHook = {
   generated_hook_id?: string;
   psych_mode?: PsychMode;
   why_this_works?: string;
+  promise?: string;
 };
 
 export type CompanyResolutionStatus = "ok" | "needs_disambiguation" | "no_match";

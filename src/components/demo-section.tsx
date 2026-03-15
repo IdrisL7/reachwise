@@ -101,52 +101,56 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
 }
 
 // Pre-generated sample hooks for the demo (no API call needed)
-const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string } = {
-  company: "Stripe (https://stripe.com)",
+const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string; sourceUrl: string } = {
+  company: "Gong",
+  sourceUrl: "https://getlatka.com/blog/gong-revenue/",
   hooks: [
-    'Your "Revenue Recognition automating ASC 606 compliance" launch — is the main driver faster book-close, or reducing manual reconciliation errors?',
-    'You offer "250+ prebuilt integrations across payments, billing, and tax" — is the priority coverage breadth, or depth on core payment flows?',
-    'Your docs now cover "handling webhook delivery failures and retry logic" — is that driven by enterprise customer requests, or internal reliability targets?',
+    'Gong grew ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. Is the current retention story still carrying that trajectory, or has net expansion started to slow?',
+    'You crossed 4,000 customers by 2022. At that scale, are expansion plays from the existing base outperforming new logo acquisition — or are both still running neck and neck?',
+    'Gong is positioned as Revenue Intelligence rather than a sales tool. Does that framing help with economic buyer conversations — or does it slow deals when the champions are quota-carrying reps?',
   ],
   structured: [
     {
-      hook: 'Your "Revenue Recognition automating ASC 606 compliance" launch — is the main driver faster book-close, or reducing manual reconciliation errors?',
+      hook: 'Gong grew ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. Is the current retention story still carrying that trajectory, or has net expansion started to slow?',
       angle: "trigger",
       confidence: "high",
       evidence_tier: "A",
-      evidence_snippet: "Stripe launches Revenue Recognition, automating ASC 606 compliance for subscription businesses.",
-      source_title: "Stripe Blog — Revenue Recognition",
-      source_date: "2025-02",
-      source_url: "https://stripe.com/blog",
+      evidence_snippet: "Gong reached $285M ARR in 2022, up from $5M in 2018 — a 57x increase in four years.",
+      source_title: "GetLatka — Gong Revenue Data",
+      source_date: "2022",
+      source_url: "https://getlatka.com/blog/gong-revenue/",
       news_item: 1,
       psych_mode: "curiosity_gap",
-      why_this_works: "mechanism question",
+      why_this_works: "ARR trajectory creates a natural expansion question",
+      promise: "If you're in the middle of a net revenue retention push, I can show you how two teams at a similar stage rewired their expansion motion without adding headcount.",
     },
     {
-      hook: 'You offer "250+ prebuilt integrations across payments, billing, and tax" — is the priority coverage breadth, or depth on core payment flows?',
-      angle: "tradeoff",
-      confidence: "high",
-      evidence_tier: "A",
-      evidence_snippet: "250+ prebuilt integrations across payments, billing, and tax.",
-      source_title: "Stripe — Platform Overview",
-      source_date: "",
-      source_url: "https://stripe.com",
-      news_item: 2,
-      psych_mode: "tradeoff_frame",
-      why_this_works: "tradeoff frame",
-    },
-    {
-      hook: 'Your docs now cover "handling webhook delivery failures and retry logic" — is that driven by enterprise customer requests, or internal reliability targets?',
+      hook: 'You crossed 4,000 customers by 2022. At that scale, are expansion plays from the existing base outperforming new logo acquisition — or are both still running neck and neck?',
       angle: "risk",
       confidence: "high",
       evidence_tier: "A",
-      evidence_snippet: "New section added to Stripe Docs: Handling webhook delivery failures and retry logic.",
-      source_title: "Stripe Developer Docs",
-      source_date: "2025-02",
-      source_url: "https://docs.stripe.com",
-      news_item: 3,
+      evidence_snippet: "Gong reported 4,000+ customers as of 2022 with ARR at $285M, implying ~$71K average contract value.",
+      source_title: "GetLatka — Gong Revenue Data",
+      source_date: "2022",
+      source_url: "https://getlatka.com/blog/gong-revenue/",
+      news_item: 2,
       psych_mode: "relevance",
-      why_this_works: "you-first relevance",
+      why_this_works: "scale milestone surfaces a strategic tension",
+      promise: "I have a framework that's helped teams at your scale identify the top accounts most likely to expand before the QBR conversation — worth a 15-minute look.",
+    },
+    {
+      hook: 'Gong is positioned as Revenue Intelligence rather than a sales tool. Does that framing help with economic buyer conversations — or does it slow deals when the champions are quota-carrying reps?',
+      angle: "tradeoff",
+      confidence: "high",
+      evidence_tier: "A",
+      evidence_snippet: "Gong describes itself as a Revenue Intelligence platform, targeting VP Sales, RevOps, and CFO buyers.",
+      source_title: "GetLatka — Gong Overview",
+      source_date: "2022",
+      source_url: "https://getlatka.com/blog/gong-revenue/",
+      news_item: 3,
+      psych_mode: "tradeoff_frame",
+      why_this_works: "positioning tradeoff is a genuine internal tension for the buyer",
+      promise: "Happy to show you how a peer with the same positioning reframed their CFO pitch in two slides and cut deal cycles by 30%.",
     },
   ],
 };
@@ -250,7 +254,7 @@ export function DemoSection() {
         setError(
           data.suggestion
             ? data.suggestion
-            : "No hooks were generated. Try again with a different company.",
+            : "No signals found from this URL. Try pasting a TechCrunch article, GetLatka page, or press release about this company instead.",
         );
       }
     } catch (err) {
@@ -435,7 +439,7 @@ export function DemoSection() {
             Try it now (3 generations/day)
           </h2>
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Paste a URL, pick a role, and get hooks with receipts you can copy into outbound.
+            Paste a company URL or a news article about them, pick a role, and get hooks with receipts you can copy into outbound.
           </p>
         </div>
 
@@ -471,12 +475,12 @@ export function DemoSection() {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
-                      Company URL
+                      Company URL or article about them
                     </label>
                     <input
-                      type="url"
+                      type="text"
                       inputMode="url"
-                      placeholder="https://acme.com"
+                      placeholder="acme.com, or a TechCrunch / GetLatka article about them"
                       value={companyUrl}
                       onChange={(event) => setCompanyUrl(event.target.value)}
                       className="h-12 w-full rounded-lg border border-zinc-700/50 bg-[#111119] px-4 text-[0.9375rem] text-zinc-50 outline-none transition-all duration-200 placeholder:text-zinc-600 focus:border-violet-500/50 focus:ring-1 focus:ring-violet-500/30 focus:shadow-[0_0_16px_rgba(139,92,246,0.08)]"
@@ -649,7 +653,12 @@ export function DemoSection() {
                       Sample
                     </span>
                     <span className="text-zinc-400">
-                      Showing pre-generated hooks for <span className="font-medium text-zinc-200">{SAMPLE_HOOKS.company}</span>. Enter your own company above to generate fresh hooks.
+                      Showing pre-generated hooks for <span className="font-medium text-zinc-200">{SAMPLE_HOOKS.company}</span>{" "}
+                      from{" "}
+                      <a href={SAMPLE_HOOKS.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-violet-400/80 underline decoration-violet-500/20 hover:text-violet-300 transition-colors">
+                        {SAMPLE_HOOKS.sourceUrl.replace("https://", "")}
+                      </a>
+                      . Enter your own company URL above to generate fresh hooks.
                     </span>
                   </div>
                 )}
@@ -682,6 +691,12 @@ export function DemoSection() {
                           <p className="whitespace-pre-wrap text-[0.9375rem] leading-[1.65] text-zinc-200">
                             {hook}
                           </p>
+
+                          {structured?.promise && (
+                            <p className="mt-2 mb-1 text-[0.75rem] text-zinc-500">
+                              <span className="font-medium text-zinc-300">Promise:</span> {structured.promise}
+                            </p>
+                          )}
 
                           {/* Evidence panel */}
                           {structured && structured.evidence_snippet && (
