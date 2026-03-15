@@ -2,6 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import {
   fetchSourcesWithGating,
+  fetchUserProvidedSource,
   buildSystemPrompt,
   buildUserPrompt,
   callClaude,
@@ -333,6 +334,52 @@ export async function POST(request: Request) {
 
     if (!candidateHooks) {
       try {
+        // -----------------------------------------------------------------------
+        // USER-PROVIDED SUBPAGE FAST PATH
+        // When the user explicitly provides a subpage URL (e.g. hubspot.com/startups/partners),
+        // bypass all tier/signal gating. Fetch the page directly, treat it as Tier A,
+        // and call Claude. The auto-discovery pipeline only runs if no subpage or fetch fails.
+        // -----------------------------------------------------------------------
+        let usedFastPath = false;
+        try {
+          const parsedInput = new URL(url.startsWith("http") ? url : `https://${url}`);
+          const hasSubpath = parsedInput.pathname.length > 1 && parsedInput.pathname !== "/";
+
+          if (hasSubpath) {
+            const userSrc = await fetchUserProvidedSource(url, companyDomain).catch(() => null);
+
+            if (userSrc) {
+              console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url });
+              const sourceLookup = new Map<number, ClassifiedSource>([[1, userSrc]]);
+              const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
+              const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona);
+              const userPrompt = buildUserPrompt(url, [userSrc], context);
+              const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+              candidateHooks = publishGate(rawHooks, sourceLookup, { includeMarketContext: false });
+              citations = [{
+                source_title: userSrc.title,
+                publisher: userSrc.publisher,
+                date: userSrc.date,
+                url: userSrc.url,
+                tier: "A",
+                anchorScore: 5,
+              }];
+              isLowSignal = false;
+              hasAnchored = true;
+              tierACount = 1;
+              signalCount = 1;
+              usedFastPath = true;
+
+              console.log("[generate-hooks] userProvidedFastPath result", {
+                traceId,
+                candidateHookCount: candidateHooks.length,
+                factCount: userSrc.facts.length,
+              });
+            }
+          }
+        } catch { /* URL parse error — skip fast path */ }
+
+        if (!usedFastPath) {
         // 1. Gather and classify sources with signal gating + anchor scoring
         let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
@@ -377,7 +424,7 @@ export async function POST(request: Request) {
         // Inject high-confidence intent signals into signalCount BEFORE threshold check
         signalCount += rawSignals.filter((s) => s.confidence >= 0.8).length;
         console.log('[threshold-fix] tierACount:', tierACount, 'signalCount after intent injection:', signalCount);
-        isLowSignal = tierACount < 1;
+        isLowSignal = result.lowSignal; // RV18: respect hasUserProvidedSignal bypass from fetchSourcesWithGating
         hasAnchored = result.hasAnchoredSources;
 
         console.log("[generate-hooks] threshold check:", {
@@ -440,12 +487,6 @@ export async function POST(request: Request) {
           });
 
           // 5. First pass: publishGate with source lookup (anchored-source filtering)
-          // DEBUG: capture raw hook news_item numbers and source lookup keys
-          (sourceDiagnostics as any) = {
-            ...(sourceDiagnostics || {}),
-            _debug_rawHooks: rawHooks.slice(0, 10).map((h) => ({ news_item: h.news_item, angle: h.angle, hook_preview: (h.hook || "").slice(0, 80) })),
-            _debug_sourceLookupKeys: Array.from(sourceLookup.keys()),
-          };
           candidateHooks = publishGate(rawHooks, sourceLookup, {
             includeMarketContext: false,
           });
@@ -455,6 +496,7 @@ export async function POST(request: Request) {
             candidateHookCount: candidateHooks.length,
           });
         }
+        } // end if (!usedFastPath)
       } catch (error) {
         console.error("generate-hooks: Error during external calls", error);
         return NextResponse.json({
@@ -476,7 +518,7 @@ export async function POST(request: Request) {
     }
 
     // Also enforce tiers on hook evidence_tier fields (cached hooks may have stale tiers)
-    candidateHooks = candidateHooks.map((h) => {
+    candidateHooks = (candidateHooks ?? []).map((h) => {
       if (h.evidence_tier !== "A") return h;
       if (!h.source_url || !companyDomain) return h;
       const firstParty = isFirstPartySource(h.source_url, companyDomain);

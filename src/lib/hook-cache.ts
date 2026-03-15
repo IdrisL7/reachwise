@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 
 // Bump this whenever tier rules, gating logic, or prompt templates change.
 // Cached entries with a different version will be treated as stale.
-export const RULES_VERSION = 15;
+export const RULES_VERSION = 19;
 
 async function hashUrl(url: string, targetRole?: string): Promise<string> {
   const normalized = url

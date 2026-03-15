@@ -216,6 +216,7 @@ export type ClassifiedSource = Source & {
   entity_matched_term?: string | null;
   entity_mismatch?: boolean;
   tier_reason?: string;
+  userProvided?: boolean;
 };
 
 export type CompanyCandidate = {
@@ -1400,6 +1401,76 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 }
 
 /**
+ * Fetch a user-provided subpage URL and return it as a Tier A ClassifiedSource.
+ * Bypasses all signal/tier gating — the user has explicitly vouched for this URL.
+ * Falls back to Jina AI Reader for any URL (not just known signal patterns).
+ * Returns null if the page can't be fetched or has no extractable content.
+ */
+export async function fetchUserProvidedSource(
+  url: string,
+  domain: string,
+): Promise<ClassifiedSource | null> {
+  // 1. Try direct fetch first
+  let src: Source | null = await fetchPageAsSource(url, domain).catch(() => null);
+
+  // 2. Jina fallback for any URL (fetchPageAsSource only tries Jina for known signal patterns)
+  if (!src) {
+    try {
+      const jinaController = new AbortController();
+      const jinaTimeout = setTimeout(() => jinaController.abort(), 12_000);
+      const jinaRes = await fetch(`https://r.jina.ai/${url}`, {
+        headers: { Accept: "text/plain" },
+        signal: jinaController.signal,
+      });
+      clearTimeout(jinaTimeout);
+      if (jinaRes.ok) {
+        const markdown = await jinaRes.text();
+        const jinaText = markdown.slice(0, 300_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
+        if (jinaText.length >= 50) {
+          const jinaTitleMatch = markdown.match(/^#\s+(.+)/m);
+          const jinaFacts = extractClaimSentences(jinaText);
+          if (jinaFacts.length >= 2) {
+            src = {
+              title: jinaTitleMatch?.[1]?.trim() ?? `${domain} page`,
+              publisher: domain,
+              date: "",
+              url,
+              facts: jinaFacts,
+            };
+          }
+        }
+      }
+    } catch { /* Jina blocked or timed out */ }
+  }
+
+  if (!src) return null;
+
+  // 3. Sanity check: page must have some content mentioning the company OR enough facts
+  const companyName = extractCompanyName(url);
+  const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, domain);
+
+  if (entityMatch.entity_hit_score === 0 && src.facts.length < 3) {
+    console.log("[fetchUserProvidedSource] sanity check failed — no entity match and < 3 facts", { url });
+    return null;
+  }
+
+  console.log("[fetchUserProvidedSource] success", {
+    url,
+    factCount: src.facts.length,
+    entityHitScore: entityMatch.entity_hit_score,
+  });
+
+  return {
+    ...src,
+    tier: "A" as EvidenceTier,
+    anchorScore: 5,
+    entity_hit_score: Math.max(entityMatch.entity_hit_score, 1),
+    entity_matched_term: entityMatch.entity_matched_term ?? domain,
+    userProvided: true,
+  };
+}
+
+/**
  * Prong D: Directly fetch the company's homepage and signal-rich subpages.
  * This captures actual claims, numbers, and product details that Brave Search misses.
  */
@@ -1703,11 +1774,43 @@ export async function fetchSourcesWithGating(
   try {
     const parsedInput = new URL(url.startsWith("http") ? url : `https://${url}`);
     if (parsedInput.pathname && parsedInput.pathname !== "/" && parsedInput.pathname.length > 1) {
+      const signalPageKeywords = /\/(press|newsroom|blog|changelog|news|about|customers|case-studies|resources)\b/i;
+      const looksLikeSignalPage = signalPageKeywords.test(parsedInput.pathname);
       inputPagePromise = fetchPageAsSource(parsedInput.href, domain)
-        .then((src) => {
-          if (!src) return [] as ClassifiedSource[];
-          const tier = classifySource(src, true, domain);
-          return [{ ...src, tier }] as ClassifiedSource[];
+        .then(async (src) => {
+          if (src) {
+            const tier = classifySource(src, true, domain);
+            return [{ ...src, tier, userProvided: true }] as ClassifiedSource[];
+          }
+          // Direct fetch returned null (likely JS-rendered SPA).
+          // For user-provided URLs, always try Jina AI Reader — it renders JS pages.
+          // fetchPageAsSource only tries Jina for known signal-path patterns; here we
+          // extend that effort to ANY subpage the user explicitly submitted.
+          try {
+            const jinaController = new AbortController();
+            const jinaTimeout = setTimeout(() => jinaController.abort(), 12_000);
+            const jinaRes = await fetch(`https://r.jina.ai/${parsedInput.href}`, {
+              headers: { Accept: "text/plain" },
+              signal: jinaController.signal,
+            });
+            clearTimeout(jinaTimeout);
+            if (jinaRes.ok) {
+              const markdown = await jinaRes.text();
+              const jinaText = markdown.slice(0, 300_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
+              if (jinaText.length >= 50) {
+                const jinaTitleMatch = markdown.match(/^#\s+(.+)/m);
+                const jinaTitle = jinaTitleMatch ? jinaTitleMatch[1].trim() : `${domain} page`;
+                const jinaFacts = extractClaimSentences(jinaText);
+                if (jinaFacts.length > 0) {
+                  console.log("[inputPagePromise] Jina fallback succeeded for user-provided URL", parsedInput.href);
+                  const jsSrc: Source = { title: jinaTitle, publisher: domain, date: "", url: parsedInput.href, facts: jinaFacts };
+                  const tier = classifySource(jsSrc, true, domain);
+                  return [{ ...jsSrc, tier, userProvided: true }] as ClassifiedSource[];
+                }
+              }
+            }
+          } catch { /* Jina fallback failed */ }
+          return [] as ClassifiedSource[];
         })
         .catch(() => [] as ClassifiedSource[]);
     }
@@ -1736,11 +1839,14 @@ export async function fetchSourcesWithGating(
     const entityMatch = computeEntityHitScore(source, companyName, domain);
 
     // ENTITY MATCH GATE: if evidence is NOT about the target entity → force Tier C
-    // Exception: confirmed first-party sources with minimum extractable evidence pass through.
+    // Exception 1: confirmed first-party sources with minimum extractable evidence pass through.
+    // Exception 2: user-provided URLs — user explicitly vouched for relevance, skip kill.
     if (entityMatch.entity_hit_score === 0) {
       const isConfirmedFirstParty = !!domain && isFirstPartySource(source.url, domain);
 
-      if (isConfirmedFirstParty) {
+      if (source.userProvided) {
+        // User explicitly provided this URL — trust them, fall through with original tier
+      } else if (isConfirmedFirstParty) {
         const totalTextLength = source.facts.join(" ").length;
         const hasMinimumEvidence = source.facts.length >= 2 || totalTextLength >= 200;
         const companyToken = domain.split(".")[0].toLowerCase();
@@ -1856,7 +1962,23 @@ export async function fetchSourcesWithGating(
     }
   }
 
-  const lowSignal = tierACount < 1;
+  // USER-PROVIDED SIGNAL: if the user explicitly gave a URL and it has content with
+  // at least a partial entity match, bypass the lowSignal gate — user vouches for relevance.
+  const userProvidedSource = finalRanked.find((s) => s.userProvided);
+  const hasUserProvidedSignal =
+    !!userProvidedSource &&
+    (userProvidedSource.entity_hit_score ?? 0) >= 1 &&
+    userProvidedSource.facts.length >= 2;
+
+  const lowSignal = tierACount < 1 && !hasUserProvidedSignal;
+
+  // If user provided a signal-rich URL, treat it as anchored so the route's
+  // !hasAnchored gate doesn't truncate results to 1 hook and show the banner.
+  if (hasUserProvidedSignal && !hasAnchoredSources) {
+    hasAnchoredSources = true;
+  }
+
+  console.log(`[fetchSourcesWithGating] tierACount=${tierACount} hasUserProvidedSignal=${hasUserProvidedSignal} userProvided=${!!userProvidedSource} hasAnchoredSources=${hasAnchoredSources} url=${url}`);
 
   const _diagnostics: FetchSourcesResult["_diagnostics"] = {
     targetDomain: domain,
@@ -2850,30 +2972,40 @@ export function publishGate(
 ): Hook[] {
   const includeMarketContext = options?.includeMarketContext ?? false;
 
-  // Step 1: Filter source lookup to exclude unanchored when market context off
+  // Step 1: Filter source lookup to exclude unanchored when market context off.
+  // Tier A sources (first-party / reputable publisher) always pass regardless of anchorScore —
+  // they're anchored by classification. The anchorScore filter is only for Tier B/C market commentary.
   const filteredLookup = new Map<number, ClassifiedSource>();
   for (const [idx, source] of sourceLookup) {
-    const anchored = (source.anchorScore ?? 0) >= 3;
+    const anchored = source.tier === "A" || !!source.userProvided || (source.anchorScore ?? 0) >= 3;
     if (!anchored && !includeMarketContext) continue;
     filteredLookup.set(idx, source);
   }
+
+  console.log(`[publishGate] filteredLookupCount=${filteredLookup.size} gatedCount=${rawHooks.length}`);
+
+  // Fallback key: first source in filteredLookup (used when Claude omits news_item)
+  const firstFilteredKey = filteredLookup.keys().next().value ?? 1;
 
   const diagnostics: Array<{ idx: number; news_item: number; status: string; tier?: string; anchorScore?: number }> = [];
 
   // Step 2: Validate each hook through full pipeline (includes rewrite-or-drop)
   const validHooks: Hook[] = [];
   for (const [idx, raw] of rawHooks.entries()) {
-    // Reject hooks from sources that were filtered out
-    if (!filteredLookup.has(raw.news_item)) {
-      diagnostics.push({ idx, news_item: raw.news_item, status: "drop:source_filtered_out" });
+    // Reject hooks from sources that were filtered out.
+    // If Claude omitted news_item, fall back to the first available filtered source.
+    const newsItem = raw.news_item && filteredLookup.has(raw.news_item) ? raw.news_item : firstFilteredKey;
+    const rawWithItem = { ...raw, news_item: newsItem };
+    if (!filteredLookup.has(newsItem)) {
+      diagnostics.push({ idx, news_item: newsItem, status: "drop:source_filtered_out" });
       continue;
     }
-    const validated = validateHook(raw, filteredLookup);
+    const validated = validateHook(rawWithItem, filteredLookup);
     if (validated) {
-      diagnostics.push({ idx, news_item: raw.news_item, status: "pass:validateHook", tier: validated.evidence_tier, anchorScore: filteredLookup.get(raw.news_item)?.anchorScore });
+      diagnostics.push({ idx, news_item: newsItem, status: "pass:validateHook", tier: validated.evidence_tier, anchorScore: filteredLookup.get(newsItem)?.anchorScore });
       validHooks.push(validated);
     } else {
-      diagnostics.push({ idx, news_item: raw.news_item, status: "drop:validateHook_failed", tier: (raw.evidence_tier || "").toUpperCase(), anchorScore: filteredLookup.get(raw.news_item)?.anchorScore });
+      diagnostics.push({ idx, news_item: newsItem, status: "drop:validateHook_failed", tier: (raw.evidence_tier || "").toUpperCase(), anchorScore: filteredLookup.get(newsItem)?.anchorScore });
     }
   }
 
