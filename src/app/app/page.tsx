@@ -17,6 +17,7 @@ export default async function DashboardPage() {
       tierId: schema.users.tierId,
       trialEndsAt: schema.users.trialEndsAt,
       stripeSubscriptionId: schema.users.stripeSubscriptionId,
+      hooksResetAt: schema.users.hooksResetAt,
     })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
@@ -52,6 +53,8 @@ export default async function DashboardPage() {
     : 0;
   const trialExpired = isOnTrial && trialDaysLeft === 0;
 
+  const resetDaysLeft = user?.hooksResetAt ? Math.max(0, Math.ceil((new Date(user.hooksResetAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : null;
+
   const progressColor = hooksPercent > 80
     ? "bg-gradient-to-r from-amber-500 to-red-500"
     : hooksPercent > 50
@@ -62,224 +65,109 @@ export default async function DashboardPage() {
     <div>
       {/* Trial expiry banner */}
       {trialExpired && (
-        <div className="bg-red-900/30 border border-red-800 rounded-lg p-4 mb-6 animate-fade-in">
-          <p className="text-sm text-red-300 font-medium">Your free trial has ended.</p>
-          <p className="text-xs text-red-400 mt-1">
-            Subscribe to continue generating hooks and managing leads.
+        <div className="border-b border-amber-800/60 bg-amber-950/30 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 mb-6 animate-fade-in">
+          <p className="text-sm text-amber-300">
+            Your free trial has ended.{" "}
+            <Link href="/#pricing" className="underline underline-offset-2 hover:text-amber-200 font-medium">View plans →</Link>
           </p>
-          <Link
-            href="/#pricing"
-            className="inline-block mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            View plans
-          </Link>
         </div>
       )}
 
       {/* Trial countdown banner */}
       {isOnTrial && !trialExpired && trialDaysLeft <= 3 && (
-        <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-4 mb-6 animate-fade-in">
-          <p className="text-sm text-amber-300 font-medium">
-            {trialDaysLeft === 1 ? "1 day" : `${trialDaysLeft} days`} left on your free trial
+        <div className="border-b border-amber-800/40 bg-amber-950/20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 mb-6 animate-fade-in">
+          <p className="text-sm text-amber-300/80">
+            {trialDaysLeft} {trialDaysLeft === 1 ? "day" : "days"} left on your free trial.{" "}
+            <Link href="/#pricing" className="underline underline-offset-2 hover:text-amber-200">View plans →</Link>
           </p>
-          <p className="text-xs text-amber-400 mt-1">
-            Subscribe now to keep access to your hooks and leads.
-          </p>
-          <Link
-            href="/#pricing"
-            className="inline-block mt-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            Subscribe
-          </Link>
         </div>
       )}
-
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Link
-          href="/app/hooks"
-          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg shadow-[0_0_20px_rgba(139,92,246,0.2)] hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all duration-200"
-        >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          Generate Hooks
-        </Link>
-      </div>
 
       {/* First-run welcome for new users */}
       {isNewUser && (
-        <div className="bg-gradient-to-br from-violet-900/20 to-zinc-900 border border-violet-800/40 rounded-xl p-6 mb-8 animate-scale-in">
-          <h2 className="text-lg font-semibold mb-2">Welcome to GetSignalHooks</h2>
-          <p className="text-sm text-zinc-400 mb-4">
-            Get started in 2 steps:
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Link
-              href="/app/hooks"
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 hover:border-violet-600/50 transition-all duration-200 group"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/10 text-violet-400 text-sm font-bold mb-3">1</div>
-              <h3 className="font-medium mb-1 group-hover:text-violet-400 transition-colors">Generate your first hooks</h3>
-              <p className="text-xs text-zinc-500">
-                Paste any company URL and get research-backed outbound hooks in seconds.
-              </p>
+        <div className="border border-[#252830] bg-[#14161a] rounded-xl p-6 mb-6 animate-scale-in">
+          <p className="text-xs text-[#878a8f] uppercase tracking-widest mb-2 font-medium">Get started</p>
+          <h2 className="text-base font-semibold mb-1">Welcome to GetSignalHooks</h2>
+          <p className="text-sm text-[#878a8f] mb-4">Two steps to your first outbound hook.</p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Link href="/app/hooks" className="inline-flex items-center gap-2 text-sm text-[#eceae6] hover:text-white transition-colors group">
+              <span className="font-mono text-[#878a8f] text-xs">01</span>
+              Generate your first hooks
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"><path d="m9 18 6-6-6-6"/></svg>
             </Link>
-            <Link
-              href="/app/leads"
-              className="bg-zinc-900 border border-zinc-700 rounded-xl p-5 hover:border-violet-600/50 transition-all duration-200 group"
-            >
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/10 text-violet-400 text-sm font-bold mb-3">2</div>
-              <h3 className="font-medium mb-1 group-hover:text-violet-400 transition-colors">Import your leads</h3>
-              <p className="text-xs text-zinc-500">
-                Upload a CSV from Apollo, Clay, or any source to generate hooks at scale.
-              </p>
+            <span className="hidden sm:block text-[#252830] self-center">|</span>
+            <Link href="/app/leads" className="inline-flex items-center gap-2 text-sm text-[#eceae6] hover:text-white transition-colors group">
+              <span className="font-mono text-[#878a8f] text-xs">02</span>
+              Import your leads
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"><path d="m9 18 6-6-6-6"/></svg>
             </Link>
           </div>
         </div>
       )}
 
-      {/* Stats grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Hooks Used */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="h-4 w-4 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
-              Hooks Used
-            </p>
-          </div>
-          <div className="flex items-baseline gap-1.5">
-            <p className="text-2xl font-bold">{hooksUsed}</p>
-            <span className="text-sm text-zinc-500 font-normal">
-              / {limits.hooksPerMonth}
-            </span>
-            <span className="ml-auto text-xs text-zinc-600 font-medium">
-              {hooksPercent}%
-            </span>
-          </div>
-          <div className="mt-2 h-2 bg-zinc-800 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${progressColor}`}
-              style={{ width: `${hooksPercent}%` }}
-            />
-          </div>
+      {/* Usage strip */}
+      <div className="border border-[#252830] bg-[#14161a] rounded-xl p-5 mb-4 animate-stagger-1">
+        <div className="flex items-baseline justify-between mb-2">
+          <span className="text-xs text-[#878a8f] font-medium">Hooks this month</span>
+          <span className="text-sm font-semibold tabular-nums">
+            {hooksUsed}<span className="text-[#878a8f] font-normal"> / {limits.hooksPerMonth}</span>
+          </span>
         </div>
-
-        {/* Total Leads */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="h-4 w-4 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-            </svg>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
-              Total Leads
-            </p>
-          </div>
-          <p className="text-2xl font-bold">{leadCount?.count ?? 0}</p>
-          {(leadCount?.count ?? 0) === 0 && (
-            <Link href="/app/leads" className="text-xs text-violet-400 hover:text-violet-300 mt-1 inline-block transition-colors">
-              Import your first leads
-            </Link>
-          )}
+        <div className="h-1.5 bg-[#252830] rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-700 ${progressColor}`} style={{ width: `${hooksPercent}%` }} />
         </div>
-
-        {/* Emails Sent */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="h-4 w-4 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-            </svg>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
-              Emails Sent (30d)
-            </p>
-          </div>
-          <p className="text-2xl font-bold">{emailsSent?.count ?? 0}</p>
-        </div>
-
-        {/* Plan */}
-        <div className={`bg-zinc-900 border rounded-xl p-5 ${isOnTrial && !trialExpired ? "border-l-amber-500 border-l-2 border-zinc-800" : "border-zinc-800"}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <svg className="h-4 w-4 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
-            </svg>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">
-              Plan
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-0.5 text-sm font-bold text-emerald-400 capitalize">
-              {tierId}
-            </span>
-            {isOnTrial && !trialExpired && (
-              <span className="text-xs bg-amber-900/40 text-amber-400 px-2 py-0.5 rounded-full border border-amber-800/50">
-                Trial
-              </span>
-            )}
-          </div>
-          {tierId !== "concierge" && (
-            <Link
-              href="/#pricing"
-              className="text-xs text-violet-400 hover:text-violet-300 mt-1.5 inline-block transition-colors"
-            >
-              Upgrade
-            </Link>
+        <div className="flex items-center justify-between mt-2">
+          <span className="text-[11px] text-[#878a8f]">{hooksPercent}% used</span>
+          {resetDaysLeft !== null && (
+            <span className="text-[11px] text-[#878a8f]">Resets in {resetDaysLeft} {resetDaysLeft === 1 ? "day" : "days"}</span>
           )}
         </div>
       </div>
 
-      {/* Quick actions */}
-      <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link
-          href="/app/hooks"
-          className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-violet-500/30 hover:shadow-[0_2px_16px_rgba(139,92,246,0.06)] transition-all duration-200 group"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/10 text-violet-400 transition-colors group-hover:bg-violet-600/15">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <h3 className="font-medium group-hover:text-violet-300 transition-colors">Generate Hooks</h3>
+      {/* Inline stats row */}
+      <div className="flex items-center gap-6 px-1 mb-8 animate-stagger-2">
+        <div>
+          <p className="text-xs text-[#878a8f] mb-0.5">Leads</p>
+          <p className="text-sm font-semibold tabular-nums">{leadCount?.count ?? 0}</p>
+        </div>
+        <div className="h-6 w-px bg-[#252830]" />
+        <div>
+          <p className="text-xs text-[#878a8f] mb-0.5">Emails (30d)</p>
+          <p className="text-sm font-semibold tabular-nums">{emailsSent?.count ?? 0}</p>
+        </div>
+        <div className="h-6 w-px bg-[#252830]" />
+        <div className="flex items-center gap-2">
+          <div>
+            <p className="text-xs text-[#878a8f] mb-0.5">Plan</p>
+            <p className="text-sm font-semibold capitalize">{tierId}</p>
           </div>
-          <p className="text-sm text-zinc-500">
-            Enter a company URL and get evidence-based hooks instantly.
-          </p>
+          {isOnTrial && !trialExpired && <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">Trial</span>}
+          {tierId !== "concierge" && <Link href="/#pricing" className="text-[11px] text-violet-400 hover:text-violet-300">Upgrade →</Link>}
+        </div>
+      </div>
+
+      {/* Primary action */}
+      <div className="mb-3 animate-stagger-3">
+        <Link href="/app/hooks" className="flex items-center justify-between bg-[#14161a] border border-[#252830] hover:border-violet-500/30 rounded-xl px-5 py-4 transition-colors group">
+          <div>
+            <p className="text-sm font-semibold group-hover:text-white transition-colors">Generate Hooks</p>
+            <p className="text-xs text-[#878a8f] mt-0.5">Paste a company URL and get evidence-backed hooks in seconds.</p>
+          </div>
+          <span className="bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 ml-4">
+            Start
+          </span>
         </Link>
-        <Link
-          href="/app/leads"
-          className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-violet-500/30 hover:shadow-[0_2px_16px_rgba(139,92,246,0.06)] transition-all duration-200 group"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/10 text-violet-400 transition-colors group-hover:bg-violet-600/15">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
-              </svg>
-            </div>
-            <h3 className="font-medium group-hover:text-violet-300 transition-colors">Manage Leads</h3>
-          </div>
-          <p className="text-sm text-zinc-500">
-            Upload, view, and manage your lead pipeline.
-          </p>
+      </div>
+
+      {/* Secondary actions */}
+      <div className="flex flex-col border border-[#252830] rounded-xl overflow-hidden animate-stagger-4">
+        <Link href="/app/leads" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#1c1e20] transition-colors group border-b border-[#252830]">
+          <span className="text-sm text-[#878a8f] group-hover:text-[#eceae6] transition-colors">Manage Leads</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#878a8f]"><path d="m9 18 6-6-6-6"/></svg>
         </Link>
-        <Link
-          href="/app/analytics"
-          className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-violet-500/30 hover:shadow-[0_2px_16px_rgba(139,92,246,0.06)] transition-all duration-200 group"
-        >
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600/10 text-violet-400 transition-colors group-hover:bg-violet-600/15">
-              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-              </svg>
-            </div>
-            <h3 className="font-medium group-hover:text-violet-300 transition-colors">View Analytics</h3>
-          </div>
-          <p className="text-sm text-zinc-500">
-            Track hook performance, email engagement, and ROI.
-          </p>
+        <Link href="/app/analytics" className="flex items-center justify-between px-5 py-3.5 hover:bg-[#1c1e20] transition-colors group">
+          <span className="text-sm text-[#878a8f] group-hover:text-[#eceae6] transition-colors">View Analytics</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#878a8f]"><path d="m9 18 6-6-6-6"/></svg>
         </Link>
       </div>
     </div>

@@ -63,7 +63,7 @@ export function HookForm({
 }: HookFormProps) {
   return (
     <form id="hooks-form" onSubmit={onSubmit} className="mb-8">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
+      <div className="bg-[#14161a] border border-[#252830] rounded-xl p-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
           <Input
             type="text"
@@ -94,7 +94,7 @@ export function HookForm({
                   localStorage.setItem("gsh_targetRole", val);
                 }
               }}
-              className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors appearance-none"
+              className="w-full bg-[#0e0f10] border border-[#252830] rounded-lg px-4 py-2.5 text-[#eceae6] focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors appearance-none"
             >
               <option value="Not sure / Any role">Not sure / Any role</option>
               <option value="VP Sales">VP Sales</option>
@@ -117,26 +117,26 @@ export function HookForm({
                   />
                 </div>
                 <div className="mt-2">
-                  <label className="block text-xs text-zinc-500 mb-1">What pain does this role feel?</label>
+                  <label className="block text-xs text-[#878a8f] mb-1">What pain does this role feel?</label>
                   <textarea
                     value={customPain}
                     onChange={(e) => setCustomPain(e.target.value.slice(0, 200))}
                     placeholder="e.g. Spends too much time on unqualified leads"
                     maxLength={200}
                     rows={2}
-                    className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors resize-none"
+                    className="w-full bg-[#0e0f10] border border-[#252830] rounded-lg px-3 py-2 text-sm text-[#eceae6] focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors resize-none"
                   />
                   <span className="text-[10px] text-zinc-600">{customPain.length}/200</span>
                 </div>
                 <div className="mt-2">
-                  <label className="block text-xs text-zinc-500 mb-1">What outcome can you promise?</label>
+                  <label className="block text-xs text-[#878a8f] mb-1">What outcome can you promise?</label>
                   <input
                     type="text"
                     value={customPromise}
                     onChange={(e) => setCustomPromise(e.target.value.slice(0, 80))}
                     placeholder="e.g. A 10-min audit of your outbound signals"
                     maxLength={80}
-                    className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors"
+                    className="w-full bg-[#0e0f10] border border-[#252830] rounded-lg px-3 py-2 text-sm text-[#eceae6] focus:outline-none focus:ring-2 focus:ring-violet-500/40 focus:border-violet-500/60 transition-colors"
                   />
                   <span className="text-[10px] text-zinc-600">{customPromise.length}/80</span>
                 </div>
@@ -144,13 +144,13 @@ export function HookForm({
             )}
           </div>
         </div>
-        <p className="text-xs text-zinc-500 mb-4">
+        <p className="text-xs text-[#878a8f] mb-4">
           Best results: use a press page, funding article (TechCrunch, Reuters), or company newsroom. Generic homepages rarely have enough signal.
         </p>
         <button
           type="submit"
           disabled={loading || (!url && !companyName)}
-          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg shadow-[0_0_20px_rgba(139,92,246,0.2)] hover:shadow-[0_0_30px_rgba(139,92,246,0.3)] transition-all duration-200"
+          className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-semibold px-6 py-2.5 rounded-lg transition-colors duration-200"
         >
           {loading && (
             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">

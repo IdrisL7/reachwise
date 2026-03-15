@@ -27,7 +27,7 @@ export function MobileMoreMenu({ items }: { items: NavItem[] }) {
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors"
+        className="px-2 py-1.5 text-xs text-[#878a8f] hover:text-zinc-100 rounded-md hover:bg-[#1c1e20] transition-colors"
       >
         More
         <svg className="inline-block ml-0.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -36,13 +36,13 @@ export function MobileMoreMenu({ items }: { items: NavItem[] }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-48 bg-zinc-900 border border-zinc-700/60 rounded-xl shadow-2xl py-1 z-50 animate-scale-in">
+        <div className="absolute right-0 top-full mt-1 w-48 bg-[#14161a] border border-[#252830] rounded-xl shadow-2xl py-1 z-50 animate-scale-in">
           {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="block px-4 py-2.5 text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 transition-colors"
+              className="block px-4 py-2.5 text-sm text-[#878a8f] hover:text-zinc-100 hover:bg-[#1c1e20] transition-colors"
             >
               {item.label}
             </Link>

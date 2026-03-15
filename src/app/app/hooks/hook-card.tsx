@@ -154,7 +154,7 @@ export function HookCard({
 
   return (
     <div
-      className={`bg-zinc-900 border border-zinc-800 rounded-xl p-5 border-l-[3px] ${angleBorderColor[hook.angle] || "border-l-zinc-700"} transition-all duration-200 hover:border-zinc-700 animate-slide-in-bottom`}
+      className={`bg-[#14161a] border border-[#252830] rounded-xl p-5 border-l-[3px] ${angleBorderColor[hook.angle] || "border-l-zinc-700"} transition-all duration-200 hover:border-[#353840] animate-slide-in-bottom`}
       style={{ animationDelay: `${index * 80}ms` }}
     >
       {/* Badges row */}
@@ -236,14 +236,14 @@ export function HookCard({
       <p className="text-zinc-200 mb-3">{displayText}</p>
 
       {hook.promise && (
-        <p className="text-xs text-emerald-400/80 mt-1 mb-3 flex items-center gap-1.5">
-          <span className="font-medium">🎯 Promise:</span> {hook.promise}
+        <p className="text-xs text-[#878a8f] mt-1 mb-3 flex items-center gap-1.5">
+          <span className="font-medium text-[#eceae6]">Promise:</span> {hook.promise}
         </p>
       )}
 
       {/* Evidence */}
       {hook.source_snippet && (
-        <div className="text-xs text-zinc-500 italic border-l-2 border-violet-500/30 pl-3 mb-3 bg-violet-500/[0.03] py-2 rounded-r">
+        <div className="text-xs text-[#878a8f] italic border-l-2 border-amber-500/30 pl-3 mb-3 bg-amber-500/[0.03] py-2 rounded-r">
           <p>{hook.source_snippet}</p>
           {hook.source_url && (
             <a
@@ -259,7 +259,7 @@ export function HookCard({
       )}
 
       {/* Action buttons */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-800">
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#252830]">
         <button
           onClick={() => onCopyHook(hook.text, index)}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
@@ -300,11 +300,11 @@ export function HookCard({
 
       {/* Generated email */}
       {generatedEmails[index] && (
-        <div className="mt-3 bg-black border border-zinc-800 rounded-lg p-4 animate-slide-in-bottom">
-          <p className="text-xs text-zinc-500 mb-1">Subject:</p>
-          <p className="text-sm text-zinc-200 font-medium mb-3">{generatedEmails[index].subject}</p>
-          <p className="text-xs text-zinc-500 mb-1">Body:</p>
-          <p className="text-sm text-zinc-300 whitespace-pre-line">{generatedEmails[index].body}</p>
+        <div className="mt-3 bg-[#0e0f10] border border-[#252830] rounded-lg p-4 animate-slide-in-bottom">
+          <p className="text-xs text-[#878a8f] mb-1">Subject:</p>
+          <p className="text-sm text-[#eceae6] font-medium mb-3">{generatedEmails[index].subject}</p>
+          <p className="text-xs text-[#878a8f] mb-1">Body:</p>
+          <p className="text-sm text-[#eceae6] whitespace-pre-line">{generatedEmails[index].body}</p>
         </div>
       )}
     </div>

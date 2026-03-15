@@ -43,12 +43,12 @@ export default async function AppLayout({
   const tierId = freshUser?.tierId || session.user.tierId;
 
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0e0f10] text-[#eceae6] font-[family-name:var(--font-geist-sans)]">
       {/* Top nav */}
-      <header className="border-b border-zinc-800 bg-zinc-900/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-[#252830] bg-[#0e0f10] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-14">
-          <Link href="/app" className="text-lg font-bold text-emerald-400 mr-4 sm:mr-8 shrink-0">
-            GSH
+          <Link href="/app" className="font-mono text-sm tracking-tight text-zinc-100 mr-4 sm:mr-8 shrink-0">
+            GSH<span className="text-amber-500">.</span>
           </Link>
 
           {/* Desktop nav — all items */}
@@ -57,7 +57,7 @@ export default async function AppLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className="px-3 py-1.5 text-sm text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                className="px-3 py-1.5 text-sm text-[#878a8f] hover:text-[#eceae6] aria-[current=page]:text-white aria-[current=page]:bg-[#1c1e20] rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
               >
                 {item.label}
               </Link>
@@ -70,7 +70,7 @@ export default async function AppLayout({
               <Link
                 key={item.href}
                 href={item.href}
-                className="px-2 py-1.5 text-xs text-zinc-400 hover:text-zinc-100 rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                className="px-2 py-1.5 text-xs text-[#878a8f] hover:text-[#eceae6] aria-[current=page]:text-white aria-[current=page]:bg-[#1c1e20] rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
               >
                 {item.label}
               </Link>
@@ -79,10 +79,10 @@ export default async function AppLayout({
           </nav>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
-            <span className="text-xs text-zinc-500 hidden sm:block">
+            <span className="text-xs text-[#878a8f] hidden sm:block">
               {session.user.email}
             </span>
-            <span className="text-xs bg-emerald-900/50 text-emerald-400 border border-emerald-800 px-2 py-0.5 rounded capitalize">
+            <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded capitalize">
               {tierId}
             </span>
             {tierId !== "concierge" && (
