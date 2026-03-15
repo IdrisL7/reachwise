@@ -101,17 +101,21 @@ function Spinner({ className = "h-4 w-4" }: { className?: string }) {
 }
 
 // Pre-generated sample hooks for the demo (no API call needed)
-const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string; sourceUrl: string } = {
+// Shows the full 4-part structure: trigger → bridge → question → promise
+// Targeting VP Sales at Gong, pitch context: "We help outbound teams book more demos using buying signals"
+const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: string; sourceUrl: string; targetRole: string; pitchContext: string } = {
   company: "Gong",
   sourceUrl: "https://getlatka.com/blog/gong-revenue/",
+  targetRole: "VP Sales",
+  pitchContext: "We help outbound teams turn more first replies into booked demos without doubling headcount.",
   hooks: [
-    'Gong grew ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. Is the current retention story still carrying that trajectory, or has net expansion started to slow?',
-    'You crossed 4,000 customers by 2022. At that scale, are expansion plays from the existing base outperforming new logo acquisition — or are both still running neck and neck?',
-    'Gong is positioned as Revenue Intelligence rather than a sales tool. Does that framing help with economic buyer conversations — or does it slow deals when the champions are quota-carrying reps?',
+    "Gong scaled ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. With that kind of trajectory, is net revenue expansion from existing accounts keeping pace with new logo acquisition, or is one starting to pull ahead? Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
+    "You crossed 4,000 customers by 2022 at an implied ~$71K ACV. At that density, are your reps surfacing expansion signals before the QBR — or are those conversations still reactive? We can show you how teams like yours get ahead of that window.",
+    "Gong positions itself as Revenue Intelligence rather than a sales tool, which means your champions are often quota-carrying reps while your economic buyers are CFOs. Does that split create friction in your deal cycles, or has it helped you land bigger contracts? I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
   ],
   structured: [
     {
-      hook: 'Gong grew ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. Is the current retention story still carrying that trajectory, or has net expansion started to slow?',
+      hook: "Gong scaled ARR from $5M to $285M between 2018 and 2022 — a 57x run in four years. With that kind of trajectory, is net revenue expansion from existing accounts keeping pace with new logo acquisition, or is one starting to pull ahead? Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
       angle: "trigger",
       confidence: "high",
       evidence_tier: "A",
@@ -121,11 +125,11 @@ const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: st
       source_url: "https://getlatka.com/blog/gong-revenue/",
       news_item: 1,
       psych_mode: "curiosity_gap",
-      why_this_works: "ARR trajectory creates a natural expansion question",
-      promise: "If you're in the middle of a net revenue retention push, I can show you how two teams at a similar stage rewired their expansion motion without adding headcount.",
+      why_this_works: "ARR trajectory creates a natural expansion question for a VP Sales buyer",
+      promise: "Happy to show you how two teams at a similar stage used buying signals to shift that balance without adding headcount.",
     },
     {
-      hook: 'You crossed 4,000 customers by 2022. At that scale, are expansion plays from the existing base outperforming new logo acquisition — or are both still running neck and neck?',
+      hook: "You crossed 4,000 customers by 2022 at an implied ~$71K ACV. At that density, are your reps surfacing expansion signals before the QBR — or are those conversations still reactive? We can show you how teams like yours get ahead of that window.",
       angle: "risk",
       confidence: "high",
       evidence_tier: "A",
@@ -135,11 +139,11 @@ const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: st
       source_url: "https://getlatka.com/blog/gong-revenue/",
       news_item: 2,
       psych_mode: "relevance",
-      why_this_works: "scale milestone surfaces a strategic tension",
-      promise: "I have a framework that's helped teams at your scale identify the top accounts most likely to expand before the QBR conversation — worth a 15-minute look.",
+      why_this_works: "Scale milestone surfaces a proactive vs reactive tension that resonates with VP Sales",
+      promise: "We can show you how teams like yours get ahead of that window.",
     },
     {
-      hook: 'Gong is positioned as Revenue Intelligence rather than a sales tool. Does that framing help with economic buyer conversations — or does it slow deals when the champions are quota-carrying reps?',
+      hook: "Gong positions itself as Revenue Intelligence rather than a sales tool, which means your champions are often quota-carrying reps while your economic buyers are CFOs. Does that split create friction in your deal cycles, or has it helped you land bigger contracts? I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
       angle: "tradeoff",
       confidence: "high",
       evidence_tier: "A",
@@ -149,8 +153,8 @@ const SAMPLE_HOOKS: { hooks: string[]; structured: StructuredHook[]; company: st
       source_url: "https://getlatka.com/blog/gong-revenue/",
       news_item: 3,
       psych_mode: "tradeoff_frame",
-      why_this_works: "positioning tradeoff is a genuine internal tension for the buyer",
-      promise: "Happy to show you how a peer with the same positioning reframed their CFO pitch in two slides and cut deal cycles by 30%.",
+      why_this_works: "Positioning tradeoff is a genuine internal tension — the promise offers a concrete next step",
+      promise: "I've mapped how three teams in the same position rewired their multi-threading playbook — worth 15 minutes if it resonates.",
     },
   ],
 };
@@ -159,7 +163,8 @@ export function DemoSection() {
   const [companyUrl, setCompanyUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [resolvedCompanyLabel, setResolvedCompanyLabel] = useState<string | null>(null);
-  const [pitchContext, setPitchContext] = useState("");
+  const [pitchContext, setPitchContext] = useState(SAMPLE_HOOKS.pitchContext);
+  const [targetRole, setTargetRole] = useState(SAMPLE_HOOKS.targetRole);
   const [mode, setMode] = useState<"single" | "batch">("single");
   const [showingSample, setShowingSample] = useState(true);
 
@@ -207,6 +212,7 @@ export function DemoSection() {
           url: params.url,
           companyName: params.companyName,
           context: params.context?.trim() || undefined,
+          targetRole: targetRole !== "Any role" ? targetRole : undefined,
         }),
       });
 
@@ -501,10 +507,32 @@ export function DemoSection() {
                 </div>
 
                 <div>
+                  <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
+                    Who are you emailing?
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {["Any role", "VP Sales", "RevOps", "SDR Manager", "Marketing", "Founder/CEO"].map((role) => (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setTargetRole(role)}
+                        className={`rounded-md px-3 py-1.5 text-[0.75rem] font-medium border transition-all duration-200 ${
+                          targetRole === role
+                            ? "bg-violet-600/20 border-violet-500/50 text-violet-300"
+                            : "bg-[#111119] border-zinc-700/40 text-zinc-400 hover:border-violet-500/30 hover:text-zinc-200"
+                        }`}
+                      >
+                        {role}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
                   <div className="mb-2 flex items-baseline justify-between gap-3">
                     <label className="block text-[0.8125rem] font-medium text-zinc-400">
-                      Pitch context{" "}
-                      <span className="text-zinc-600">(optional)</span>
+                      Your pitch{" "}
+                      <span className="text-zinc-600">(what do you sell?)</span>
                     </label>
                   </div>
                   <div className="mb-2.5 flex flex-wrap items-center gap-1.5">

@@ -29,7 +29,7 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#080808]/80 backdrop-blur-xl">
       <div className="mx-auto flex h-[4.25rem] max-w-[90rem] items-center justify-between px-6 lg:px-10">
         <Link href="/" className="flex items-center gap-2.5">
-          <Image src="/logo-getsignalhooks.svg" alt="GetSignalHooks" width={32} height={32} />
+          <Image src="/logo.png" alt="GetSignalHooks" width={32} height={32} className="rounded-full" />
           <span className="text-[1rem] font-bold tracking-[-0.01em] text-white">
             GetSignalHooks
           </span>
