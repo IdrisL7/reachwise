@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
+import Image from "next/image";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SignOutButton } from "@/components/sign-out-button";
 import { MobileMoreMenu } from "./mobile-more-menu";
@@ -47,8 +48,15 @@ export default async function AppLayout({
       {/* Top nav */}
       <header className="border-b border-[#252830] bg-[#0e0f10] sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex items-center h-14">
-          <Link href="/app" className="font-mono text-sm tracking-tight text-zinc-100 mr-4 sm:mr-8 shrink-0">
-            GSH<span className="text-amber-500">.</span>
+          <Link href="/app" className="mr-4 sm:mr-8 shrink-0">
+            <Image
+              src="/logo.png"
+              alt="GetSignalHooks"
+              width={32}
+              height={32}
+              className="rounded-md"
+              priority
+            />
           </Link>
 
           {/* Desktop nav — all items */}
