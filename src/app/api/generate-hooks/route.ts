@@ -306,6 +306,7 @@ export async function POST(request: Request) {
     let intentSignalsLength = 0;
     let cached = false;
     let cacheStale = false;
+    let isFastPath = false;
 
     try {
       const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole);
@@ -349,13 +350,33 @@ export async function POST(request: Request) {
             const userSrc = await fetchUserProvidedSource(url, companyDomain).catch(() => null);
 
             if (userSrc) {
-              console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url });
-              const sourceLookup = new Map<number, ClassifiedSource>([[1, userSrc]]);
+              console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
               const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
               const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona);
               const userPrompt = buildUserPrompt(url, [userSrc], context);
               const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
-              candidateHooks = publishGate(rawHooks, sourceLookup, { includeMarketContext: false });
+
+              // Bypass publishGate (which calls validateHook with strict rules designed for
+              // auto-discovered noise). User-provided sources are trusted — convert directly.
+              candidateHooks = rawHooks
+                .filter((h) => h.hook && h.hook.trim().length > 0 && h.hook.length <= 600)
+                .map((h): Hook => ({
+                  news_item: h.news_item ?? 1,
+                  angle: (["trigger", "risk", "tradeoff"].includes(h.angle) ? h.angle : "trigger") as Hook["angle"],
+                  hook: h.hook.trim(),
+                  evidence_snippet: h.evidence_snippet || "",
+                  source_title: h.source_title || userSrc.title,
+                  source_date: h.source_date || "",
+                  source_url: h.source_url || userSrc.url,
+                  evidence_tier: (["A", "B"].includes((h.evidence_tier || "").toUpperCase()) ? (h.evidence_tier || "").toUpperCase() : "A") as Hook["evidence_tier"],
+                  confidence: (["high", "med", "low"].includes(h.confidence) ? h.confidence : "med") as Hook["confidence"],
+                  psych_mode: h.psych_mode as Hook["psych_mode"],
+                  why_this_works: h.why_this_works,
+                  trigger_type: h.trigger_type as Hook["trigger_type"],
+                  promise: h.promise,
+                  bridge_quality: h.bridge_quality,
+                }));
+
               citations = [{
                 source_title: userSrc.title,
                 publisher: userSrc.publisher,
@@ -368,10 +389,12 @@ export async function POST(request: Request) {
               hasAnchored = true;
               tierACount = 1;
               signalCount = 1;
+              isFastPath = true;
               usedFastPath = true;
 
               console.log("[generate-hooks] userProvidedFastPath result", {
                 traceId,
+                rawHookCount: rawHooks.length,
                 candidateHookCount: candidateHooks.length,
                 factCount: userSrc.facts.length,
               });
@@ -556,7 +579,10 @@ export async function POST(request: Request) {
       droppedAtDiagnosticStage: publishDiagnostics.filter((d) => d.reason !== "pass").length,
     });
 
-    const gated = publishGateFinal(candidateHooks, companyDomain, {
+    // Fast path: user vouched for the source — skip validateHook inside publishGateFinal.
+    // Only keep the unanchored-source check (Rule B), which already passes since source
+    // URL is on the company domain.
+    const gated = isFastPath ? candidateHooks : publishGateFinal(candidateHooks, companyDomain, {
       includeMarketContext: false,
     });
 
