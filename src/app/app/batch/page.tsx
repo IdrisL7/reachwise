@@ -1,427 +1,448 @@
+
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import React, { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Layers,
+  UploadCloud,
+  Play,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Download,
+  XCircle,
+  ChevronDown,
+  RefreshCcw,
+} from 'lucide-react';
 
-interface Hook {
-  hook: string;
-  angle: string;
-  confidence: string;
-  evidence_tier: string;
-  evidence_snippet?: string;
-  source_url?: string;
-  source_title?: string;
+// Mock data types for demonstration
+interface BatchItem {
+  id: string;
+  domain: string;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  hook?: string;
+  confidence?: number;
+  error?: string;
 }
 
-interface BatchResult {
-  url: string;
-  hooks: Hook[];
-  error: string | null;
-  suggestion?: string;
-  lowSignal?: boolean;
-  hookVariants?: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }>;
-  intent?: { score: number; temperature: string; signalsCount: number } | null;
-}
+const BatchMode = () => {
+  const [processingState, setProcessingState] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [batchItems, setBatchItems] = useState<BatchItem[]>([]);
+  const [processedCount, setProcessedCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState('VP Sales / Head of Sales');
 
-export default function BatchPage() {
-  const [urlsText, setUrlsText] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [results, setResults] = useState<BatchResult[]>([]);
-  const [copiedIdx, setCopiedIdx] = useState<string | null>(null);
-  const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
-  const [progress, setProgress] = useState(0);
-  const [upgradePrompt, setUpgradePrompt] = useState<{
-    title: string; message: string; cta: string; href: string;
-  } | null>(null);
+  // --- Mock File Upload Logic ---
+  const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setUploadedFile(file);
+      setProcessingState('uploading');
+      setError(null);
 
-  const urls = urlsText
-    .split(/[\n,]/)
-    .map((u) => u.trim())
-    .filter((u) => u.length > 0);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        // In a real app, you'd parse CSV/Excel here
+        // For now, let's mock some batch items
+        const mockDomains = text.split('\n').filter(line => line.trim() !== '').map((_, i) => `example${i + 1}.com`);
+        if (mockDomains.length > 0) {
+          const items: BatchItem[] = mockDomains.map((domain, index) => ({
+            id: `item-${index}`,
+            domain,
+            status: 'pending',
+          }));
+          setBatchItems(items);
+          setProcessingState('idle'); // Back to idle after "upload" but before "run"
+        } else {
+          setError("CSV/Excel must contain at least one domain.");
+          setProcessingState('error');
+        }
+      };
+      reader.onerror = () => {
+        setError("Failed to read file.");
+        setProcessingState('error');
+      };
+      reader.readAsText(file); // Only for text files like CSV. For Excel, use a library like 'xlsx'.
+    }
+  }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (urls.length === 0) return;
+  // --- Mock Batch Processing Logic ---
+  const runBatchAnalysis = useCallback(() => {
+    if (!uploadedFile || batchItems.length === 0) {
+      setError("Please upload a file with domains first.");
+      setProcessingState('error');
+      return;
+    }
 
-    setLoading(true);
-    setError("");
-    setUpgradePrompt(null);
-    setResults([]);
-    setProgress(0);
+    setProcessingState('processing');
+    setProcessedCount(0);
+    setError(null);
 
-    let progressInterval: ReturnType<typeof setInterval> | undefined;
+    let currentItemIndex = 0;
+    const interval = setInterval(() => {
+      if (currentItemIndex < batchItems.length) {
+        setBatchItems(prevItems => {
+          const updatedItems = [...prevItems];
+          const item = { ...updatedItems[currentItemIndex] };
 
-    try {
-      progressInterval = setInterval(() => {
-        setProgress((prev) => {
-          const target = 95;
-          const step = (target - prev) * 0.08;
-          return prev + Math.max(step, 0.5);
+          // Simulate API call and result
+          if (Math.random() > 0.1) { // 90% success rate
+            item.status = 'completed';
+            item.hook = `A personalized hook for ${item.domain} based on role ${selectedRole}.`;
+            item.confidence = Math.floor(Math.random() * 30) + 70; // 70-99% confidence
+          } else {
+            item.status = 'failed';
+            item.error = `Failed to generate hook for ${item.domain}.`;
+          }
+
+          updatedItems[currentItemIndex] = item;
+          return updatedItems;
         });
-      }, 500);
-
-      const res = await fetch("/api/generate-hooks-batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: urls.map((url) => ({ url })) }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const code = data.code as string | undefined;
-        if (code === "TRIAL_EXPIRED") {
-          setUpgradePrompt({
-            title: "Your free trial has ended",
-            message: "Subscribe to keep generating hooks.",
-            cta: "View plans",
-            href: "/#pricing",
-          });
-          return;
-        }
-        if (code === "TIER_LIMIT") {
-          setUpgradePrompt({
-            title: data.message || "Batch limit reached",
-            message: "Upgrade your plan for larger batches or more hooks.",
-            cta: "Upgrade",
-            href: "/#pricing",
-          });
-          return;
-        }
-        throw new Error(data.error || data.message || "Batch generation failed");
+        setProcessedCount(prev => prev + 1);
+        currentItemIndex++;
+      } else {
+        clearInterval(interval);
+        setProcessingState('completed');
       }
+    }, 500); // Simulate processing each item every 500ms
+  }, [uploadedFile, batchItems, selectedRole]);
 
-      setResults(data.results || []);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      if (progressInterval) clearInterval(progressInterval);
-      setLoading(false);
-      setProgress(100);
-      setTimeout(() => setProgress(0), 500);
-    }
-  }
+  const totalItems = batchItems.length;
+  const progressPercentage = totalItems > 0 ? (processedCount / totalItems) * 100 : 0;
 
-  async function copyAllHooks(result: BatchResult, idx: number) {
-    const text = result.hooks
-      .map((h) => {
-        let line = h.hook;
-        if (h.evidence_snippet) line += `\nEvidence: ${h.evidence_snippet}`;
-        if (h.source_url) line += `\nSource: ${h.source_url}`;
-        return line;
-      })
-      .join("\n\n---\n\n");
+  // --- Reset Function ---
+  const resetWorkflow = useCallback(() => {
+    setProcessingState('idle');
+    setUploadedFile(null);
+    setBatchItems([]);
+    setProcessedCount(0);
+    setError(null);
+  }, []);
 
-    await navigator.clipboard.writeText(text);
-    setCopiedIdx(`all-${idx}`);
-    setTimeout(() => setCopiedIdx(null), 2000);
-  }
+  // --- Download Results ---
+  const downloadResults = useCallback(() => {
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + "Domain,Status,Confidence,Hook,Error\n"
+      + batchItems.map(item =>
+          `"${item.domain}",` +
+          `"${item.status}",` +
+          `"${item.confidence ? item.confidence.toFixed(0) + '%' : 'N/A'}",` +
+          `"${item.hook ? item.hook.replace(/"/g, '""') : 'N/A'}",` +
+          `"${item.error ? item.error.replace(/"/g, '""') : 'N/A'}"`
+        ).join('\n');
 
-  async function copySingleHook(hook: Hook, key: string, overrideText?: string) {
-    let text = overrideText || hook.hook;
-    if (hook.evidence_snippet) text += `\nEvidence: ${hook.evidence_snippet}`;
-    if (hook.source_url) text += `\nSource: ${hook.source_url}`;
-    await navigator.clipboard.writeText(text);
-    setCopiedIdx(key);
-    setTimeout(() => setCopiedIdx(null), 2000);
-  }
-
-  async function exportCsv() {
-    const rows = [["URL", "Hook", "Angle", "Tier", "Evidence", "Source URL"]];
-    for (const r of results) {
-      if (r.error) {
-        rows.push([r.url, `ERROR: ${r.error}`, "", "", "", ""]);
-        continue;
-      }
-      for (const h of r.hooks) {
-        rows.push([
-          r.url,
-          h.hook,
-          h.angle,
-          h.evidence_tier,
-          h.evidence_snippet || "",
-          h.source_url || "",
-        ]);
-      }
-    }
-    const csv = rows.map((row) => row.map((c) => `"${c.replace(/"/g, '""')}"`).join(",")).join("\n");
-    await navigator.clipboard.writeText(csv);
-    setCopiedIdx("csv");
-    setTimeout(() => setCopiedIdx(null), 2000);
-  }
-
-  const totalHooks = results.reduce((sum, r) => sum + r.hooks.length, 0);
-  const successCount = results.filter((r) => !r.error).length;
-  const errorCount = results.filter((r) => r.error).length;
-
-  const tierColors: Record<string, string> = {
-    A: "text-emerald-400 bg-emerald-900/30 border-emerald-800",
-    B: "text-amber-400 bg-amber-900/30 border-amber-800",
-    C: "text-zinc-400 bg-zinc-800 border-zinc-700",
-  };
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', 'batch_signal_hooks_results.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }, [batchItems]);
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+    <div className="bg-[#030014] min-h-screen p-8 text-white font-sans">
+      {/* 1. Header & Strategy Selection */}
+      <div className="flex justify-between items-end mb-10">
         <div>
-          <h1 className="text-2xl font-bold">Batch Generate</h1>
-          <p className="text-sm text-zinc-500 mt-1">
-            Generate hooks for multiple companies at once. Paste URLs separated by newlines or commas.
-          </p>
+          <div className="flex items-center gap-2 text-purple-400 font-bold text-xs uppercase tracking-widest mb-2">
+            <Layers size={14} /> Power Workflow
+          </div>
+          <h1 className="text-3xl font-bold">Batch Signal Research</h1>
+          <p className="text-slate-400 mt-1">Upload a CSV of domains to generate evidence-backed hooks at scale.</p>
         </div>
-        <Link
-          href="/app/hooks"
-          className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors shrink-0"
-        >
-          Single mode
-        </Link>
+
+        <div className="flex gap-3">
+          <div className="bg-white/5 border border-white/10 rounded-lg p-1 flex">
+            <button className={`px-4 py-2 rounded-md text-sm font-bold ${true ? 'bg-purple-600' : 'text-slate-400 hover:text-white transition-colors'}`}>Standard</button>
+            <button className="px-4 py-2 text-slate-400 text-sm font-bold hover:text-white transition-colors">Deep Scan (Pro)</button>
+          </div>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="mb-8">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-          <label className="block text-sm text-zinc-400 mb-1.5">
-            Company URLs (one per line, or comma-separated)
-          </label>
-          <textarea
-            value={urlsText}
-            onChange={(e) => setUrlsText(e.target.value)}
-            placeholder={"https://gong.io\nhttps://hubspot.com\nhttps://stripe.com"}
-            rows={6}
-            className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-3 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600 font-mono text-sm resize-y"
-          />
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-4">
-            <p className="text-xs text-zinc-500">
-              {urls.length} URL{urls.length !== 1 ? "s" : ""} detected
-            </p>
-            <button
-              type="submit"
-              disabled={loading || urls.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium px-6 py-2.5 rounded-lg transition-colors w-full sm:w-auto"
-            >
-              {loading ? `Researching ${urls.length} companies...` : `Generate Hooks (${urls.length})`}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {loading && (
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-1.5">
-            <p className="text-sm text-zinc-400">Processing {urls.length} companies...</p>
-            <span className="text-xs text-zinc-500">{Math.round(progress)}%</span>
-          </div>
-          <div className="w-full bg-zinc-800 rounded-full h-1.5">
-            <div
-              className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       {error && (
-        <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-lg mb-6 text-sm">
-          {error}
-        </div>
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-red-900/40 border border-red-700 text-red-300 px-6 py-4 rounded-xl mb-6 flex items-center gap-3"
+        >
+          <AlertCircle size={20} />
+          <p className="font-medium text-sm">{error}</p>
+          <button onClick={() => setError(null)} className="ml-auto text-red-300 hover:text-white">
+            <XCircle size={18} />
+          </button>
+        </motion.div>
       )}
 
-      {upgradePrompt && (
-        <div className="bg-violet-900/30 border border-violet-800 rounded-lg px-5 py-4 mb-6">
-          <h3 className="text-sm font-semibold text-violet-200 mb-1">{upgradePrompt.title}</h3>
-          <p className="text-sm text-violet-300/80 mb-3">{upgradePrompt.message}</p>
-          <Link
-            href={upgradePrompt.href}
-            className="inline-block bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            {upgradePrompt.cta}
-          </Link>
-        </div>
-      )}
-
-      {results.length > 0 && (
-        <div>
-          {/* Summary bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-zinc-300">
-                <strong className="text-emerald-400">{totalHooks}</strong> hooks from{" "}
-                <strong>{successCount}</strong> companies
-              </span>
-              {errorCount > 0 && (
-                <span className="text-red-400">{errorCount} failed</span>
-              )}
-            </div>
-            <button
-              onClick={exportCsv}
-              className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
-            >
-              {copiedIdx === "csv" ? "Copied CSV!" : "Copy as CSV"}
-            </button>
-          </div>
-
-          {/* Results */}
-          <div className="space-y-4">
-            {results.map((result, idx) => (
-              <div
-                key={idx}
-                className={`bg-zinc-900 border rounded-lg p-5 ${
-                  result.error ? "border-red-800/50" : "border-zinc-800"
-                }`}
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-zinc-200 truncate">
-                      {result.url}
-                    </span>
-                    {result.lowSignal && (
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded border text-amber-400 bg-amber-900/20 border-amber-800/50 shrink-0">
-                        Low signal
-                      </span>
-                    )}
-                    {result.intent && (
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border shrink-0 ${
-                        result.intent.temperature === "hot"
-                          ? "bg-red-900/30 text-red-400 border-red-800"
-                          : result.intent.temperature === "warm"
-                            ? "bg-amber-900/30 text-amber-400 border-amber-800"
-                            : "bg-zinc-800 text-zinc-400 border-zinc-700"
-                      }`}>
-                        {result.intent.score} {result.intent.temperature === "hot" ? "Hot" : result.intent.temperature === "warm" ? "Warm" : "Cold"}
-                      </span>
-                    )}
-                  </div>
-                  {result.hooks.length > 0 && (
-                    <button
-                      onClick={() => copyAllHooks(result, idx)}
-                      className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors shrink-0 ml-2"
-                    >
-                      {copiedIdx === `all-${idx}` ? "Copied!" : `Copy all (${result.hooks.length})`}
-                    </button>
-                  )}
+      <div className="grid lg:grid-cols-3 gap-8">
+        {/* 2. Upload & Configuration (Left) */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-[#111111] border border-white/5 rounded-2xl p-6">
+            <h3 className="font-bold mb-4 flex items-center gap-2">
+              <UploadCloud size={18} className="text-purple-400" /> 1. Upload Leads
+            </h3>
+            <label htmlFor="file-upload" className="border-2 border-dashed border-white/10 rounded-xl p-8 text-center hover:border-purple-500/40 transition-colors cursor-pointer group block">
+              <input id="file-upload" type="file" accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="hidden" onChange={handleFileUpload} disabled={processingState === 'processing' || processingState === 'uploading'} />
+              {uploadedFile ? (
+                <div className="flex flex-col items-center">
+                  <FileText className="mx-auto mb-3 text-purple-400" size={32} />
+                  <p className="text-sm font-medium text-slate-300">{uploadedFile.name}</p>
+                  <p className="text-xs text-slate-500 mt-1">{totalItems} domains loaded</p>
                 </div>
+              ) : (
+                <>
+                  <FileText className="mx-auto mb-3 text-slate-600 group-hover:text-purple-400 transition-colors" size={32} />
+                  <p className="text-sm font-medium text-slate-300">Drop CSV or Excel</p>
+                  <p className="text-xs text-slate-500 mt-1 italic">Must include 'domain' column</p>
+                </>
+              )}
+            </label>
+            {uploadedFile && (
+              <p className="text-xs text-slate-500 mt-2 text-center">
+                <button onClick={resetWorkflow} className="text-purple-400 hover:text-purple-300 underline">Clear file</button>
+              </p>
+            )}
+          </div>
 
-                {result.error && (
-                  <p className="text-sm text-red-400">{result.error}</p>
-                )}
-
-                {result.suggestion && (
-                  <p className="text-xs text-amber-400/80 mb-2">{result.suggestion}</p>
-                )}
-
-                {result.hooks.length > 0 && (
-                  <div className="space-y-2">
-                    {result.hooks.map((hook, hi) => (
-                      <div key={hi} className="bg-black/50 border border-zinc-800 rounded-lg p-3">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span
-                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${tierColors[hook.evidence_tier] || tierColors.C}`}
-                          >
-                            Tier {hook.evidence_tier}
-                          </span>
-                          <span className="text-[10px] text-zinc-500">{hook.angle}</span>
-                        </div>
-                        {(() => {
-                          const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
-                          if (!variantEntry || variantEntry.variants.length === 0) return null;
-                          const channels = [
-                            { key: "email", label: "Email" },
-                            { key: "linkedin_connection", label: "LinkedIn" },
-                            { key: "linkedin_message", label: "LinkedIn DM" },
-                            { key: "cold_call", label: "Call" },
-                            { key: "video_script", label: "Video" },
-                          ];
-                          const chanKey = `${idx}-${hi}`;
-                          const active = activeChannel[chanKey] || "email";
-                          return (
-                            <div className="flex gap-1 mb-1.5 flex-wrap">
-                              {channels.map((ch) => (
-                                <button
-                                  key={ch.key}
-                                  onClick={() => setActiveChannel((prev) => ({ ...prev, [chanKey]: ch.key }))}
-                                  className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
-                                    active === ch.key
-                                      ? "bg-emerald-900/40 border-emerald-700 text-emerald-300"
-                                      : "bg-zinc-800/50 border-zinc-700 text-zinc-500 hover:text-zinc-300"
-                                  }`}
-                                >
-                                  {ch.label}
-                                </button>
-                              ))}
-                            </div>
-                          );
-                        })()}
-                        <p className="text-sm text-zinc-200 mb-1.5">
-                          {(() => {
-                            const chanKey = `${idx}-${hi}`;
-                            const active = activeChannel[chanKey] || "email";
-                            if (active === "email") return hook.hook;
-                            const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
-                            const variant = variantEntry?.variants.find((v) => v.channel === active);
-                            return variant?.text || hook.hook;
-                          })()}
-                        </p>
-                        {hook.evidence_snippet && (
-                          <p className="text-xs text-zinc-500 italic border-l-2 border-zinc-700 pl-2 mb-1.5">
-                            {hook.evidence_snippet}
-                          </p>
-                        )}
-                        <div className="flex items-center gap-2">
-                          {hook.source_url && (
-                            <a
-                              href={hook.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-[10px] text-zinc-600 hover:text-zinc-400 underline underline-offset-2 truncate"
-                            >
-                              {hook.source_title || hook.source_url}
-                            </a>
-                          )}
-                          <button
-                            onClick={() => {
-                              const chanKey = `${idx}-${hi}`;
-                              const active = activeChannel[chanKey] || "email";
-                              let overrideText: string | undefined;
-                              if (active !== "email") {
-                                const variantEntry = result.hookVariants?.find((v) => v.hook_index === hi);
-                                overrideText = variantEntry?.variants.find((v) => v.channel === active)?.text;
-                              }
-                              copySingleHook(hook, `${idx}-${hi}`, overrideText);
-                            }}
-                            className="text-[10px] font-medium px-2 py-1 rounded border border-zinc-700 bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors shrink-0 ml-auto"
-                          >
-                            {copiedIdx === `${idx}-${hi}` ? "Copied!" : hook.evidence_snippet ? "Copy + Evidence" : "Copy"}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {!result.error && result.hooks.length === 0 && (
-                  <p className="text-xs text-zinc-500">No hooks generated</p>
-                )}
+          <div className="bg-[#111111] border border-white/5 rounded-2xl p-6">
+            <h3 className="font-bold mb-4 flex items-center gap-2">
+              <Play size={18} className="text-purple-400" /> 2. Research Parameters
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase font-black text-slate-500 block mb-2">Target Buyer Role</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-[#0B0F1A] border border-white/10 rounded-lg p-3 text-sm outline-none focus:border-purple-500 appearance-none pr-10"
+                    value={selectedRole}
+                    onChange={(e) => setSelectedRole(e.target.value)}
+                    disabled={processingState === 'processing' || processingState === 'uploading'}
+                  >
+                    <option>VP Sales / Head of Sales</option>
+                    <option>RevOps / SalesOps</option>
+                    <option>CEO / Founder</option>
+                    <option>Marketing Director</option>
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
               </div>
-            ))}
+              <button
+                onClick={runBatchAnalysis}
+                className="w-full bg-purple-600 hover:bg-purple-700 py-4 rounded-xl font-bold transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!uploadedFile || batchItems.length === 0 || processingState === 'processing' || processingState === 'uploading'}
+              >
+                {processingState === 'processing' ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 size={18} className="animate-spin" /> Processing...
+                  </span>
+                ) : (
+                  'Run Batch Analysis'
+                )}
+              </button>
+            </div>
           </div>
         </div>
-      )}
 
-      {results.length === 0 && !loading && !error && !upgradePrompt && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-10 text-center">
-          <div className="text-4xl mb-4">&#x1F4E6;</div>
-          <h2 className="text-lg font-semibold text-zinc-200 mb-2">
-            Batch hook generation
-          </h2>
-          <p className="text-sm text-zinc-500 max-w-md mx-auto">
-            Paste a list of company URLs to generate hooks for all of them at once.
-            Results include evidence and sources for every hook.
-          </p>
-          <p className="text-xs text-zinc-600 mt-3">
-            Starter: up to 10 URLs &middot; Pro: up to 75 URLs
-          </p>
+        {/* 3. Progress & Results (Right) */}
+        <div className="lg:col-span-2 space-y-8">
+          <AnimatePresence mode="wait">
+            {processingState === 'idle' && (
+              <motion.div
+                key="idle-state"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#111111] border border-white/5 rounded-2xl p-6 h-[200px] flex items-center justify-center"
+              >
+                <div className="text-center text-slate-500">
+                  <Play size={32} className="mx-auto mb-3" />
+                  <p className="text-lg font-semibold">Ready to start batch processing.</p>
+                  <p className="text-sm">Upload a file and configure parameters to begin.</p>
+                </div>
+              </motion.div>
+            )}
+
+            {(processingState === 'uploading' || processingState === 'processing') && (
+              <motion.div
+                key="processing-state"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#111111] border border-white/5 rounded-2xl p-6"
+              >
+                <h3 className="font-bold mb-4 flex items-center gap-2">
+                  <Loader2 size={18} className="text-purple-400 animate-spin" /> Live Progress
+                </h3>
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className="font-medium text-slate-300">Processed: {processedCount} / {totalItems}</span>
+                      <span className="text-purple-400 font-bold">{progressPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-2">
+                      <motion.div
+                        className="bg-purple-600 h-2 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${progressPercentage}%` }}
+                        transition={{ duration: 0.5 }}
+                      ></motion.div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm text-slate-400">
+                    <div>
+                      <span className="font-semibold text-slate-300">Current Item:</span> {batchItems[processedCount]?.domain || 'N/A'}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-slate-300">Status:</span>
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                        batchItems[processedCount]?.status === 'completed' ? 'bg-green-900/30 text-green-300' :
+                        batchItems[processedCount]?.status === 'failed' ? 'bg-red-900/30 text-red-300' :
+                        'bg-blue-900/30 text-blue-300'
+                      }`}>
+                        {batchItems[processedCount]?.status || 'Pending'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {processingState === 'processing' && totalItems > 0 && (
+                  <div className="mt-6 border-t border-white/5 pt-4">
+                    <h4 className="text-sm font-semibold text-slate-400 mb-3">Last 5 Processed:</h4>
+                    <div className="space-y-2">
+                      {[...batchItems].slice(Math.max(0, processedCount - 5), processedCount).reverse().map(item => (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="flex items-center gap-3 text-xs"
+                        >
+                          {item.status === 'completed' ? <CheckCircle2 size={16} className="text-green-500" /> : <AlertCircle size={16} className="text-red-500" />}
+                          <span className="font-medium text-slate-300">{item.domain}</span>
+                          <span className="text-slate-500 truncate flex-1">{item.hook || item.error}</span>
+                          {item.confidence && <span className="text-purple-400 font-bold ml-auto">{item.confidence}%</span>}
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {processingState === 'completed' && (
+              <motion.div
+                key="completed-state"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#111111] border border-white/5 rounded-2xl p-6"
+              >
+                <h3 className="font-bold mb-4 flex items-center gap-2 text-green-400">
+                  <CheckCircle2 size={18} /> Batch Processing Complete!
+                </h3>
+                <div className="flex justify-between items-center mb-4">
+                  <p className="text-sm text-slate-300">Successfully processed {processedCount} out of {totalItems} domains.</p>
+                  <button
+                    onClick={downloadResults}
+                    className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded-lg text-sm font-semibold transition-colors"
+                  >
+                    <Download size={16} /> Download Results
+                  </button>
+                </div>
+                <button
+                  onClick={resetWorkflow}
+                  className="w-full flex items-center justify-center gap-2 text-purple-400 hover:text-purple-300 py-3 border border-purple-600 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  <RefreshCcw size={16} /> Run New Batch
+                </button>
+              </motion.div>
+            )}
+
+            {processingState === 'error' && (
+              <motion.div
+                key="error-state"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.2 }}
+                className="bg-[#111111] border border-white/5 rounded-2xl p-6"
+              >
+                <h3 className="font-bold mb-4 flex items-center gap-2 text-red-400">
+                  <AlertCircle size={18} /> Error during processing
+                </h3>
+                <p className="text-sm text-red-300 mb-4">{error || "An unexpected error occurred."}</p>
+                <button
+                  onClick={resetWorkflow}
+                  className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 py-3 border border-red-600 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  <RefreshCcw size={16} /> Try Again
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {(processingState === 'completed' || processingState === 'processing') && (
+            <motion.div
+              key="results-table"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3, duration: 0.3 }}
+              className="bg-[#111111] border border-white/5 rounded-2xl p-6"
+            >
+              <h3 className="font-bold mb-4 flex items-center gap-2">
+                <FileText size={18} className="text-purple-400" /> Batch Results
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-400">
+                  <thead>
+                    <tr className="border-b border-white/5 text-slate-300">
+                      <th className="py-3 px-4">Domain</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Confidence</th>
+                      <th className="py-3 px-4">Hook / Error</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <AnimatePresence>
+                      {batchItems.map((item) => (
+                        <motion.tr
+                          key={item.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, x: -20 }}
+                          transition={{ duration: 0.15 }}
+                          className="border-b border-white/5 last:border-b-0"
+                        >
+                          <td className="py-3 px-4 font-medium text-slate-300">{item.domain}</td>
+                          <td className="py-3 px-4">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              item.status === 'completed' ? 'bg-green-900/30 text-green-300' :
+                              item.status === 'failed' ? 'bg-red-900/30 text-red-300' :
+                              'bg-blue-900/30 text-blue-300'
+                            }`}>
+                              {item.status.charAt(0).toUpperCase() + item.status.slice(1)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-purple-400 font-bold">{item.confidence ? item.confidence.toFixed(0) + '%' : 'N/A'}</td>
+                          <td className="py-3 px-4 max-w-xs truncate">{item.hook || item.error || 'N/A'}</td>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
-}
+};
+
+export default BatchMode;

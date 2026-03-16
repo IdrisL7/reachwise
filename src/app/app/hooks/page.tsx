@@ -4,9 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import ContextWalletModal from "@/components/context-wallet-modal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Search, Sparkles, Link as LinkIcon, ChevronDown, CheckCircle } from 'lucide-react';
 import { HookCard } from "./hook-card";
-import { HookForm } from "./hook-form";
-import { EmptyState } from "./empty-state";
 import { IntentSignals } from "./intent-signals";
 import { UpgradePrompt } from "./upgrade-prompt";
 import { CompanyIntelPanel } from "./company-intel-panel";
@@ -148,6 +147,12 @@ export default function HooksPage() {
 
   const shouldGate = !hasProfile && hooksUsed === 0 && !skippedGate;
   const profileRequired = !hasProfile && skippedGate;
+
+  const progressSteps = [
+    { label: "Profile", done: hasProfile },
+    { label: "Generate", done: hooks.length > 0 },
+    { label: "Copy", done: hasCopied },
+  ];
 
   function markCopied() {
     if (!hasCopied) {
@@ -300,19 +305,7 @@ export default function HooksPage() {
 
   function runWithUrl(newUrl: string) {
     setUrl(newUrl);
-    setTimeout(() => {
-      const form = document.getElementById("hooks-form") as HTMLFormElement;
-      form?.requestSubmit();
-    }, 50);
-  }
-
-  function onSourceSelected(sourceUrl: string, name: string) {
-    setUrl(sourceUrl);
-    setCompanyName(name);
-    setTimeout(() => {
-      const form = document.getElementById("hooks-form") as HTMLFormElement;
-      form?.requestSubmit();
-    }, 50);
+    setTimeout(() => generateHooks({ preventDefault: () => {} } as React.FormEvent), 50);
   }
 
   const doGenerate = useCallback(async () => {
@@ -427,7 +420,7 @@ export default function HooksPage() {
     } finally {
       setLoading(false);
     }
-  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise, pitchContext, userTier]);
+  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise, pitchContext, userTier, hooksUsed]);
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -470,14 +463,6 @@ export default function HooksPage() {
     pendingGenerate.current = true;
   }
 
-  // Progress bar steps
-  const hasGenerated = (hooksUsed ?? 0) > 0 || hooks.length > 0;
-  const progressSteps = [
-    { label: "Profile", done: hasProfile },
-    { label: "Generate", done: hasGenerated },
-    { label: "Copy", done: hasCopied },
-  ];
-
   const EXAMPLE_COMPANIES = [
     { url: "https://www.linkedin.com/company/gong-io/about/", name: "Gong", role: "VP Sales" },
     { url: "https://www.linkedin.com/company/hubspot/about/", name: "HubSpot", role: "Marketing" },
@@ -485,442 +470,478 @@ export default function HooksPage() {
   ];
 
   return (
-    <div>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-        <h1 className="text-2xl font-bold">Generate Hooks</h1>
-        {hooksUsed !== null && (
-          <div className="flex items-center gap-1.5">
-            {progressSteps.map((step, i) => (
-              <div key={step.label} className="flex items-center gap-1.5">
-                <div className="flex items-center gap-1">
-                  <div
-                    className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
-                      step.done ? "bg-emerald-600 text-white" : "bg-zinc-800 text-zinc-500"
-                    }`}
-                  >
-                    {step.done ? (
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    ) : i + 1}
-                  </div>
-                  <span className={`text-xs hidden sm:block ${step.done ? "text-zinc-300" : "text-zinc-600"}`}>
-                    {step.label}
-                  </span>
-                </div>
-                {i < progressSteps.length - 1 && (
-                  <div className={`w-6 h-px ${step.done ? "bg-emerald-600" : "bg-zinc-800"}`} />
-                )}
+    <div className="bg-[#030014] min-h-screen text-white p-8">
+      <div className="max-w-5xl mx-auto">
+        {/* Header with Stepper */}
+        <div className="flex justify-between items-center mb-12">
+          <h1 className="text-3xl font-bold">Generate Hooks</h1>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 text-green-400 text-sm font-bold">
+              <CheckCircle size={16}/>
+              1. Profile
+            </div>
+            <div className="h-px w-8 bg-slate-700" />
+            <div className="flex items-center gap-2 text-purple-400 text-sm font-bold underline decoration-2">
+              2. Generate
+            </div>
+            <div className="h-px w-8 bg-slate-700" />
+            <div className="text-slate-600 text-sm font-bold">3. Copy</div>
+          </div>
+        </div>
+
+        {/* Input Console */}
+        <form onSubmit={generateHooks} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-8 shadow-2xl mb-8">
+          <div className="grid grid-cols-12 gap-6 items-end">
+            <div className="col-span-6">
+              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">
+                Target Company
+              </label>
+              <div className="relative">
+                <input
+                  value={url || companyName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val.includes('.') || val.startsWith('http')) {
+                      setUrl(val);
+                      setCompanyName('');
+                    } else {
+                      setCompanyName(val);
+                      setUrl('');
+                    }
+                  }}
+                  placeholder="e.g. Notion or shopify.com"
+                  className="w-full bg-[#030014] border border-white/10 rounded-xl p-4 pl-12 text-sm focus:border-purple-500 outline-none transition-all"
+                />
+                <Search className="absolute left-4 top-4 text-slate-600" size={18} />
+                <LinkIcon className="absolute right-4 top-4 text-slate-700 hover:text-purple-400 cursor-pointer transition-colors" size={16} />
               </div>
-            ))}
+            </div>
+            <div className="col-span-4">
+              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">
+                Buyer Role
+              </label>
+              <div className="relative">
+                <select
+                  value={targetRole}
+                  onChange={(e) => setTargetRole(e.target.value)}
+                  className="w-full bg-[#030014] border border-white/10 rounded-xl p-4 text-sm appearance-none outline-none focus:border-purple-500"
+                >
+                  <option value="VP Sales">VP Sales</option>
+                  <option value="RevOps">RevOps / SalesOps</option>
+                  <option value="Founder/CEO">Founder / CEO</option>
+                  <option value="Marketing">Marketing</option>
+                  <option value="Customer Success">Customer Success</option>
+                  <option value="Not sure / Any role">Not sure / Any role</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-4 text-slate-600 pointer-events-none" size={18} />
+              </div>
+            </div>
+            <div className="col-span-2">
+              <button
+                type="submit"
+                disabled={loading || (!url && !companyName)}
+                className="w-full bg-purple-600 hover:bg-purple-500 py-4 rounded-xl font-bold transition-all shadow-lg shadow-purple-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Generating..." : "Generate"}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {error && (
+          <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm animate-scale-in">
+            {error}
           </div>
         )}
-      </div>
 
-      <HookForm
-        onSourceSelected={onSourceSelected}
-        companyName={companyName}
-        setCompanyName={setCompanyName}
-        targetRole={targetRole}
-        setTargetRole={setTargetRole}
-        showCustomRole={showCustomRole}
-        setShowCustomRole={setShowCustomRole}
-        customRoleInput={customRoleInput}
-        setCustomRoleInput={setCustomRoleInput}
-        customPain={customPain}
-        setCustomPain={setCustomPain}
-        customPromise={customPromise}
-        setCustomPromise={setCustomPromise}
-        pitchContext={pitchContext}
-        setPitchContext={setPitchContext}
-        isPaidUser={userTier !== "starter"}
-        loading={loading}
-        error={error}
-        onSubmit={generateHooks}
-      />
+        {upgradePrompt && (
+          <UpgradePrompt
+            title={upgradePrompt.title}
+            message={upgradePrompt.message}
+            cta={upgradePrompt.cta}
+            href={upgradePrompt.href}
+          />
+        )}
 
-      {error && (
-        <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm animate-scale-in">
-          {error}
-        </div>
-      )}
-
-      {upgradePrompt && (
-        <UpgradePrompt
-          title={upgradePrompt.title}
-          message={upgradePrompt.message}
-          cta={upgradePrompt.cta}
-          href={upgradePrompt.href}
-        />
-      )}
-
-      {/* Loading skeleton — two-column */}
-      {loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 mb-6">
-          <div className="space-y-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 border-l-[3px] border-l-zinc-700">
-                <div className="flex items-center gap-1.5 mb-3">
-                  <Skeleton className="h-5 w-14 rounded-full" />
-                  <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-5 w-12 rounded-full" />
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 mb-6">
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 border-l-[3px] border-l-zinc-700">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                    <Skeleton className="h-5 w-12 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-full mb-2" />
+                  <Skeleton className="h-4 w-4/5 mb-3" />
+                  <Skeleton className="h-12 w-full rounded mb-3" />
+                  <div className="flex gap-2 pt-2 border-t border-zinc-800">
+                    <Skeleton className="h-7 w-20 rounded-lg" />
+                    <Skeleton className="h-7 w-28 rounded-lg" />
+                    <Skeleton className="h-7 w-28 rounded-lg" />
+                  </div>
                 </div>
-                <Skeleton className="h-4 w-full mb-2" />
-                <Skeleton className="h-4 w-4/5 mb-3" />
-                <Skeleton className="h-12 w-full rounded mb-3" />
-                <div className="flex gap-2 pt-2 border-t border-zinc-800">
-                  <Skeleton className="h-7 w-20 rounded-lg" />
-                  <Skeleton className="h-7 w-28 rounded-lg" />
-                  <Skeleton className="h-7 w-28 rounded-lg" />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <Skeleton className="h-64 rounded-xl" />
           </div>
-          <Skeleton className="h-64 rounded-xl" />
-        </div>
-      )}
+        )}
 
-      {!loading && hooks.length === 0 && !error && !upgradePrompt && !suggestion && (
-        <EmptyState
-          examples={EXAMPLE_COMPANIES}
-          onTryExample={(exUrl, role) => {
-            setUrl(exUrl);
-            setTargetRole(role);
-            localStorage.setItem("gsh_targetRole", role);
-            setTimeout(() => {
-              const form = document.getElementById("hooks-form") as HTMLFormElement;
-              form?.requestSubmit();
-            }, 50);
-          }}
-        />
-      )}
-
-      {suggestion && (
-        <div className={`border rounded-xl mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800" : "bg-blue-900/30 border-blue-800"}`}>
-          <div className="px-4 pt-4 pb-2">
-            <p className={`font-semibold mb-1 ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
-              We need a better source to write your hooks
+        {/* Immersive Empty State */}
+        {!loading && hooks.length === 0 && !error && !upgradePrompt && !suggestion && (
+          <div className="border border-dashed border-white/5 rounded-3xl p-20 text-center bg-white/[0.01]">
+            <div className="bg-purple-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-purple-400">
+              <Sparkles size={40} />
+            </div>
+            <h2 className="text-2xl font-bold mb-3">Ready to find some evidence?</h2>
+            <p className="text-slate-500 mb-8 max-w-sm mx-auto">
+              Paste a URL to turn public signals into personalized outbound hooks with cited receipts.
             </p>
-            <p className="text-zinc-400 text-xs leading-relaxed">{suggestion}</p>
-          </div>
-
-          {linkedinSlug && (
-            <div className="px-4 pb-3">
-              <button
-                onClick={() => runWithUrl(`https://www.linkedin.com/company/${linkedinSlug}/about/`)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
-              >
-                Use LinkedIn About page instead
-              </button>
-            </div>
-          )}
-
-          {firstPartyUrls.length > 0 && (
-            <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">Pages we found on their site — click one to try it:</p>
-              <div className="space-y-1">
-                {firstPartyUrls.map((d, i) => (
-                  <button
-                    key={i}
-                    onClick={() => runWithUrl(d.url)}
-                    className="block w-full text-left text-xs text-emerald-400 hover:text-emerald-300 truncate"
-                  >
-                    {d.title || d.url}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {webUrls.length > 0 && (
-            <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-500 mb-1.5">Other sources we found — may need verification:</p>
-              <div className="space-y-1">
-                {webUrls.map((d, i) => (
-                  <button
-                    key={i}
-                    onClick={() => runWithUrl(d.url)}
-                    className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-300 truncate"
-                  >
-                    {d.title || d.url}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {lowSignal && !linkedinSlug && (
-            <div className="px-4 pb-3">
-              <p className="text-xs font-medium text-zinc-400 mb-1.5">Try pasting one of these URLs into the field above:</p>
-              <div className="text-xs text-zinc-500 space-y-0.5">
-                <p>{companyDomain ? companyDomain : "theirdomain.com"}/press</p>
-                <p>{companyDomain ? companyDomain : "theirdomain.com"}/newsroom</p>
-                <p>{companyDomain ? companyDomain : "theirdomain.com"}/blog</p>
-              </div>
-              <p className="text-xs text-zinc-600 mt-2">Or copy the URL of any recent news article about them.</p>
-            </div>
-          )}
-
-          {lowSignal && (
-            <div className="px-4 pb-4 flex flex-wrap gap-2">
-              {companyDomain && (
+            <div className="flex justify-center gap-3">
+              {EXAMPLE_COMPANIES.map((example) => (
                 <button
-                  onClick={async () => {
-                    setDiscovering(true);
-                    trackEvent("sources_found_clicked");
-                    runWithUrl(`https://${companyDomain}`);
-                    setDiscovering(false);
+                  key={example.name}
+                  onClick={() => {
+                    setUrl(example.url);
+                    setTargetRole(example.role);
+                    localStorage.setItem("gsh_targetRole", example.role);
+                    setTimeout(() => generateHooks({ preventDefault: () => {} } as React.FormEvent), 50);
                   }}
-                  disabled={discovering || loading}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                  className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold hover:bg-white/10 transition-colors"
                 >
-                  {discovering ? "Searching..." : "Find sources on their site"}
+                  Try {example.name}
                 </button>
-              )}
-              {(companyName || companyDomain) && (
+              ))}
+            </div>
+          </div>
+        )}
+
+        {suggestion && (
+          <div className={`border rounded-xl mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800" : "bg-blue-900/30 border-blue-800"}`}>
+            <div className="px-4 pt-4 pb-2">
+              <p className={`font-semibold mb-1 ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
+                We need a better source to write your hooks
+              </p>
+              <p className="text-zinc-400 text-xs leading-relaxed">{suggestion}</p>
+            </div>
+
+            {linkedinSlug && (
+              <div className="px-4 pb-3">
+                <button
+                  onClick={() => runWithUrl(`https://www.linkedin.com/company/${linkedinSlug}/about/`)}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors"
+                >
+                  Use LinkedIn About page instead
+                </button>
+              </div>
+            )}
+
+            {firstPartyUrls.length > 0 && (
+              <div className="px-4 pb-3">
+                <p className="text-xs font-medium text-zinc-400 mb-1.5">Pages we found on their site — click one to try it:</p>
+                <div className="space-y-1">
+                  {firstPartyUrls.map((d, i) => (
+                    <button
+                      key={i}
+                      onClick={() => runWithUrl(d.url)}
+                      className="block w-full text-left text-xs text-emerald-400 hover:text-emerald-300 truncate"
+                    >
+                      {d.title || d.url}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {webUrls.length > 0 && (
+              <div className="px-4 pb-3">
+                <p className="text-xs font-medium text-zinc-500 mb-1.5">Other sources we found — may need verification:</p>
+                <div className="space-y-1">
+                  {webUrls.map((d, i) => (
+                    <button
+                      key={i}
+                      onClick={() => runWithUrl(d.url)}
+                      className="block w-full text-left text-xs text-zinc-400 hover:text-zinc-300 truncate"
+                    >
+                      {d.title || d.url}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {lowSignal && !linkedinSlug && (
+              <div className="px-4 pb-3">
+                <p className="text-xs font-medium text-zinc-400 mb-1.5">Try pasting one of these URLs into the field above:</p>
+                <div className="text-xs text-zinc-500 space-y-0.5">
+                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/press</p>
+                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/newsroom</p>
+                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/blog</p>
+                </div>
+                <p className="text-xs text-zinc-600 mt-2">Or copy the URL of any recent news article about them.</p>
+              </div>
+            )}
+
+            {lowSignal && (
+              <div className="px-4 pb-4 flex flex-wrap gap-2">
+                {companyDomain && (
+                  <button
+                    onClick={async () => {
+                      setDiscovering(true);
+                      trackEvent("sources_found_clicked");
+                      runWithUrl(`https://${companyDomain}`);
+                      setDiscovering(false);
+                    }}
+                    disabled={discovering || loading}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                  >
+                    {discovering ? "Searching..." : "Find sources on their site"}
+                  </button>
+                )}
+                {(companyName || companyDomain) && (
+                  <button
+                    onClick={() => {
+                      const name = companyName || companyDomain.split(".")[0];
+                      setCompanyName(name);
+                      setUrl("");
+                      setTimeout(() => generateHooks({ preventDefault: () => {} } as React.FormEvent), 50);
+                    }}
+                    disabled={loading}
+                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                  >
+                    Search recent news for &ldquo;{companyName || companyDomain.split(".")[0]}&rdquo;
+                  </button>
+                )}
                 <button
                   onClick={() => {
-                    const name = companyName || companyDomain.split(".")[0];
-                    setCompanyName(name);
-                    setUrl("");
-                    setTimeout(() => {
-                      const form = document.getElementById("hooks-form") as HTMLFormElement;
-                      form?.requestSubmit();
-                    }, 50);
+                    setUrl(""); setCompanyName(""); setSuggestion(""); setLowSignal(false);
+                    setLinkedinSlug(null); setFirstPartyUrls([]); setWebUrls([]);
+                    const input = document.querySelector<HTMLInputElement>("input[placeholder*='Notion']");
+                    input?.focus();
                   }}
-                  disabled={loading}
-                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+                  className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
                 >
-                  Search recent news for &ldquo;{companyName || companyDomain.split(".")[0]}&rdquo;
+                  + Search another company
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  setUrl(""); setCompanyName(""); setSuggestion(""); setLowSignal(false);
-                  setLinkedinSlug(null); setFirstPartyUrls([]); setWebUrls([]);
-                  const input = document.querySelector<HTMLInputElement>("input[placeholder*='Gong']");
-                  input?.focus();
-                }}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
-              >
-                + Search another company
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+              </div>
+            )}
+          </div>
+        )}
 
-      {hooks.length > 0 && (() => {
-        const visibleHooks = showAll ? [...hooks, ...overflowHooks] : hooks;
-        const totalCount = hooks.length + overflowHooks.length;
-        return (
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
-            {/* Left: hooks list */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 justify-between">
-                <h2 className="text-lg font-semibold">
-                  Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
-                  {totalCount > hooks.length && !showAll && (
-                    <span className="text-zinc-500 text-sm font-normal ml-1">of {totalCount}</span>
+        {hooks.length > 0 && (() => {
+          const visibleHooks = showAll ? [...hooks, ...overflowHooks] : hooks;
+          const totalCount = hooks.length + overflowHooks.length;
+          return (
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
+              {/* Left: hooks list */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 justify-between">
+                  <h2 className="text-lg font-semibold">
+                    Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
+                    {totalCount > hooks.length && !showAll && (
+                      <span className="text-zinc-500 text-sm font-normal ml-1">of {totalCount}</span>
+                    )}
+                    {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
+                  </h2>
+                  {batchId && crmConnected && (
+                    <button
+                      onClick={pushBatchToCrm}
+                      disabled={pushingBatch}
+                      className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                    >
+                      {pushingBatch ? "Pushing all..." : "Push batch to CRM"}
+                    </button>
                   )}
-                  {lowSignal && <span className="text-amber-400 text-sm font-normal ml-2">(low signal)</span>}
-                </h2>
-                {batchId && crmConnected && (
+                </div>
+                {visibleHooks.map((hook, i) => (
+                  <HookCard
+                    key={i}
+                    hook={hook}
+                    index={i}
+                    companyDomain={companyDomain}
+                    targetRole={targetRole}
+                    customRoleInput={customRoleInput}
+                    hookVariants={hookVariants}
+                    activeChannel={activeChannel}
+                    setActiveChannel={setActiveChannel}
+                    copied={copied}
+                    copiedEvidence={copiedEvidence}
+                    generatingEmail={generatingEmail}
+                    generatedEmails={generatedEmails}
+                    copiedEmail={copiedEmail}
+                    pushingCrm={!!hook.generated_hook_id && pushingHook === hook.generated_hook_id}
+                    pushedToCrm={!!(hook.generated_hook_id && pushedHookIds[hook.generated_hook_id])}
+                    showCrmPush={crmConnected}
+                    onCopyHook={copyHook}
+                    onCopyHookWithEvidence={copyHookWithEvidence}
+                    onGenerateEmail={generateEmail}
+                    onCopyEmail={copyEmail}
+                    onPushToCrm={pushSingleHookToCrm}
+                  />
+                ))}
+                {overflowHooks.length > 0 && !showAll && (
                   <button
-                    onClick={pushBatchToCrm}
-                    disabled={pushingBatch}
-                    className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 disabled:opacity-50 transition-colors"
+                    onClick={() => setShowAll(true)}
+                    className="w-full py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
                   >
-                    {pushingBatch ? "Pushing all..." : "Push batch to CRM"}
+                    Show {overflowHooks.length} more hook{overflowHooks.length !== 1 ? "s" : ""}
+                  </button>
+                )}
+                {showAll && overflowHooks.length > 0 && (
+                  <button
+                    onClick={() => setShowAll(false)}
+                    className="w-full py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
+                  >
+                    Show less
                   </button>
                 )}
               </div>
-              {visibleHooks.map((hook, i) => (
-                <HookCard
-                  key={i}
-                  hook={hook}
-                  index={i}
-                  companyDomain={companyDomain}
-                  targetRole={targetRole}
-                  customRoleInput={customRoleInput}
-                  hookVariants={hookVariants}
-                  activeChannel={activeChannel}
-                  setActiveChannel={setActiveChannel}
-                  copied={copied}
-                  copiedEvidence={copiedEvidence}
-                  generatingEmail={generatingEmail}
-                  generatedEmails={generatedEmails}
-                  copiedEmail={copiedEmail}
-                  pushingCrm={!!hook.generated_hook_id && pushingHook === hook.generated_hook_id}
-                  pushedToCrm={!!(hook.generated_hook_id && pushedHookIds[hook.generated_hook_id])}
-                  showCrmPush={crmConnected}
-                  onCopyHook={copyHook}
-                  onCopyHookWithEvidence={copyHookWithEvidence}
-                  onGenerateEmail={generateEmail}
-                  onCopyEmail={copyEmail}
-                  onPushToCrm={pushSingleHookToCrm}
-                />
-              ))}
-              {overflowHooks.length > 0 && !showAll && (
-                <button
-                  onClick={() => setShowAll(true)}
-                  className="w-full py-2.5 text-sm font-medium text-zinc-400 hover:text-zinc-200 border border-zinc-800 rounded-xl bg-zinc-900/50 hover:bg-zinc-900 transition-colors"
-                >
-                  Show {overflowHooks.length} more hook{overflowHooks.length !== 1 ? "s" : ""}
-                </button>
-              )}
-              {showAll && overflowHooks.length > 0 && (
-                <button
-                  onClick={() => setShowAll(false)}
-                  className="w-full py-2.5 text-sm font-medium text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  Show less
-                </button>
-              )}
-            </div>
 
-            {/* Right: sticky intel/intent panel */}
-            <div className="lg:sticky lg:top-20 space-y-4">
-              {companyIntel && intentData ? (
-                <>
-                  <div className="flex gap-0 bg-[#0e0f10] rounded-lg p-0.5 w-fit mb-2">
-                    {(["intel", "intent"] as const).map((tab) => (
+              {/* Right: sticky intel/intent panel */}
+              <div className="lg:sticky lg:top-20 space-y-4">
+                {companyIntel && intentData ? (
+                  <>
+                    <div className="flex gap-0 bg-[#0e0f10] rounded-lg p-0.5 w-fit mb-2">
+                      {(["intel", "intent"] as const).map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setRightTab(tab)}
+                          className={`text-xs px-3 py-1 rounded-md transition-all capitalize ${
+                            rightTab === tab ? "bg-[#1c1e20] text-white shadow-inner-glow" : "text-zinc-500"
+                          }`}
+                        >
+                          {tab === "intel" ? "Company" : "Signals"}
+                        </button>
+                      ))}
+                    </div>
+                    {rightTab === "intel" && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
+                    {rightTab === "intent" && <IntentSignals data={intentData} />}
+                  </>
+                ) : (
+                  <>
+                    {companyIntel && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
+                    {intentData && <IntentSignals data={intentData} />}
+                  </>
+                )}
+
+                {/* Find contacts */}
+                {companyDomain && (
+                  <div className="pt-3 border-t border-zinc-800/60">
+                    {userTier === "starter" ? (
+                      <p className="text-xs text-zinc-500">
+                        <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company.{" "}
+                        <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
+                      </p>
+                    ) : contactsResult ? (
+                      <p className="text-xs text-zinc-400">
+                        Saved <span className="text-emerald-400 font-medium">{contactsResult.created}</span> new contact{contactsResult.created !== 1 ? "s" : ""} to your leads
+                        {contactsResult.skipped > 0 && <span className="text-zinc-600"> ({contactsResult.skipped} already in list)</span>}
+                        {" — "}
+                        <a href="/app/leads" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">View leads</a>
+                      </p>
+                    ) : (
                       <button
-                        key={tab}
-                        onClick={() => setRightTab(tab)}
-                        className={`text-xs px-3 py-1 rounded-md transition-all capitalize ${
-                          rightTab === tab ? "bg-[#1c1e20] text-white shadow-inner-glow" : "text-zinc-500"
-                        }`}
+                        onClick={findContacts}
+                        disabled={findingContacts}
+                        aria-busy={findingContacts}
+                        className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
                       >
-                        {tab === "intel" ? "Company" : "Signals"}
+                        {findingContacts ? (
+                          <>
+                            <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                            </svg>
+                            Finding contacts…
+                          </>
+                        ) : (
+                          <>
+                            <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
+                              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                            </svg>
+                            Find contacts at {companyDomain}
+                          </>
+                        )}
                       </button>
-                    ))}
+                    )}
+                    {contactsError && (
+                      <p className="text-xs text-red-400 mt-1">{contactsError}</p>
+                    )}
                   </div>
-                  {rightTab === "intel" && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
-                  {rightTab === "intent" && <IntentSignals data={intentData} />}
-                </>
-              ) : (
-                <>
-                  {companyIntel && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
-                  {intentData && <IntentSignals data={intentData} />}
-                </>
-              )}
+                )}
 
-              {/* Find contacts */}
-              {companyDomain && (
-                <div className="pt-3 border-t border-zinc-800/60">
-                  {userTier === "starter" ? (
-                    <p className="text-xs text-zinc-500">
-                      <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company.{" "}
-                      <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
-                    </p>
-                  ) : contactsResult ? (
-                    <p className="text-xs text-zinc-400">
-                      Saved <span className="text-emerald-400 font-medium">{contactsResult.created}</span> new contact{contactsResult.created !== 1 ? "s" : ""} to your leads
-                      {contactsResult.skipped > 0 && <span className="text-zinc-600"> ({contactsResult.skipped} already in list)</span>}
-                      {" — "}
-                      <a href="/app/leads" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">View leads</a>
-                    </p>
-                  ) : (
+                {/* Profile nudge */}
+                {!hasProfile && !shouldGate && (
+                  <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-400">
+                    Want hooks that connect to your pitch?{" "}
                     <button
-                      onClick={findContacts}
-                      disabled={findingContacts}
-                      aria-busy={findingContacts}
-                      className="text-xs font-medium text-zinc-400 hover:text-zinc-200 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                      onClick={() => setShowProfileModal(true)}
+                      className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors"
                     >
-                      {findingContacts ? (
-                        <>
-                          <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                          </svg>
-                          Finding contacts…
-                        </>
-                      ) : (
-                        <>
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                          </svg>
-                          Find contacts at {companyDomain}
-                        </>
-                      )}
+                      Add your 60-second profile
                     </button>
-                  )}
-                  {contactsError && (
-                    <p className="text-xs text-red-400 mt-1">{contactsError}</p>
-                  )}
-                </div>
-              )}
+                    .
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
-              {/* Profile nudge */}
-              {!hasProfile && !shouldGate && (
-                <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-400">
-                  Want hooks that connect to your pitch?{" "}
-                  <button
-                    onClick={() => setShowProfileModal(true)}
-                    className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors"
-                  >
-                    Add your 60-second profile
-                  </button>
-                  .
-                </div>
-              )}
+        {/* Profile-required gate modal */}
+        {showGateModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
+            <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl animate-scale-in">
+              <h3 className="text-lg font-semibold text-zinc-100 mb-3">
+                Add your profile to continue
+              </h3>
+              <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
+                To copy, export, or generate more hooks, add your 60-second profile so we can connect the signal to your offer.
+              </p>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleGateModalSave}
+                  className="bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-lg text-sm shadow-[0_0_16px_rgba(139,92,246,0.2)] transition-all duration-200"
+                >
+                  Add profile (60 seconds)
+                </button>
+                <button
+                  onClick={() => setShowGateModal(false)}
+                  className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
             </div>
           </div>
-        );
-      })()}
+        )}
 
-      {/* Profile-required gate modal */}
-      {showGateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-          <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl animate-scale-in">
-            <h3 className="text-lg font-semibold text-zinc-100 mb-3">
-              Add your profile to continue
-            </h3>
-            <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
-              To copy, export, or generate more hooks, add your 60-second profile so we can connect the signal to your offer.
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleGateModalSave}
-                className="bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-lg text-sm shadow-[0_0_16px_rgba(139,92,246,0.2)] transition-all duration-200"
-              >
-                Add profile (60 seconds)
-              </button>
-              <button
-                onClick={() => setShowGateModal(false)}
-                className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        {showProfileModal && (
+          <ContextWalletModal
+            showClose={!shouldGate}
+            showSkip={shouldGate}
+            gateMode={shouldGate || pendingGenerate.current}
+            onClose={() => { setShowProfileModal(false); pendingGenerate.current = false; }}
+            onSave={handleProfileSaved}
+            onSkip={handleGateSkipped}
+          />
+        )}
 
-      {showProfileModal && (
-        <ContextWalletModal
-          showClose={!shouldGate}
-          showSkip={shouldGate}
-          gateMode={shouldGate || pendingGenerate.current}
-          onClose={() => { setShowProfileModal(false); pendingGenerate.current = false; }}
-          onSave={handleProfileSaved}
-          onSkip={handleGateSkipped}
-        />
-      )}
-
-      {/* Onboarding tour */}
-      {onboardingStep !== null && <OnboardingTooltip step={onboardingStep} onNext={() => {
-        if (onboardingStep >= ONBOARDING_STEPS.length - 1) {
+        {/* Onboarding tour */}
+        {onboardingStep !== null && <OnboardingTooltip step={onboardingStep} onNext={() => {
+          if (onboardingStep >= ONBOARDING_STEPS.length - 1) {
+            setOnboardingStep(null);
+            localStorage.setItem("gsh_onboarding_done", "1");
+          } else {
+            setOnboardingStep(onboardingStep + 1);
+          }
+        }} onDismiss={() => {
           setOnboardingStep(null);
           localStorage.setItem("gsh_onboarding_done", "1");
-        } else {
-          setOnboardingStep(onboardingStep + 1);
-        }
-      }} onDismiss={() => {
-        setOnboardingStep(null);
-        localStorage.setItem("gsh_onboarding_done", "1");
-      }} />}
+        }} />}
+      </div>
     </div>
   );
 }
@@ -931,7 +952,7 @@ export default function HooksPage() {
 
 const ONBOARDING_STEPS = [
   {
-    target: "input[placeholder*='Gong']",
+    target: "input[placeholder*='Notion']",
     title: "Start here",
     body: "Type a company name and click 'Find sources' — we'll surface the best URLs to scan for signals.",
     position: "bottom" as const,
