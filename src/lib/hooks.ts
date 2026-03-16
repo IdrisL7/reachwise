@@ -2133,15 +2133,17 @@ export async function resolveCompanyByName(
   companyName: string,
   apiKey: string,
 ): Promise<CompanyResolutionResult> {
-  const query = companyName.trim();
+  const normalizedName = companyName.trim();
 
-  if (!query) {
+  if (!normalizedName) {
     return {
       status: "no_match",
       companyName: "",
       candidates: [],
     };
   }
+
+  const query = `${normalizedName} company official website`;
 
   const tavilyResults = await tavilySearch(query, apiKey, {
     topic: "general",
@@ -2163,7 +2165,7 @@ export async function resolveCompanyByName(
       };
     });
 
-  return computeCompanyResolution(companyName, webResults);
+  return computeCompanyResolution(normalizedName, webResults);
 }
 
 // ---------------------------------------------------------------------------
@@ -2285,6 +2287,7 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
       "Sender context (reference only):",
       "- Outcome: " + senderContext.primaryOutcome,
       "- Buyer roles: " + senderContext.buyerRoles.join(', '),
+      ...(senderContext.voiceTone ? ["- Voice tone: " + senderContext.voiceTone] : []),
     ] : []),
   ].join("\\n");
 }

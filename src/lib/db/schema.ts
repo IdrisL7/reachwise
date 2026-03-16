@@ -248,6 +248,7 @@ export const workspaceProfiles = sqliteTable("workspace_profiles", {
   primaryOutcome: text("primary_outcome").notNull(),
   offerCategory: text("offer_category").notNull(),
   proof: text("proof", { mode: "json" }).$type<string[]>(),
+  voiceTone: text("voice_tone"),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
 

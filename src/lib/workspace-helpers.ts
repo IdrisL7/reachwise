@@ -45,6 +45,7 @@ export async function getWorkspaceProfile(
     primaryOutcome: profile.primaryOutcome,
     offerCategory: profile.offerCategory as SenderContext["offerCategory"],
     proof: profile.proof,
+    voiceTone: profile.voiceTone ?? null,
   };
 }
 

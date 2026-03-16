@@ -36,6 +36,7 @@ export interface SenderContext {
   primaryOutcome: string;
   offerCategory: OfferCategory;
   proof?: string[] | null;
+  voiceTone?: string | null;
 }
 
 export interface ProfilePreset {

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import ContextWalletModal from "@/components/context-wallet-modal";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Sparkles, Link as LinkIcon, ChevronDown, CheckCircle } from 'lucide-react';
+import { Sparkles, ChevronDown, CheckCircle } from 'lucide-react';
+import { CompanySearchInput } from "./company-search-input";
 import { HookCard } from "./hook-card";
 import { IntentSignals } from "./intent-signals";
 import { UpgradePrompt } from "./upgrade-prompt";
@@ -496,25 +497,16 @@ export default function HooksPage() {
               <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">
                 Target Company
               </label>
-              <div className="relative">
-                <input
-                  value={url || companyName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val.includes('.') || val.startsWith('http')) {
-                      setUrl(val);
-                      setCompanyName('');
-                    } else {
-                      setCompanyName(val);
-                      setUrl('');
-                    }
-                  }}
-                  placeholder="e.g. Notion or shopify.com"
-                  className="w-full bg-[#030014] border border-white/10 rounded-xl p-4 pl-12 text-sm focus:border-purple-500 outline-none transition-all"
-                />
-                <Search className="absolute left-4 top-4 text-slate-600" size={18} />
-                <LinkIcon className="absolute right-4 top-4 text-slate-700 hover:text-purple-400 cursor-pointer transition-colors" size={16} />
-              </div>
+              <CompanySearchInput
+                onSourceSelected={(sourceUrl, name) => {
+                  setUrl(sourceUrl);
+                  setCompanyName(name);
+                }}
+                onCompanyNameChange={(name) => {
+                  setCompanyName(name);
+                  setUrl('');
+                }}
+              />
             </div>
             <div className="col-span-4">
               <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">

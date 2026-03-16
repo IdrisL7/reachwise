@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Layers,
@@ -34,6 +34,18 @@ const BatchMode = () => {
   const [processedCount, setProcessedCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState('VP Sales / Head of Sales');
+  const [batchLimit, setBatchLimit] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('/api/user-stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.limits?.batchSize != null) {
+          setBatchLimit(data.limits.batchSize);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // --- Mock File Upload Logic ---
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,17 +58,26 @@ const BatchMode = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
-        // In a real app, you'd parse CSV/Excel here
-        // For now, let's mock some batch items
-        const mockDomains = text.split('\n').filter(line => line.trim() !== '').map((_, i) => `example${i + 1}.com`);
-        if (mockDomains.length > 0) {
-          const items: BatchItem[] = mockDomains.map((domain, index) => ({
+        const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length < 2) {
+          setError("CSV must have a header row and at least one domain.");
+          setProcessingState('error');
+          return;
+        }
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, '').toLowerCase());
+        const colIndex = headers.findIndex(h => h === 'domain' || h === 'url');
+        const domains = lines.slice(1).map(line => {
+          const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+          return colIndex >= 0 ? cols[colIndex] : cols[0];
+        }).filter(Boolean);
+        if (domains.length > 0) {
+          const items: BatchItem[] = domains.map((domain, index) => ({
             id: `item-${index}`,
             domain,
             status: 'pending',
           }));
           setBatchItems(items);
-          setProcessingState('idle'); // Back to idle after "upload" but before "run"
+          setProcessingState('idle');
         } else {
           setError("CSV/Excel must contain at least one domain.");
           setProcessingState('error');
@@ -70,8 +91,8 @@ const BatchMode = () => {
     }
   }, []);
 
-  // --- Mock Batch Processing Logic ---
-  const runBatchAnalysis = useCallback(() => {
+  // --- Real Batch Processing ---
+  const runBatchAnalysis = useCallback(async () => {
     if (!uploadedFile || batchItems.length === 0) {
       setError("Please upload a file with domains first.");
       setProcessingState('error');
@@ -82,34 +103,45 @@ const BatchMode = () => {
     setProcessedCount(0);
     setError(null);
 
-    let currentItemIndex = 0;
-    const interval = setInterval(() => {
-      if (currentItemIndex < batchItems.length) {
-        setBatchItems(prevItems => {
-          const updatedItems = [...prevItems];
-          const item = { ...updatedItems[currentItemIndex] };
+    try {
+      const items = batchItems.map(item => ({
+        url: item.domain.startsWith('http') ? item.domain : `https://${item.domain}`,
+        pitchContext: '',
+      }));
 
-          // Simulate API call and result
-          if (Math.random() > 0.1) { // 90% success rate
-            item.status = 'completed';
-            item.hook = `A personalized hook for ${item.domain} based on role ${selectedRole}.`;
-            item.confidence = Math.floor(Math.random() * 30) + 70; // 70-99% confidence
-          } else {
-            item.status = 'failed';
-            item.error = `Failed to generate hook for ${item.domain}.`;
-          }
+      const res = await fetch('/api/generate-hooks-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, maxHooksPerUrl: 1 }),
+      });
 
-          updatedItems[currentItemIndex] = item;
-          return updatedItems;
-        });
-        setProcessedCount(prev => prev + 1);
-        currentItemIndex++;
-      } else {
-        clearInterval(interval);
-        setProcessingState('completed');
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message ?? data.error ?? 'Batch processing failed');
+        setProcessingState('error');
+        return;
       }
-    }, 500); // Simulate processing each item every 500ms
-  }, [uploadedFile, batchItems, selectedRole]);
+
+      const results: typeof batchItems = (data.results ?? []).map(
+        (result: { url: string; hooks: Array<{ hook: string; quality_score?: number }>; error?: string | null; intent?: { score: number } | null }, index: number) => ({
+          id: `item-${index}`,
+          domain: batchItems[index]?.domain ?? result.url,
+          status: result.error ? 'failed' : 'completed',
+          hook: result.hooks?.[0]?.hook ?? undefined,
+          confidence: result.intent?.score ?? result.hooks?.[0]?.quality_score ?? undefined,
+          error: result.error ?? undefined,
+        })
+      );
+
+      setBatchItems(results);
+      setProcessedCount(results.length);
+      setProcessingState('completed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unexpected error during batch processing');
+      setProcessingState('error');
+    }
+  }, [uploadedFile, batchItems]);
 
   const totalItems = batchItems.length;
   const progressPercentage = totalItems > 0 ? (processedCount / totalItems) * 100 : 0;
@@ -204,6 +236,15 @@ const BatchMode = () => {
             {uploadedFile && (
               <p className="text-xs text-slate-500 mt-2 text-center">
                 <button onClick={resetWorkflow} className="text-purple-400 hover:text-purple-300 underline">Clear file</button>
+              </p>
+            )}
+            {batchLimit != null && (
+              <p className="text-xs text-slate-500 mt-3">
+                Your plan supports up to{' '}
+                <span className="text-slate-400 font-medium">
+                  {batchLimit === -1 ? 'unlimited' : batchLimit} domain{batchLimit !== 1 && batchLimit !== -1 ? 's' : ''}
+                </span>{' '}
+                per batch.
               </p>
             )}
           </div>

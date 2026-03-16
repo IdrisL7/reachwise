@@ -150,31 +150,31 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div>
+    <div className="p-8 bg-[#030014] min-h-screen">
       <div className="flex items-center justify-between mb-1">
         <h1 className="text-2xl font-bold">Discover Companies</h1>
         {savedSearches.length > 0 && (
           <button
             onClick={() => setShowSaved(!showSaved)}
-            className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+            className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 transition-colors"
           >
             {showSaved ? "Hide" : "Saved Searches"} ({savedSearches.length})
           </button>
         )}
       </div>
-      <p className="text-zinc-400 text-sm mb-6">Find prospects matching your ideal customer profile.</p>
+      <p className="text-slate-500 text-sm mb-6">Find prospects matching your ideal customer profile.</p>
 
       {showSaved && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-6 space-y-2">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Saved Searches</p>
+        <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-4 mb-6 space-y-1">
+          <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-3">Saved Searches</p>
           {savedSearches.map((s) => (
             <button
               key={s.id}
               onClick={() => loadSearch(s)}
-              className="w-full text-left flex items-center justify-between px-3 py-2 rounded-lg hover:bg-zinc-800 group"
+              className="w-full text-left flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/5 group transition-colors"
             >
-              <span className="text-sm text-zinc-200">{s.name || "Untitled search"}</span>
-              <span className="text-xs text-zinc-500 group-hover:text-zinc-400">
+              <span className="text-sm text-slate-200">{s.name || "Untitled search"}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 group-hover:text-slate-400">
                 {s.resultCount} results &middot; {new Date(s.createdAt).toLocaleDateString()}
               </span>
             </button>
@@ -185,28 +185,30 @@ export default function DiscoverPage() {
       <div className="relative">
         <DiscoveryForm criteria={criteria} setCriteria={setCriteria} onSubmit={runDiscovery} loading={loading || isDiscoveryLocked} />
         {isDiscoveryLocked && (
-          <div className="absolute inset-0 bg-[#080808]/85 border border-zinc-800 rounded-xl flex flex-col items-center justify-center p-6 text-center">
-            <p className="text-zinc-200 font-medium mb-2">Lead Discovery is available on Pro and Concierge.</p>
-            <p className="text-zinc-400 text-sm mb-4">Upgrade to search prospects by industry, tech stack, and growth signals.</p>
-            <a href="/#pricing" className="bg-violet-600 hover:bg-violet-500 text-white text-sm px-4 py-2 rounded-lg">Upgrade to Pro</a>
+          <div className="absolute inset-0 bg-[#030014]/90 border border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-center">
+            <p className="text-slate-200 font-bold mb-2">Lead Discovery is available on Pro and Concierge.</p>
+            <p className="text-slate-500 text-sm mb-4">Upgrade to search prospects by industry, tech stack, and growth signals.</p>
+            <a href="/#pricing" className="bg-purple-600 hover:bg-purple-500 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-purple-500/20">Upgrade to Pro</a>
           </div>
         )}
       </div>
 
-      {error && <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>}
-      {saveNotice && <div className="bg-zinc-900 border border-zinc-700 text-zinc-300 px-4 py-2 rounded-xl mb-6 text-sm">{saveNotice}</div>}
+      {error && <div className="bg-red-900/30 border border-red-800/50 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm">{error}</div>}
+      {saveNotice && <div className="bg-[#0B0F1A] border border-white/10 text-slate-300 px-4 py-2 rounded-xl mb-6 text-sm">{saveNotice}</div>}
 
       {results.length > 0 && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-zinc-400">Found {results.length} companies matching your criteria</p>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+              {results.length} companies found
+            </p>
             <div className="flex gap-2">
               {searchId && (
-                <button onClick={saveSearch} disabled={savingSearch} className="text-xs px-3 py-1.5 rounded-lg border border-violet-600 text-violet-300 hover:bg-violet-900/30 disabled:opacity-50">
-                  {savingSearch ? "Saving..." : "Save Search"}
+                <button onClick={saveSearch} disabled={savingSearch} className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-purple-500/40 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50 transition-colors">
+                  {savingSearch ? "Saving…" : "Save Search"}
                 </button>
               )}
-              <button onClick={exportCsv} className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800">Export All CSV</button>
+              <button onClick={exportCsv} className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:bg-white/5 transition-colors">Export CSV</button>
             </div>
           </div>
           {results.map((company) => (
@@ -228,8 +230,8 @@ export default function DiscoverPage() {
       )}
 
       {hasSearched && !loading && results.length === 0 && !error && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 text-sm text-zinc-400">
-          No companies matched this search yet. Try broader filters like a wider location or fewer tech constraints.
+        <div className="border border-dashed border-white/10 rounded-2xl p-8 text-center">
+          <p className="text-slate-500 text-sm">No companies matched this search. Try broader filters — wider location or fewer tech constraints.</p>
         </div>
       )}
     </div>

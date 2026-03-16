@@ -130,12 +130,12 @@ export default function IntegrationsPage() {
           return (
             <div
               key={integration.id}
-              className="bg-zinc-900 border border-zinc-800 rounded-lg p-5"
+              className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 hover:border-purple-500/20 transition-all group"
             >
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-5">
                   <div
-                    className={`w-10 h-10 ${integration.logoBg} rounded-lg flex items-center justify-center ${integration.logoText} font-bold text-lg`}
+                    className={`w-12 h-12 ${integration.logoBg} rounded-xl flex items-center justify-center ${integration.logoText} font-bold text-lg border border-white/5`}
                   >
                     {integration.logoLetter}
                   </div>
@@ -145,15 +145,15 @@ export default function IntegrationsPage() {
                         {integration.name}
                       </p>
                       {loading ? (
-                        <span className="text-[10px] text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded-full">
-                          Checking...
+                        <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+                          Checking…
                         </span>
                       ) : status.connected ? (
-                        <span className="text-[10px] text-emerald-400 bg-emerald-900/30 border border-emerald-800 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] text-teal-400 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
                           Connected
                         </span>
                       ) : (
-                        <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded-full">
+                        <span className="text-[10px] text-slate-500 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">
                           Disconnected
                         </span>
                       )}
@@ -175,14 +175,14 @@ export default function IntegrationsPage() {
                       <button
                         onClick={() => handleSync(integration.id, integration.syncUrl)}
                         disabled={busy}
-                        className="text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-700 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                        className="text-xs text-slate-400 hover:text-slate-200 border border-white/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                       >
-                        {busy ? "Syncing..." : "Sync Now"}
+                        {busy ? "Syncing…" : "Sync Now"}
                       </button>
                       <button
                         onClick={() => handleDisconnect(integration.id)}
                         disabled={busy}
-                        className="text-xs text-red-400 hover:text-red-300 border border-red-800/50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                        className="text-xs text-red-400 hover:text-red-300 border border-red-500/20 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                       >
                         Disconnect
                       </button>
@@ -190,7 +190,7 @@ export default function IntegrationsPage() {
                   ) : (
                     <a
                       href={integration.connectUrl}
-                      className="text-xs text-white bg-violet-600 hover:bg-violet-500 px-4 py-1.5 rounded-lg transition-colors font-medium"
+                      className="text-xs text-white bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded-xl transition-colors font-bold"
                     >
                       Connect
                     </a>

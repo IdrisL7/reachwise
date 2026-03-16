@@ -4,10 +4,10 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import Link from "next/link";
-import Image from "next/image";
 import { VerifyEmailBanner } from "@/components/verify-email-banner";
 import { SignOutButton } from "@/components/sign-out-button";
 import { MobileMoreMenu } from "./mobile-more-menu";
+import { SignalHooksLogo } from "@/components/ui/signalhooks-logo";
 
 const navGroups = [
   {
@@ -73,14 +73,7 @@ export default async function AppLayout({
         {/* Logo */}
         <div className="flex items-center h-12 px-4 border-b border-white/[0.04] shrink-0">
           <Link href="/app" className="flex items-center gap-2.5">
-            <Image
-              src="/logo.svg"
-              alt="GetSignalHooks"
-              width={28}
-              height={28}
-              className="rounded-lg"
-              priority
-            />
+            <SignalHooksLogo />
             <span className="text-sm font-semibold text-[#eceae6]">SignalHooks</span>
           </Link>
         </div>
@@ -131,14 +124,7 @@ export default async function AppLayout({
           {/* Mobile: logo + nav */}
           <div className="flex lg:hidden items-center gap-0.5 flex-1 min-w-0">
             <Link href="/app" className="mr-2 shrink-0">
-              <Image
-                src="/logo.svg"
-                alt="GetSignalHooks"
-                width={28}
-                height={28}
-                className="rounded-lg"
-                priority
-              />
+              <SignalHooksLogo />
             </Link>
             <nav className="flex items-center gap-0.5 mr-3">
               {primaryNav.map((item) => (
