@@ -332,7 +332,7 @@ export async function POST(request: Request) {
       });
 
       // Check if we have usable sources
-      const usableSources = sources.filter((s: any) => s.tier !== "C");
+      const usableSources = sources.filter((s: ClassifiedSource) => s.tier !== "C");
       if (usableSources.length === 0) {
         console.log(`[${traceId}] No usable sources found`);
         return NextResponse.json({
@@ -402,7 +402,7 @@ export async function POST(request: Request) {
         final: candidateHooks.length,
       });
 
-      citations = sources.map((s) => ({
+      citations = sources.map((s: ClassifiedSource) => ({
         source_title: s.title,
         publisher: s.publisher,
         date: s.date,

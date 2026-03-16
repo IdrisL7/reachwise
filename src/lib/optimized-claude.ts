@@ -13,20 +13,21 @@ export interface OptimizedClaudeConfig {
 }
 
 export interface ClaudeHookPayload {
-  news_item?: number;
-  angle?: string;
-  hook?: string;
-  evidence_snippet?: string;
-  source_title?: string;
-  source_date?: string;
-  source_url?: string;
-  evidence_tier?: string;
-  confidence?: string;
+  news_item: number;
+  angle: string;
+  hook: string;
+  evidence_snippet: string;
+  source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: string;
+  confidence: string;
   psych_mode?: string;
   why_this_works?: string;
+  trigger?: string;
   trigger_type?: string;
   promise?: string;
-  bridge_quality?: string;
+  bridge_quality?: "strong" | "moderate" | "weak";
 }
 
 /**
@@ -212,6 +213,24 @@ export async function callOptimizedClaude(
 /**
  * Enhanced JSON parsing with better error recovery
  */
+/**
+ * Ensure all hooks have required fields with default values
+ */
+function ensureNewsItems(hooks: any[]): ClaudeHookPayload[] {
+  return hooks.map((hook, index) => ({
+    ...hook,
+    news_item: typeof hook.news_item === 'number' ? hook.news_item : 1,
+    angle: typeof hook.angle === 'string' ? hook.angle : 'unknown',
+    hook: typeof hook.hook === 'string' ? hook.hook : 'Missing hook content',
+    evidence_snippet: typeof hook.evidence_snippet === 'string' ? hook.evidence_snippet : '',
+    source_title: typeof hook.source_title === 'string' ? hook.source_title : 'Unknown source',
+    source_date: typeof hook.source_date === 'string' ? hook.source_date : '',
+    source_url: typeof hook.source_url === 'string' ? hook.source_url : '',
+    evidence_tier: typeof hook.evidence_tier === 'string' ? hook.evidence_tier : 'B',
+    confidence: typeof hook.confidence === 'string' ? hook.confidence : 'medium'
+  }));
+}
+
 function parseClaudeResponse(text: string): ClaudeHookPayload[] {
   // Strip markdown fences
   let cleaned = text
@@ -222,7 +241,7 @@ function parseClaudeResponse(text: string): ClaudeHookPayload[] {
   // Try parsing as-is first
   try {
     const parsed = JSON.parse(cleaned);
-    return Array.isArray(parsed) ? parsed : [parsed];
+    return ensureNewsItems(Array.isArray(parsed) ? parsed : [parsed]);
   } catch {
     // Fall through to recovery methods
   }
@@ -245,7 +264,7 @@ function parseClaudeResponse(text: string): ClaudeHookPayload[] {
 
   if (jsonObjects.length > 0) {
     console.log(`[CLAUDE] Recovered ${jsonObjects.length} objects from malformed JSON`);
-    return jsonObjects;
+    return ensureNewsItems(jsonObjects);
   }
 
   // Recovery attempt 2: Try to fix common JSON issues
@@ -258,7 +277,7 @@ function parseClaudeResponse(text: string): ClaudeHookPayload[] {
     cleaned = cleaned.replace(/"([^"]*)"([^"]*)"([^"]*)":/g, '"$1\\"$2\\"$3":');
     
     const parsed = JSON.parse(cleaned);
-    return Array.isArray(parsed) ? parsed : [parsed];
+    return ensureNewsItems(Array.isArray(parsed) ? parsed : [parsed]);
   } catch {
     // Give up
   }

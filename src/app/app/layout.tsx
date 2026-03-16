@@ -74,11 +74,11 @@ export default async function AppLayout({
         <div className="flex items-center h-12 px-4 border-b border-white/[0.04] shrink-0">
           <Link href="/app" className="flex items-center gap-2.5">
             <Image
-              src="/logo.png"
+              src="/logo.svg"
               alt="GetSignalHooks"
               width={28}
               height={28}
-              className="rounded-full"
+              className="rounded-lg"
               priority
             />
             <span className="text-sm font-semibold text-[#eceae6]">SignalHooks</span>
@@ -132,11 +132,11 @@ export default async function AppLayout({
           <div className="flex lg:hidden items-center gap-0.5 flex-1 min-w-0">
             <Link href="/app" className="mr-2 shrink-0">
               <Image
-                src="/logo.png"
+                src="/logo.svg"
                 alt="GetSignalHooks"
                 width={28}
                 height={28}
-                className="rounded-full"
+                className="rounded-lg"
                 priority
               />
             </Link>
