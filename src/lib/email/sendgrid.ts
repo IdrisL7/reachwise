@@ -139,6 +139,34 @@ export async function sendEmail(params: SendEmailParams): Promise<SendResult> {
   }
 }
 
+/** High-trust verification email template with "Let's get those signals" branding */
+export function verificationEmailHtml(verifyUrl: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Verify Your Account</title>
+</head>
+<body style="background-color: #030014; padding: 40px; font-family: sans-serif;">
+  <div style="max-width: 600px; margin: auto; background: #0B0F1A; border: 1px solid #1e293b; border-top: 4px solid #9333ea; padding: 40px; border-radius: 12px; color: #cbd5e1;">
+    <h2 style="color: #ffffff; margin-top: 0;">Let's get those signals.</h2>
+    <p>Welcome to GetSignalHooks. You're one click away from evidence-backed outreach that never hallucinates.</p>
+    
+    <a href="${verifyUrl}" style="background: #9333ea; color: #ffffff; padding: 14px 30px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold; margin: 25px 0;">
+      Verify My Account
+    </a>
+    
+    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 30px 0;">
+    
+    <p style="font-size: 12px; color: #64748b;">
+      The GetSignalHooks Team — Evidence-first hooks for outbound sales.
+    </p>
+  </div>
+</body>
+</html>`;
+}
+
 /** Send a batch of emails */
 export async function sendEmailBatch(
   emails: SendEmailParams[],
