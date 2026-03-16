@@ -71,7 +71,6 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
   const [selectedSource, setSelectedSource] = useState<SelectedSource | null>(null);
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const [leadsCompanies, setLeadsCompanies] = useState<Array<{ name: string; domain: string }>>([]);
-  const [icpKeywords, setIcpKeywords] = useState<string>("");
   const [activeIndex, setActiveIndex] = useState(-1);
   const [isFocused, setIsFocused] = useState(false);
   const [debouncing, setDebouncing] = useState(false);
@@ -81,6 +80,8 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Request ID to discard stale in-flight responses (CRITICAL: prevents wrong-company results)
+  const searchReqIdRef = useRef(0);
 
   // Load recent searches, leads companies, and ICP context on mount
   useEffect(() => {
@@ -110,14 +111,6 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
       })
       .catch(() => {});
 
-    // Load ICP keywords from workspace profile
-    fetch("/api/workspace-profile")
-      .then((r) => r.json())
-      .then((data) => {
-        const industry = data.profile?.icpIndustry?.trim();
-        if (industry) setIcpKeywords(industry);
-      })
-      .catch(() => {});
   }, []);
 
   // Rotating placeholder
@@ -182,27 +175,27 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
 
   async function runSearch(query: string) {
     if (!query.trim()) return;
+    const reqId = ++searchReqIdRef.current;
     setSearching(true);
     setSearchError(null);
     setSearchResults([]);
     setActiveIndex(-1);
     try {
-      const enrichedQuery = icpKeywords
-        ? `${query.trim()} ${icpKeywords} news funding press`
-        : `${query.trim()} news funding press`;
       const res = await fetch("/api/search-sources", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName: enrichedQuery }),
+        body: JSON.stringify({ companyName: query.trim() }),
       });
+      if (reqId !== searchReqIdRef.current) return; // stale response — discard
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Search failed");
       setSearchResults(data.sources ?? []);
       if (!data.sources?.length) setSearchError("no_results");
     } catch (err) {
+      if (reqId !== searchReqIdRef.current) return;
       setSearchError(err instanceof Error ? err.message : "Search failed");
     } finally {
-      setSearching(false);
+      if (reqId === searchReqIdRef.current) setSearching(false);
     }
   }
 
@@ -228,10 +221,21 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
   // Leads companies filtered by prefix
   const leadsMatches = searchQuery.length >= 1
     ? leadsCompanies.filter((c) =>
-        c.name.toLowerCase().startsWith(searchQuery.toLowerCase()) ||
-        c.domain.toLowerCase().startsWith(searchQuery.toLowerCase())
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.domain.toLowerCase().includes(searchQuery.toLowerCase())
       ).slice(0, 3)
     : [];
+
+  // Unified navigable items list for keyboard nav — order matches DOM render order
+  type NavItem =
+    | { kind: "recent"; name: string }
+    | { kind: "lead"; name: string; domain: string }
+    | { kind: "source"; source: SourceResult };
+  const navItems: NavItem[] = [
+    ...(searchQuery === "" ? recentSearches.map((name) => ({ kind: "recent" as const, name })) : []),
+    ...leadsMatches.map((c) => ({ kind: "lead" as const, name: c.name, domain: c.domain })),
+    ...searchResults.map((source) => ({ kind: "source" as const, source })),
+  ];
 
   const showDropdown =
     isFocused &&
@@ -245,8 +249,16 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (activeIndex >= 0 && activeIndex < searchResults.length) {
-        selectSource(searchResults[activeIndex]);
+      if (activeIndex >= 0 && activeIndex < navItems.length) {
+        const item = navItems[activeIndex];
+        if (item.kind === "source") {
+          selectSource(item.source);
+        } else {
+          const name = item.name;
+          setSearchQuery(name);
+          onCompanyNameChange(name);
+          runSearch(name);
+        }
       } else {
         runSearch(searchQuery);
       }
@@ -259,7 +271,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
     }
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, searchResults.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, navItems.length - 1));
       return;
     }
     if (e.key === "ArrowUp") {
@@ -355,7 +367,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                     </svg>
                     <span className="text-[0.6875rem] text-zinc-600 font-medium uppercase tracking-wider">Recent</span>
                   </div>
-                  {recentSearches.map((name) => (
+                  {recentSearches.map((name, i) => (
                     <div key={name} className="flex items-center gap-2 group">
                       <button
                         type="button"
@@ -365,7 +377,9 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                           onCompanyNameChange(name);
                           runSearch(name);
                         }}
-                        className="flex-1 text-left px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22] transition-colors"
+                        className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          activeIndex === i ? "bg-[#1a1c22] text-zinc-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22]"
+                        }`}
                       >
                         {name}
                       </button>
@@ -385,34 +399,39 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
               )}
 
               {/* Leads company suggestions */}
-              {searchQuery.length >= 1 && leadsMatches.length > 0 && (
-                <div className="p-2">
-                  <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5">
-                    <svg className="h-3 w-3 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
-                    </svg>
-                    <span className="text-[0.6875rem] text-zinc-600 font-medium uppercase tracking-wider">Your Leads</span>
+              {searchQuery.length >= 1 && leadsMatches.length > 0 && (() => {
+                const leadsOffset = searchQuery === "" ? recentSearches.length : 0;
+                return (
+                  <div className="p-2">
+                    <div className="flex items-center gap-1.5 px-2 py-1 mb-0.5">
+                      <svg className="h-3 w-3 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 0 0 3.741-.479 3 3 0 0 0-4.682-2.72m.94 3.198.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0 1 12 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 0 1 6 18.719m12 0a5.971 5.971 0 0 0-.941-3.197m0 0A5.995 5.995 0 0 0 12 12.75a5.995 5.995 0 0 0-5.058 2.772m0 0a3 3 0 0 0-4.681 2.72 8.986 8.986 0 0 0 3.74.477m.94-3.197a5.971 5.971 0 0 0-.94 3.197M15 6.75a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm6 3a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Zm-13.5 0a2.25 2.25 0 1 1-4.5 0 2.25 2.25 0 0 1 4.5 0Z" />
+                      </svg>
+                      <span className="text-[0.6875rem] text-zinc-600 font-medium uppercase tracking-wider">Your Leads</span>
+                    </div>
+                    {leadsMatches.map((company, i) => (
+                      <button
+                        key={company.name}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(company.name);
+                          onCompanyNameChange(company.name);
+                          setIsFocused(true);
+                          runSearch(company.name);
+                        }}
+                        className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                          activeIndex === leadsOffset + i ? "bg-[#1a1c22] text-zinc-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22]"
+                        }`}
+                      >
+                        <span className="text-zinc-300">{company.name}</span>
+                        {company.domain && (
+                          <span className="text-zinc-600 text-xs">{company.domain}</span>
+                        )}
+                      </button>
+                    ))}
                   </div>
-                  {leadsMatches.map((company) => (
-                    <button
-                      key={company.name}
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery(company.name);
-                        onCompanyNameChange(company.name);
-                        setIsFocused(true);
-                        runSearch(company.name);
-                      }}
-                      className="flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg text-sm text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22] transition-colors"
-                    >
-                      <span className="text-zinc-300">{company.name}</span>
-                      {company.domain && (
-                        <span className="text-zinc-600 text-xs">{company.domain}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
+                );
+              })()}
 
               {/* Skeleton rows while searching */}
               {searching && (
@@ -424,7 +443,9 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
               )}
 
               {/* Source results */}
-              {!searching && searchResults.length > 0 && (
+              {!searching && searchResults.length > 0 && (() => {
+                const sourcesOffset = navItems.findIndex((item) => item.kind === "source");
+                return (
                 <div className="p-2">
                   <p className="text-[0.6875rem] text-zinc-600 font-medium uppercase tracking-wider px-2 py-1 mb-0.5">
                     Sources — ranked by signal quality
@@ -437,7 +458,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                         onClick={() => selectSource(source)}
                         style={{ animationDelay: `${i * 50}ms` }}
                         className={`animate-fade-in flex items-center gap-3 w-full rounded-lg border px-4 py-2.5 text-left transition-all group ${
-                          activeIndex === i
+                          activeIndex === sourcesOffset + i
                             ? "border-violet-500/40 bg-violet-500/5 ring-1 ring-inset ring-violet-500/20"
                             : "border-[#252830] bg-[#0e0f10] hover:border-violet-500/40 hover:bg-[#111319]"
                         }`}
@@ -470,7 +491,8 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                     ))}
                   </div>
                 </div>
-              )}
+                );
+              })()}
 
               {/* No results */}
               {!searching && searchError === "no_results" && (
@@ -524,9 +546,6 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                     e.preventDefault();
                     onSourceSelected(directUrl.trim(), searchQuery.trim());
                   }
-                }}
-                onBlur={() => {
-                  if (directUrl.trim()) onSourceSelected(directUrl.trim(), searchQuery.trim());
                 }}
                 className="mt-1 w-full bg-[#030014] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-purple-500 outline-none transition-all"
               />
