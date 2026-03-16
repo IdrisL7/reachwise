@@ -1,338 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Download } from 'lucide-react';
 
-interface Lead {
-  id: string;
-  email: string;
-  name: string | null;
-  title: string | null;
-  companyName: string | null;
-  status: string;
-  sequenceStep: number;
-  createdAt: string;
-  intentScore: number | null;
-  temperature: string | null;
-  signalsCount: number;
-}
+const LeadsView = () => (
+  <div className="p-8 bg-[#030014]">
+    <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl overflow-hidden">
+      <div className="p-4 flex justify-between items-center border-b border-white/5">
+        <h3 className="text-sm font-bold">Recent Leads</h3>
+        <button className="bg-purple-600 px-4 py-2 rounded text-xs font-bold flex items-center gap-2 hover:scale-[1.02] active:scale-[0.98]"><Download size={14}/> Import CSV</button>
+      </div>
+      <div className="divide-y divide-white/5">
+        {[
+          { name: 'Sarah Chen', company: 'Notion', status: 'Synced to HubSpot', color: 'text-orange-400' },
+          { name: 'Marcus Aurelius', company: 'Stoic Inc', status: 'Ready to Send', color: 'text-purple-400' },
+          { name: 'Elena Rodriguez', company: 'Linear', status: 'Synced to Salesforce', color: 'text-orange-400' },
+          { name: 'James Wilson', company: 'Stripe', status: 'Draft Generated', color: 'text-blue-400' },
+          { name: 'Alice Johnson', company: 'Vercel', status: 'Ready to Send', color: 'text-purple-400' },
+          { name: 'David Kim', company: 'Ramp', status: 'Synced to HubSpot', color: 'text-orange-400' },
+          { name: 'Maria Garcia', company: 'Figma', status: 'Awaiting Approval', color: 'text-yellow-400' },
+          { name: 'Tom Chen', company: 'OpenAI', status: 'Ready to Send', color: 'text-purple-400' }
+        ].map((lead, i) => (
+          <div key={i} className="p-4 flex justify-between items-center text-sm hover:bg-white/[0.02] transition-colors">
+            <div>
+              <p className="font-bold">{lead.name}</p>
+              <p className="text-xs text-slate-500">{lead.company}</p>
+            </div>
+            <div className={`text-[10px] font-black uppercase tracking-tighter ${lead.color}`}>{lead.status}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+);
 
 export default function LeadsPage() {
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [csvText, setCsvText] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const [message, setMessage] = useState("");
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [sequences, setSequences] = useState<Array<{ id: string; name: string }>>([]);
-  const [assigning, setAssigning] = useState<string | null>(null);
-  const [scoring, setScoring] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchLeads();
-    fetch("/api/sequences").then((r) => r.json()).then((data) => {
-      setSequences(data.sequences || []);
-    }).catch(() => {});
-  }, []);
-
-  async function fetchLeads() {
-    try {
-      const res = await fetch("/api/leads");
-      if (res.ok) {
-        const data = await res.json();
-        setLeads(data.leads || []);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCsvUpload() {
-    if (!csvText.trim()) return;
-    setUploading(true);
-    setMessage("");
-
-    try {
-      const lines = csvText.trim().split("\n");
-      const headers = lines[0].split(",").map((h) => h.trim().toLowerCase());
-      const emailIdx = headers.findIndex((h) => h === "email");
-
-      if (emailIdx === -1) {
-        setMessage("CSV must have an 'email' column.");
-        setUploading(false);
-        return;
-      }
-
-      const nameIdx = headers.findIndex((h) => h === "name");
-      const titleIdx = headers.findIndex((h) => h === "title");
-      const companyIdx = headers.findIndex((h) =>
-        ["company", "company_name", "companyname"].includes(h),
-      );
-      const websiteIdx = headers.findIndex((h) =>
-        ["website", "company_website", "url"].includes(h),
-      );
-
-      const leadsData = lines.slice(1).map((line) => {
-        const cols = line.split(",").map((c) => c.trim());
-        return {
-          email: cols[emailIdx],
-          name: nameIdx >= 0 ? cols[nameIdx] : undefined,
-          title: titleIdx >= 0 ? cols[titleIdx] : undefined,
-          company_name: companyIdx >= 0 ? cols[companyIdx] : undefined,
-          company_website: websiteIdx >= 0 ? cols[websiteIdx] : undefined,
-        };
-      }).filter((l) => l.email);
-
-      const res = await fetch("/api/leads", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leads: leadsData }),
-      });
-
-      const data = await res.json();
-      if (res.ok) {
-        setMessage(`Uploaded ${data.created} lead${data.created !== 1 ? "s" : ""}.`);
-        setCsvText("");
-        setShowUpload(false);
-        fetchLeads();
-      } else {
-        setMessage(data.message || "Upload failed.");
-      }
-    } catch {
-      setMessage("Upload failed.");
-    } finally {
-      setUploading(false);
-    }
-  }
-
-  async function deleteLead(id: string) {
-    if (!confirm("Delete this lead? This cannot be undone.")) return;
-    setDeleting(id);
-    try {
-      const res = await fetch(`/api/leads/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        setLeads((prev) => prev.filter((l) => l.id !== id));
-        setMessage("Lead deleted.");
-      } else {
-        setMessage("Failed to delete lead.");
-      }
-    } catch {
-      setMessage("Failed to delete lead.");
-    } finally {
-      setDeleting(null);
-    }
-  }
-
-  async function assignSequence(leadId: string, sequenceId: string) {
-    setAssigning(leadId);
-    try {
-      const res = await fetch("/api/lead-sequences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leadId, sequenceId }),
-      });
-      if (res.ok) {
-        setMessage("Sequence assigned.");
-      } else {
-        const data = await res.json();
-        setMessage(data.error || "Failed to assign sequence.");
-      }
-    } catch {
-      setMessage("Failed to assign sequence.");
-    } finally {
-      setAssigning(null);
-    }
-  }
-
-  async function scoreLead(leadId: string) {
-    setScoring(leadId);
-    try {
-      const res = await fetch(`/api/leads/${leadId}/intent`, { method: "POST" });
-      if (res.ok) {
-        await fetchLeads(); // Refresh to show new score
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setScoring(null);
-    }
-  }
-
-  const statusColors: Record<string, string> = {
-    cold: "bg-blue-900/30 text-blue-400 border-blue-800",
-    in_conversation: "bg-amber-900/30 text-amber-400 border-amber-800",
-    won: "bg-emerald-900/30 text-emerald-400 border-emerald-800",
-    lost: "bg-red-900/30 text-red-400 border-red-800",
-    unreachable: "bg-zinc-800 text-zinc-400 border-zinc-700",
-  };
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Leads</h1>
-        <div className="flex items-center gap-2">
-          {leads.length > 0 && (
-            <a
-              href="/api/leads/export"
-              download
-              className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-            >
-              Export CSV
-            </a>
-          )}
-          <button
-            onClick={() => setShowUpload(!showUpload)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            {showUpload ? "Cancel" : "Upload CSV"}
-          </button>
-        </div>
-      </div>
-
-      {message && (
-        <div className="bg-zinc-900 border border-zinc-800 text-zinc-300 px-4 py-3 rounded-lg mb-4 text-sm">
-          {message}
-        </div>
-      )}
-
-      {showUpload && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
-          <p className="text-sm text-zinc-400 mb-3">
-            Paste CSV with headers. Required: <code className="text-zinc-300">email</code>. Optional:{" "}
-            <code className="text-zinc-300">name, title, company, website</code>.
-          </p>
-          <textarea
-            value={csvText}
-            onChange={(e) => setCsvText(e.target.value)}
-            rows={8}
-            placeholder="email,name,title,company&#10;jane@acme.com,Jane Doe,VP Sales,Acme Inc"
-            className="w-full bg-black border border-zinc-700 rounded-lg px-4 py-3 text-sm font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600 mb-3"
-          />
-          <button
-            onClick={handleCsvUpload}
-            disabled={uploading || !csvText.trim()}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </button>
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-zinc-500">Loading...</p>
-      ) : leads.length === 0 ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-12 text-center">
-          <div className="text-4xl mb-4">📋</div>
-          <h2 className="text-lg font-semibold text-zinc-200 mb-2">No leads yet</h2>
-          <p className="text-sm text-zinc-500 max-w-md mx-auto mb-4">
-            Upload a CSV from Apollo, Clay, or any spreadsheet to start managing
-            your outbound pipeline. Or create leads via the API.
-          </p>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
-          >
-            Upload CSV
-          </button>
-        </div>
-      ) : (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-x-auto">
-          <table className="w-full text-sm min-w-[600px]">
-            <thead>
-              <tr className="text-left text-zinc-500 border-b border-zinc-800">
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Company</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Score</th>
-                <th className="px-4 py-3">Step</th>
-                <th className="px-4 py-3 w-16"></th>
-                <th className="px-4 py-3 w-32">Sequence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {leads.map((lead) => (
-                <tr
-                  key={lead.id}
-                  className="border-t border-zinc-800/50 hover:bg-zinc-800/30"
-                >
-                  <td className="px-4 py-3 text-zinc-200 font-mono text-xs">
-                    {lead.email}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-300">
-                    {lead.name || "-"}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400">
-                    {lead.companyName || "-"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded border ${statusColors[lead.status] || statusColors.cold}`}
-                    >
-                      {lead.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-xs">
-                    {lead.intentScore !== null ? (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[10px] font-medium ${
-                        lead.temperature === "hot"
-                          ? "bg-red-900/30 text-red-400 border-red-800"
-                          : lead.temperature === "warm"
-                            ? "bg-amber-900/30 text-amber-400 border-amber-800"
-                            : "bg-zinc-800 text-zinc-400 border-zinc-700"
-                      }`}>
-                        {lead.intentScore} {lead.temperature === "hot" ? "Hot" : lead.temperature === "warm" ? "Warm" : "Cold"}
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => scoreLead(lead.id)}
-                        disabled={scoring === lead.id}
-                        className="text-[10px] px-2 py-0.5 rounded border border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 transition-colors disabled:opacity-50"
-                      >
-                        {scoring === lead.id ? "Scoring..." : "Score"}
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-500">
-                    {lead.sequenceStep}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => deleteLead(lead.id)}
-                      disabled={deleting === lead.id}
-                      className="text-xs text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                    >
-                      {deleting === lead.id ? "..." : "Delete"}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    {sequences.length > 0 ? (
-                      <select
-                        onChange={(e) => {
-                          if (e.target.value) assignSequence(lead.id, e.target.value);
-                          e.target.value = "";
-                        }}
-                        disabled={assigning === lead.id}
-                        className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-400 focus:outline-none"
-                        defaultValue=""
-                      >
-                        <option value="" disabled>Assign...</option>
-                        {sequences.map((seq) => (
-                          <option key={seq.id} value={seq.id}>{seq.name}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span className="text-[10px] text-zinc-600">-</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  );
+  return <LeadsView />;
 }
