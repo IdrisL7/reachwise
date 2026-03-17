@@ -167,6 +167,51 @@ export function verificationEmailHtml(verifyUrl: string): string {
 </html>`;
 }
 
+/** Watchlist digest email — sent after nightly scan finds fresh signals */
+export function watchlistDigestHtml(
+  hits: Array<{ companyName: string; hookCount: number }>,
+  totalHooks: number,
+): string {
+  const rows = hits
+    .map(
+      (h) =>
+        `<tr><td style="padding:6px 0;border-bottom:1px solid #27272a;color:#e4e4e7;font-size:14px;">${h.companyName}</td><td style="padding:6px 0;border-bottom:1px solid #27272a;color:#34d399;font-size:14px;text-align:right;">${h.hookCount} hook${h.hookCount !== 1 ? "s" : ""}</td></tr>`,
+    )
+    .join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background-color:#080808;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#080808;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;">
+        <tr><td style="padding-bottom:32px;">
+          <span style="font-size:20px;font-weight:700;color:#34d399;letter-spacing:-0.02em;">GSH</span>
+          <span style="font-size:14px;font-weight:600;color:#a1a1aa;margin-left:8px;">GetSignalHooks</span>
+        </td></tr>
+        <tr><td style="color:#e4e4e7;font-size:15px;padding-bottom:24px;">
+          <p style="margin:0 0 16px;line-height:1.6;">Your watchlist picked up <strong style="color:#fff;">${totalHooks} new hook${totalHooks !== 1 ? "s" : ""}</strong> from <strong style="color:#fff;">${hits.length} compan${hits.length !== 1 ? "ies" : "y"}</strong> overnight.</p>
+        </td></tr>
+        <tr><td style="padding-bottom:24px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${rows}
+          </table>
+        </td></tr>
+        <tr><td style="padding-bottom:32px;">
+          <a href="https://www.getsignalhooks.com/app/inbox" style="display:inline-block;background:#7c3aed;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Review hooks in Inbox &rarr;</a>
+        </td></tr>
+        <tr><td style="padding-top:32px;border-top:1px solid #27272a;">
+          <p style="margin:0;font-size:12px;color:#71717a;">GetSignalHooks — Evidence-first hooks for outbound sales</p>
+          <p style="margin:4px 0 0;font-size:12px;color:#52525b;"><a href="https://www.getsignalhooks.com" style="color:#52525b;text-decoration:underline;">getsignalhooks.com</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 /** Send a batch of emails */
 export async function sendEmailBatch(
   emails: SendEmailParams[],

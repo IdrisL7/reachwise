@@ -5,10 +5,12 @@ import { Inbox as InboxIcon } from "lucide-react";
 
 interface Draft {
   id: string;
-  leadId: string;
+  leadId: string | null;
   leadName: string;
   leadCompany: string;
+  companyName?: string;
   preview: string;
+  source?: "manual" | "watchlist";
   createdAt: string;
 }
 
@@ -100,11 +102,18 @@ export default function InboxPage() {
               </div>
               <div className="flex-1">
                 <div className="flex justify-between mb-2">
-                  <h4 className="font-bold">
-                    {draft.leadName}{" "}
-                    {draft.leadCompany && <span className="text-slate-500 font-normal">@ {draft.leadCompany}</span>}
-                  </h4>
-                  <span className="text-[10px] text-slate-600 font-mono">Drafted {formatRelative(draft.createdAt)}</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="font-bold">
+                      {draft.leadName}{" "}
+                      {draft.leadCompany && <span className="text-slate-500 font-normal">@ {draft.leadCompany}</span>}
+                    </h4>
+                    {draft.source === "watchlist" && (
+                      <span className="text-[9px] font-black uppercase tracking-widest bg-teal-500/10 text-teal-400 border border-teal-500/20 px-2 py-0.5 rounded-full">
+                        Watchlist
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-600 font-mono shrink-0 ml-2">Drafted {formatRelative(draft.createdAt)}</span>
                 </div>
                 <p className="text-sm text-slate-400 italic mb-4">&ldquo;{draft.preview}&rdquo;</p>
                 <div className="flex gap-3">

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 
-// POST /api/drafts/[id]/approve — approve a draft message
+// POST /api/drafts/[id]/approve — approve a draft (lead-based or watchlist-based)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -15,7 +15,27 @@ export async function POST(
 
   const { id } = await params;
 
-  // Find the draft message
+  // Try watchlist draft first
+  const [watchlistDraft] = await db
+    .select()
+    .from(schema.drafts)
+    .where(
+      and(
+        eq(schema.drafts.id, id),
+        eq(schema.drafts.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+
+  if (watchlistDraft) {
+    await db
+      .update(schema.drafts)
+      .set({ approved: 1 })
+      .where(eq(schema.drafts.id, id));
+    return NextResponse.json({ ok: true, messageId: id });
+  }
+
+  // Fall back to outbound_messages (lead-based draft)
   const [message] = await db
     .select()
     .from(schema.outboundMessages)
@@ -44,13 +64,12 @@ export async function POST(
 
   const now = new Date().toISOString();
 
-  // Update message status to queued (or sent for email if you have direct send)
   await db
     .update(schema.outboundMessages)
     .set({ status: "queued", sentAt: now })
     .where(eq(schema.outboundMessages.id, id));
 
-  // Advance lead sequence if lead has one
+  // Advance lead sequence step
   const [ls] = await db
     .select()
     .from(schema.leadSequences)
@@ -69,13 +88,11 @@ export async function POST(
       .where(eq(schema.leadSequences.id, ls.id));
   }
 
-  // Update lead's last contacted
   await db
     .update(schema.leads)
     .set({ lastContactedAt: now, updatedAt: now })
     .where(eq(schema.leads.id, lead.id));
 
-  // Create audit log
   await db.insert(schema.auditLog).values({
     userId: session.user.id,
     leadId: lead.id,
@@ -84,7 +101,6 @@ export async function POST(
     metadata: JSON.stringify({ messageId: id, channel: message.channel }),
   });
 
-  // Delete related draft_pending notification
   await db
     .delete(schema.notifications)
     .where(

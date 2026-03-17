@@ -385,6 +385,38 @@ export const leadScores = sqliteTable("lead_scores", {
   index("lead_scores_temperature_idx").on(table.temperature),
 ]);
 
+// ── Watchlist ──
+
+export const watchlist = sqliteTable("watchlist", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyName: text("company_name").notNull(),
+  domain: text("domain").notNull(),
+  addedAt: text("added_at").notNull().default(sql`(datetime('now'))`),
+  lastCheckedAt: text("last_checked_at"),
+  lastSignalAt: text("last_signal_at"),
+  lastSignalType: text("last_signal_type"),
+}, (table) => [
+  index("watchlist_user_id_idx").on(table.userId),
+]);
+
+// ── Drafts (watchlist-generated hooks pending approval) ──
+
+export const drafts = sqliteTable("drafts", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  companyName: text("company_name").notNull(),
+  domain: text("domain"),
+  hookText: text("hook_text").notNull(),
+  source: text("source", { enum: ["manual", "watchlist"] }).notNull().default("manual"),
+  watchlistId: text("watchlist_id").references(() => watchlist.id, { onDelete: "set null" }),
+  approved: integer("approved"), // null = pending, 1 = approved, 0 = rejected
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("drafts_user_id_idx").on(table.userId),
+  index("drafts_approved_idx").on(table.approved),
+]);
+
 // ── Notifications ──
 
 export const notifications = sqliteTable("notifications", {

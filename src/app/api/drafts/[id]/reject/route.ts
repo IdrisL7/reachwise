@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 
-// POST /api/drafts/[id]/reject — reject and delete a draft
+// POST /api/drafts/[id]/reject — reject a draft (lead-based or watchlist-based)
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -15,7 +15,27 @@ export async function POST(
 
   const { id } = await params;
 
-  // Find draft
+  // Try watchlist draft first
+  const [watchlistDraft] = await db
+    .select()
+    .from(schema.drafts)
+    .where(
+      and(
+        eq(schema.drafts.id, id),
+        eq(schema.drafts.userId, session.user.id),
+      ),
+    )
+    .limit(1);
+
+  if (watchlistDraft) {
+    await db
+      .update(schema.drafts)
+      .set({ approved: 0 })
+      .where(eq(schema.drafts.id, id));
+    return NextResponse.json({ ok: true });
+  }
+
+  // Fall back to outbound_messages (lead-based draft)
   const [message] = await db
     .select()
     .from(schema.outboundMessages)
@@ -42,10 +62,8 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  // Delete draft
   await db.delete(schema.outboundMessages).where(eq(schema.outboundMessages.id, id));
 
-  // Delete notification
   await db
     .delete(schema.notifications)
     .where(

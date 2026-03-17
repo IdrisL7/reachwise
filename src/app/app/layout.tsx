@@ -22,6 +22,7 @@ const navGroups = [
     label: "Execution",
     items: [
       { href: "/app/sequences", label: "Sequences" },
+      { href: "/app/watchlist", label: "Watchlist" },
       { href: "/app/inbox", label: "Inbox" },
       { href: "/app/templates", label: "Templates" },
     ],

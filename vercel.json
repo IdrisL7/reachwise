@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/intent-refresh",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/watchlist-scan",
+      "schedule": "0 2 * * *"
     }
   ]
 }
