@@ -5,7 +5,10 @@ import { Footer } from "@/components/footer";
 export const metadata: Metadata = {
   title: "API Documentation — GetSignalHooks",
   description:
-    "GetSignalHooks API reference. Generate evidence-backed hooks, manage leads, run sequences, and integrate with your CRM programmatically.",
+    "GetSignalHooks API reference. Generate signal-backed opening lines, manage leads, run sequences, and integrate with your CRM programmatically.",
+  alternates: {
+    canonical: "https://www.getsignalhooks.com/docs",
+  },
 };
 
 const API_BASE = "https://app.getsignalhooks.com";
@@ -44,7 +47,7 @@ const endpoints = [
     path: "/api/generate-hooks",
     auth: false,
     description:
-      "Generate evidence-first hooks from a company URL or name. Returns hooks with confidence scores and evidence tiers.",
+      "Generate signal-backed opening lines from a company URL or name. Returns results with confidence scores and evidence tiers.",
     body: `{
   "url": "https://acme.com",
   "company_name": "Acme Inc"
@@ -160,11 +163,11 @@ function MethodBadge({ method }: { method: string }) {
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0a0a0b] text-zinc-100 font-[family-name:var(--font-body)]">
       <Navbar />
 
       <main className="max-w-4xl mx-auto px-6 py-20">
-        <h1 className="text-4xl font-bold mb-4">API Documentation</h1>
+        <h1 className="font-[family-name:var(--font-display)] text-4xl font-bold mb-4">API Documentation</h1>
         <p className="text-zinc-400 mb-8 text-lg">
           Integrate GetSignalHooks into your workflow. All authenticated
           endpoints accept a Bearer token via the{" "}
@@ -261,19 +264,19 @@ export default function DocsPage() {
               </thead>
               <tbody className="text-zinc-300">
                 <tr className="border-t border-zinc-800">
-                  <td className="py-3">Starter ($29)</td>
+                  <td className="py-3">Starter ($35)</td>
                   <td className="py-3">~200</td>
                   <td className="py-3">10 URLs</td>
                   <td className="py-3 text-zinc-600">-</td>
                 </tr>
                 <tr className="border-t border-zinc-800">
-                  <td className="py-3">Pro ($149)</td>
+                  <td className="py-3">Pro ($179)</td>
                   <td className="py-3">~750</td>
                   <td className="py-3">75 URLs</td>
                   <td className="py-3 text-emerald-400">Included</td>
                 </tr>
                 <tr className="border-t border-zinc-800">
-                  <td className="py-3">Concierge ($499)</td>
+                  <td className="py-3">Concierge ($599)</td>
                   <td className="py-3">Unlimited</td>
                   <td className="py-3">75 URLs</td>
                   <td className="py-3 text-emerald-400">Managed</td>

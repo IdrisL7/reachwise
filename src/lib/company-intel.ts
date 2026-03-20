@@ -87,11 +87,34 @@ async function extractJsonArray(prompt: string, claudeApiKey: string) {
   return Array.isArray(payload) ? payload : [];
 }
 
-async function extractBasicCompanyInfo(url: string, searchApiKey: string, claudeApiKey: string): Promise<BasicCompanyIntel & { companyNameRaw?: string; industryRaw?: string; foundedYear?: number | null }> {
+const THIRD_PARTY_HOSTS = new Set([
+  "linkedin.com", "techcrunch.com", "reuters.com", "bloomberg.com",
+  "crunchbase.com", "pitchbook.com", "twitter.com", "x.com",
+  "businessinsider.com", "forbes.com", "wsj.com", "ft.com",
+]);
+
+function isThirdPartyUrl(url: string): boolean {
+  try {
+    const hostname = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "");
+    return THIRD_PARTY_HOSTS.has(hostname);
+  } catch {
+    return false;
+  }
+}
+
+function extractLinkedInSlug(url: string): string | null {
+  const m = url.match(/linkedin\.com\/company\/([^/?#]+)/i);
+  return m ? m[1].replace(/-/g, " ") : null;
+}
+
+async function extractBasicCompanyInfo(url: string, searchApiKey: string, claudeApiKey: string, searchIdentifier?: string): Promise<BasicCompanyIntel & { companyNameRaw?: string; industryRaw?: string; foundedYear?: number | null }> {
   const domain = getDomain(url);
+  // Use provided identifier (company name/slug) for search, fall back to domain
+  const searchTerm = searchIdentifier || domain;
+  const fetchUrl = isThirdPartyUrl(url) ? null : url; // don't try to fetch LinkedIn/media pages
   const [homepage, results] = await Promise.all([
-    fetchPage(url).catch(() => ""),
-    searchTavily(`"${domain}" company overview employees headquarters`, searchApiKey, 5),
+    fetchUrl ? fetchPage(fetchUrl).catch(() => "") : Promise.resolve(""),
+    searchTavily(`"${searchTerm}" company overview employees headquarters`, searchApiKey, 5),
   ]);
 
   const context = results
@@ -262,15 +285,26 @@ export async function getCompanyIntelligence(
   searchApiKey: string,
   claudeApiKey: string,
   fullAccess: boolean,
+  companyNameHint?: string,
 ): Promise<CompanyIntelligence> {
+  // Resolve the real company identifier when given a third-party URL (LinkedIn, media, etc.)
+  let searchIdentifier: string | undefined;
+  if (isThirdPartyUrl(companyUrl)) {
+    searchIdentifier = extractLinkedInSlug(companyUrl) || companyNameHint || undefined;
+  }
+  // Cache by the real company domain or a sanitised slug from the search identifier
   const domain = getDomain(companyUrl);
-  const cached = await getCachedIntel(domain);
+  const cacheKey = searchIdentifier
+    ? searchIdentifier.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+    : domain;
+
+  const cached = await getCachedIntel(cacheKey);
   if (cached) {
     if (fullAccess) return cached;
     return { ...cached, techStack: [], techStackSources: [], decisionMakers: [], competitors: [] };
   }
 
-  const basic = await extractBasicCompanyInfo(companyUrl, searchApiKey, claudeApiKey);
+  const basic = await extractBasicCompanyInfo(companyUrl, searchApiKey, claudeApiKey, searchIdentifier);
   const base: CompanyIntelligence = {
     ...EMPTY_INTEL,
     companyName: basic.companyName,
@@ -295,7 +329,7 @@ export async function getCompanyIntelligence(
   }
 
   base.confidenceScore = computeConfidence(base);
-  await setCachedIntel(domain, base, companyUrl);
+  await setCachedIntel(cacheKey, base, companyUrl);
 
   if (!fullAccess) {
     return { ...base, techStack: [], techStackSources: [], decisionMakers: [], competitors: [] };

@@ -67,6 +67,15 @@ export function buildDiscoveryQueries(criteria: DiscoveryCriteria): string[] {
     queries.push([industry, "company", size, location].filter(Boolean).join(" "));
   }
 
+  // Add a natural-language fallback query with numeric tokens stripped (e.g. "fintech 1000 london" → "top fintech companies london")
+  const industryClean = industry.replace(/\b\d+\b/g, "").replace(/\s+/g, " ").trim();
+  if (industryClean || location) {
+    const nlQuery = ["top", industryClean || industry, "companies", location]
+      .filter(Boolean)
+      .join(" ");
+    queries.push(nlQuery);
+  }
+
   if (criteria.techStack?.length) {
     const tech = criteria.techStack.slice(0, 3).map((t) => `\"uses ${t}\" OR \"${t} customer\"`).join(" OR ");
     queries.push([tech, "company", industry].filter(Boolean).join(" "));
@@ -97,7 +106,7 @@ async function extractCompaniesFromResults(
 
   const raw = await callClaude(
     "Return ONLY a JSON array.",
-    `Extract companies matching these criteria: ${JSON.stringify(criteria)}\nReturn JSON array of objects with keys: name,domain,url,description,industry,employeeRange,location,matchingSignals,sourceUrls\n\nResults:\n${context}`,
+    `The user is looking for companies broadly described as: ${JSON.stringify(criteria)}\n\nExtract any companies from the search results below that broadly relate to this description. Include a company even if it only partially matches — be generous, not strict.\nReturn a JSON array of objects with keys: name, domain, url, description, industry, employeeRange, location, matchingSignals, sourceUrls\n\nResults:\n${context}`,
     claudeApiKey,
   );
 

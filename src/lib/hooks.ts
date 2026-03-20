@@ -10,6 +10,40 @@ export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
 export type PsychMode = "relevance" | "curiosity_gap" | "symptom" | "tradeoff_frame" | "contrarian" | "benefit";
 
+export type MessagingStyle = "evidence" | "challenger" | "implication" | "risk";
+
+export const MESSAGING_STYLE_MAP: Record<MessagingStyle, {
+  angle: Angle;
+  psych_mode: PsychMode;
+  label: string;
+  description: string;
+}> = {
+  evidence: {
+    angle: "trigger",
+    psych_mode: "relevance",
+    label: "Evidence",
+    description: "Anchor to the signal directly",
+  },
+  challenger: {
+    angle: "tradeoff",
+    psych_mode: "contrarian",
+    label: "Challenger",
+    description: "Reframe the prospect's reality",
+  },
+  implication: {
+    angle: "risk",
+    psych_mode: "symptom",
+    label: "Implication",
+    description: "Amplify the downstream consequence",
+  },
+  risk: {
+    angle: "risk",
+    psych_mode: "tradeoff_frame",
+    label: "Risk",
+    description: "Frame what inaction costs",
+  },
+};
+
 export type TargetRole = "VP Sales" | "RevOps" | "SDR Manager" | "Marketing" | "Founder/CEO" | "General";
 
 export type TriggerType = "award" | "stat" | "case_study" | "hiring" | "funding" | "ipo" | "expansion";
@@ -52,8 +86,11 @@ export const ROLE_RESPONSIBILITIES: Record<TargetRole, { kpis: string[]; tag: st
 
 export const PERSONA_DATA: Record<TargetRole, {
   pain_points: string[];
-  bridge_template: string;
-  promise_library: Partial<Record<TriggerType, string>>;
+  bridge_principles: string[];
+  promise_guidelines: {
+    outcome_themes: string[];
+    specificity_rule: string;
+  };
 }> = {
   "VP Sales": {
     pain_points: [
@@ -61,15 +98,15 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Forecast accuracy erodes without real-time pipeline signals",
       "Deals at risk surface too late in the quarter",
     ],
-    bridge_template: "At that growth stage, pipeline visibility usually becomes the constraint before headcount does.",
-    promise_library: {
-      award: "We help VP Sales teams call the quarter with confidence.",
-      stat: "We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
-      case_study: "We help VP Sales teams stop losing deals they didn't know were at risk.",
-      hiring: "We help VP Sales leaders build pipeline visibility that scales with new hires.",
-      funding: "We help VP Sales teams build the pipeline discipline investors expect post-raise.",
-      expansion: "We help VP Sales leaders maintain attainment through geographic expansion.",
-      ipo: "We help VP Sales teams call the quarter with confidence before the pressure arrives.",
+    bridge_principles: [
+      "Funding/PE → investor scrutiny → forecast pressure → board-level pipeline accountability",
+      "Hiring surge → management overhead → forecast dilution as new reps ramp",
+      "Award/recognition → external credibility outpacing internal operational maturity",
+      "Expansion → multi-geo complexity → pipeline fragmentation across regions",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["forecast confidence", "pipeline visibility", "deal risk surfacing", "quarter predictability"],
+      specificity_rule: "Must reference the triggering signal. E.g., if PE buyout, reference board scrutiny. If hiring 50 reps, reference ramp visibility at scale.",
     },
   },
   "RevOps": {
@@ -78,15 +115,15 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Manual reporting layers slow decision-making",
       "Operational discipline externally doesn't translate to internal pipeline ops",
     ],
-    bridge_template: "The same operational discipline that drove [X] externally should apply to your pipeline data internally.",
-    promise_library: {
-      award: "We help RevOps teams build one source of truth for pipeline activity.",
-      stat: "We help RevOps eliminate the spreadsheet layer between CRM and reality.",
-      case_study: "We help RevOps teams build one source of truth for pipeline activity.",
-      hiring: "We help RevOps teams scale pipeline ops without scaling headcount.",
-      funding: "We help RevOps teams build the data infrastructure investors expect post-raise.",
-      expansion: "We help RevOps teams build one source of truth before international complexity compounds it.",
-      ipo: "We help RevOps teams build the data infrastructure before the roadshow demands it.",
+    bridge_principles: [
+      "Funding/PE → investor-grade reporting requirements → CRM accuracy pressure",
+      "Hiring surge → more reps entering data differently → data quality erosion",
+      "Award/recognition → external polish vs internal spreadsheet chaos",
+      "Expansion → multi-region CRM instances → fragmented pipeline views",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["single source of truth", "CRM accuracy", "reporting automation", "data governance"],
+      specificity_rule: "Must reference the triggering signal. E.g., if expansion to APAC, reference cross-region pipeline consolidation.",
     },
   },
   "SDR Manager": {
@@ -95,15 +132,15 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Pipeline coaching still lags behind activity data",
       "Ramp time extends when coaching is based on weekly reviews not real-time signals",
     ],
-    bridge_template: "You track [X] externally — curious if your SDR team has the same visibility internally, or if coaching still relies on lagging data.",
-    promise_library: {
-      award: "We help SDR managers get real-time rep visibility without overhauling their stack.",
-      stat: "We help SDR managers coach in real-time instead of reviewing last week.",
-      case_study: "We help SDR managers cut ramp time by closing the gap between activity data and actual performance.",
-      hiring: "We help SDR managers ramp new reps faster with real-time coaching signals.",
-      funding: "We help SDR managers build the rep visibility that scales with post-funding growth.",
-      expansion: "We help SDR managers standardise onboarding across regions before the process breaks.",
-      ipo: "We help SDR managers build the coaching infrastructure before scale exposes the gaps.",
+    bridge_principles: [
+      "Hiring surge → coaching infrastructure stress-tested → manager leverage drops",
+      "Funding/PE → growth targets escalate → ramp pressure intensifies",
+      "Award/recognition → external standards outpacing internal rep development",
+      "Expansion → multi-region SDR teams → coaching consistency breaks",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["coaching velocity", "ramp time reduction", "real-time rep visibility", "consistent onboarding"],
+      specificity_rule: "Must reference the triggering signal. E.g., if hiring 40 SDRs, reference coaching infrastructure at that scale.",
     },
   },
   "Marketing": {
@@ -112,15 +149,15 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Attribution gap between MQL and booked meeting",
       "No visibility into what happens to leads after SDR handoff",
     ],
-    bridge_template: "Winning on [X] externally doesn't always translate to SDR follow-up speed on the leads it generates.",
-    promise_library: {
-      award: "We help marketing teams see exactly what happens to leads after SDR handoff.",
-      stat: "We help marketing teams see exactly what happens to leads after SDR handoff.",
-      case_study: "We help marketing close the attribution gap between MQL and booked meeting.",
-      hiring: "We help marketing teams maintain lead-to-meeting velocity as the SDR team scales.",
-      funding: "We help marketing teams prove campaign ROI all the way through to booked meetings.",
-      expansion: "We help marketing teams measure SDR follow-up speed on every campaign in every market.",
-      ipo: "We help marketing close the attribution gap before GTM efficiency becomes the investor question.",
+    bridge_principles: [
+      "Hiring surge → more leads needed → campaign volume up but handoff quality unknown",
+      "Funding/PE → growth expectations → marketing ROI under investor scrutiny",
+      "Award/recognition → content credibility high but lead conversion unknown",
+      "Expansion → multi-market campaigns → attribution complexity compounds",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["post-handoff visibility", "attribution clarity", "lead-to-meeting velocity", "campaign ROI proof"],
+      specificity_rule: "Must reference the triggering signal. E.g., if case study published, reference whether their own marketing sees post-SDR outcomes.",
     },
   },
   "Founder/CEO": {
@@ -129,15 +166,15 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Revenue per SDR plateaus without operational visibility",
       "GTM predictability is hard to build at the Series A/B stage",
     ],
-    bridge_template: "At that recognition level, the next question is usually GTM efficiency — getting more from your current team before scaling it.",
-    promise_library: {
-      award: "We help founders increase revenue per SDR before the next hire.",
-      stat: "We help founders build GTM predictability at the Series A/B stage.",
-      case_study: "We help founders increase revenue per SDR before the next hire.",
-      hiring: "We help founders get more from their current team before adding headcount.",
-      funding: "We help founders build GTM predictability that matches investor expectations.",
-      expansion: "We help founders get more from their current GTM motion before the next growth stage demands it.",
-      ipo: "We help founders build GTM predictability before the roadshow demands it.",
+    bridge_principles: [
+      "Funding/PE → investor expectations → GTM efficiency becomes the board metric",
+      "Hiring surge → scaling before optimizing → revenue per rep dilution",
+      "Award/recognition → founder credibility high but GTM maturity lagging",
+      "Expansion → growth adds complexity → founder loses operational visibility",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["revenue per rep", "GTM predictability", "operational efficiency", "growth without proportional headcount"],
+      specificity_rule: "Must reference the triggering signal. E.g., if PE buyout at $11B, reference board-level GTM accountability at that scale.",
     },
   },
   "General": {
@@ -146,18 +183,71 @@ export const PERSONA_DATA: Record<TargetRole, {
       "Coaching and pipeline reviews rely on lagging indicators",
       "Team performance data arrives too late to act on",
     ],
-    bridge_template: "That level of external execution usually raises the question of whether internal visibility matches.",
-    promise_library: {
-      award: "We help teams get the same real-time visibility internally that they deliver externally.",
-      stat: "We help teams close the gap between activity data and actual performance.",
-      case_study: "We help teams close the gap between activity data and actual performance.",
-      hiring: "We help teams scale performance visibility with headcount growth.",
-      funding: "We help teams build the operational visibility investors expect.",
-      expansion: "We help teams maintain performance visibility across new regions and headcount.",
-      ipo: "We help teams build GTM predictability before the roadshow demands it.",
+    bridge_principles: [
+      "Any growth signal → external success creating internal operational pressure",
+      "Any recognition → external credibility vs internal process maturity gap",
+      "Any change → transition period where visibility gaps become costly",
+    ],
+    promise_guidelines: {
+      outcome_themes: ["real-time visibility", "operational maturity", "performance data accessibility"],
+      specificity_rule: "Must reference the triggering signal specifically. Generic promises are not acceptable.",
     },
   },
 };
+
+const STRUCTURAL_VARIANTS = {
+  "direct-challenger": {
+    description: "Lead with tension from the signal, challenge an assumption, question",
+    structure: "Tension statement from signal → challenge assumption → provocative question",
+    when: "Best for funding, IPO, or signals that imply a strategic shift",
+  },
+  "curiosity-gap": {
+    description: "Mirror a specific metric or fact, create a gap between what's visible and what's not",
+    structure: "Specific observation → gap between external success and internal reality → question that surfaces the gap",
+    when: "Best for stats, case studies, or published metrics",
+  },
+  "pain-forward": {
+    description: "Name the consequence first, then tie it to the signal",
+    structure: "Consequence statement → tie to their signal as evidence → question about their current approach",
+    when: "Best for hiring surges, expansion, or signals with operational implications",
+  },
+  "signal-mirror": {
+    description: "Mirror their own language/metrics back, contrast with internal reality",
+    structure: "Quote or reference their own words/numbers → contrast with likely internal reality → question",
+    when: "Best for awards, press quotes, or first-party content",
+  },
+};
+
+const FEW_SHOT_EXAMPLES = `
+EXAMPLE HOOKS — match this tone and quality:
+
+Voice model: Write like a smart colleague who read something interesting about the prospect and is genuinely curious. Not an SDR building to a pitch. No dramatic setup. No rhetorical flourishes. Just: here's what I noticed → here's why it connects to your world → what's actually happening there?
+
+1. [VP Sales + funding, direct-challenger]
+Signal: Notion raised $270M PE buyout at $11B valuation.
+Hook: "Notion just closed a $270M PE round at $11B. That level of investor oversight usually changes how pipeline gets presented to the board. Are you showing them live data when that happens, or still pulling from last month's spreadsheet? Teams at this stage typically cut forecast prep time by 50% — happy to show you what that looks like for Notion."
+Why it works: States the signal plainly, draws a simple direct connection, asks a specific binary question, then closes with a proof-backed promise tied to the signal.
+
+2. [SDR Manager + hiring, pain-forward]
+Signal: Gong is hiring 40+ SDRs across 3 regions.
+Hook: "Gong's ramping 40 new SDRs across 3 regions. At that scale, are your managers coaching from real-time data, or still working off last week's call recordings — because that's exactly where teams like yours typically lose 30% of ramp velocity."
+Why it works: One sentence on the signal, direct question, promise woven naturally after it. The connection is obvious — no buildup needed.
+
+3. [RevOps + expansion, signal-mirror]
+Signal: HubSpot opened offices in Tokyo and Sydney, grew APAC revenue 47%.
+Hook: "HubSpot grew APAC 47% and opened two new offices. Does your CRM give you one view across all three regions, or are you stitching spreadsheets together? Companies at that expansion stage typically consolidate pipeline reporting in the first 90 days — worth a call to see if it's the same issue."
+Why it works: Uses their exact numbers, asks a binary question that surfaces the real gap, closes with an outcome-framed soft CTA tied to the expansion signal.
+
+4. [Founder/CEO + award, curiosity-gap]
+Signal: Datadog CEO named EY Entrepreneur of the Year.
+Hook: "Congrats on the EY award. Curious whether GTM efficiency is keeping pace with that recognition — are you getting more revenue per rep this year than last? Happy to show you what that looks like for a team at Datadog's stage."
+Why it works: Brief human acknowledgment, direct question, then a generic soft close (no proof context assumed).
+
+5. [Marketing + case_study, direct-challenger]
+Signal: Outreach published case study: "How Snowflake's SDR team books 3x more meetings."
+Hook: "You published that Snowflake's SDR team books 3x more meetings. Does your own marketing team see what happens to leads after SDR handoff, or does visibility stop at MQL — that attribution gap is exactly where teams at your scale typically lose 20% of pipeline visibility."
+Why it works: Uses their own content to open the question, promise woven directly into the close as an outcome claim — no first-person framing.
+`;
 
 export type Hook = {
   news_item: number;
@@ -181,6 +271,7 @@ export type Hook = {
   trigger_type?: TriggerType;
   promise?: string;
   bridge_quality?: "strong" | "moderate" | "weak";
+  structural_variant?: string;
 };
 
 export type IntentSignalInput = {
@@ -251,6 +342,7 @@ export type ClaudeHookPayload = {
   trigger_type?: string;
   promise?: string;
   bridge_quality?: "strong" | "moderate" | "weak";
+  structural_variant?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -2172,80 +2264,81 @@ export async function resolveCompanyByName(
 // Build the Claude prompt
 // ---------------------------------------------------------------------------
 
-export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }): string {
-  const personaLine = targetRole && targetRole !== "General" ? targetRole : "Custom";
+function getPersonaSection(role: TargetRole): string {
+  const data = PERSONA_DATA[role] || PERSONA_DATA["General"];
+  return [
+    `${role}:`,
+    "Pain points (use these to inform the BRIDGE — connect the signal to one of these):",
+    ...data.pain_points.map(p => `  - ${p}`),
+    "",
+    "Bridge reasoning chains (follow the chain that fits the signal):",
+    ...data.bridge_principles.map(p => `  - ${p}`),
+    "",
+    "Promise guidelines:",
+    `  - Outcome themes: ${data.promise_guidelines.outcome_themes.join(", ")}`,
+    `  - ${data.promise_guidelines.specificity_rule}`,
+  ].join("\n");
+}
+
+const STYLE_BLOCKS: Record<Exclude<MessagingStyle, "evidence">, string> = {
+  challenger: [
+    "Messaging style: Challenger.",
+    "BRIDGE must challenge an assumption the prospect is operating on — do not validate the trigger.",
+    "QUESTION must be provocative and slightly uncomfortable.",
+    "PROMISE must imply a consequence of inaction, not a product feature.",
+    "First-person rule: Do NOT use we/our/us anywhere in the hook. All you/your framing.",
+    "Preferred structural variants: direct-challenger, curiosity-gap.",
+  ].join(" "),
+  implication: [
+    "Messaging style: Implication.",
+    "BRIDGE must surface the downstream consequence of the trigger if nothing changes.",
+    "QUESTION must make the cost of inaction concrete.",
+    "PROMISE: You may reference 'we' in the final sentence if sender context is provided.",
+    "Preferred structural variants: pain-forward, signal-mirror.",
+  ].join(" "),
+  risk: [
+    "Messaging style: Risk.",
+    "BRIDGE must frame what ignoring this signal costs the persona.",
+    "QUESTION must ask what is stopping them from acting.",
+    "First-person rule: Do NOT use we/our/us anywhere in the hook. All you/your framing.",
+    "Preferred structural variants: direct-challenger, pain-forward.",
+  ].join(" "),
+};
+
+export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }, messagingStyle: MessagingStyle = "evidence"): string {
+  const activeRole = targetRole && targetRole !== "General" ? targetRole : null;
+  const personaSection = activeRole
+    ? `PERSONA: ${activeRole}\n${getPersonaSection(activeRole)}`
+    : `PERSONA: Custom\n- Bridge: Connect their external achievement to an internal sales team pain.\n- Promise: State a specific outcome you deliver for this role.`;
+
+  const variantsSection = Object.entries(STRUCTURAL_VARIANTS)
+    .map(([name, v]) => `  ${name}: ${v.description}\n    Structure: ${v.structure}\n    Best for: ${v.when}`)
+    .join("\n");
+
   return [
     "You are generating a sales hook for an outbound SDR email.",
     "",
+    personaSection,
+    "",
     "CRITICAL RULE — READ BEFORE GENERATING:",
-    "This email is written TO a person whose job title is [PERSONA]. Their challenges are [PERSONA_PAIN]. Do NOT write about the prospect's product, their customers, or their industry operations. The trigger is CONTEXT ONLY. Write about their INTERNAL sales team challenges only.",
-    "",
-    "STRUCTURE RULE: The closing promise must always be the FINAL sentence of paragraph 1. It must not appear in paragraph 2 or later.",
-    "Correct structure:",
-    "Paragraph 1: Trigger reference + bridge to their internal pain + [PROMISE as final sentence]",
-    "Paragraph 2: Question or CTA only",
-    "",
-    "A hook is 2-3 sentences maximum. Follow this exact 4-part structure:",
-    "",
-    "1. TRIGGER: Reference something specific and real about the prospect's company (award, stat, case study, funding, expansion, hiring). Start with \"Saw\" or \"Noticed\" — never \"I\".",
-    "",
-    "2. BRIDGE: Connect their external achievement to an internal pain their persona experiences. Use the persona pain map below. The bridge must feel like a natural consequence, not a leap.",
-    "",
-    "3. QUESTION: One question that surfaces their current priority. Prefer open questions over binary ones. Do not use leading questions.",
-    "",
-    "4. PROMISE: One closing sentence stating an outcome you deliver — not a feature. This must be the FINAL sentence. It must end with a full stop, not a question mark. Reference a result (ramp time, forecast accuracy, pipeline visibility) not a product (dashboards, alerts, reports).",
+    "This email is written TO a person whose job title is the PERSONA above. Their challenges are defined in the PERSONA section above. Do NOT write about the prospect's product, their customers, or their industry operations. The trigger is CONTEXT ONLY. Write about their INTERNAL sales team challenges only.",
     "",
     "---",
     "",
-    "PERSONA PAIN MAPS:",
+    "HOOK ELEMENTS (do NOT follow a rigid order — vary the structure):",
     "",
-    "SDR Manager:",
-    "- Bridge: \"You track [X] externally — curious if your SDR team has the same visibility internally, or if coaching still relies on lagging data.\"",
-    "- Promises:",
-    "  - award: \"We help SDR managers get real-time rep visibility without overhauling their stack.\"",
-    "  - stat: \"We help SDR managers coach in real-time instead of reviewing last week.\"",
-    "  - funding: \"We help SDR managers build the coaching infrastructure before scale exposes the gaps.\"",
-    "  - expansion: \"We help SDR managers standardise onboarding across regions before the process breaks.\"",
-    "  - hiring: \"We help SDR managers cut ramp time without relying on senior reps to carry new hires.\"",
-    "  - IPO: \"We help SDR managers build pipeline visibility that holds up to investor scrutiny.\"",
+    "- TRIGGER: Reference something specific and real about the prospect's company (award, stat, case study, funding, expansion, hiring). Do NOT start with \"Saw\" or \"Noticed\" — vary your opener. Use their specific numbers, names, and facts.",
     "",
-    "VP Sales:",
-    "- Bridge: \"At that growth stage, pipeline visibility usually becomes the constraint before headcount does.\"",
-    "- Promises:",
-    "  - award: \"We help VP Sales teams call the quarter with confidence.\"",
-    "  - stat: \"We help VP Sales leaders surface pipeline risk before it shows up in the forecast.\"",
-    "  - funding: \"We help VP Sales teams build forecast confidence before the pressure arrives.\"",
-    "  - expansion: \"We help VP Sales leaders maintain attainment through geographic expansion.\"",
-    "  - IPO: \"We help VP Sales teams build the forecast discipline that IPO scrutiny demands.\"",
+    "- BRIDGE: Connect the trigger to a pain the persona experiences. Follow the bridge reasoning chains in the PERSONA section — pick the chain that fits the signal. The bridge must feel like a natural consequence, not a leap. The bridge must share a domain with the trigger (operational → operational, growth → growth).",
     "",
-    "Founder/CEO:",
-    "- Bridge: \"At that recognition level, the next question is usually GTM efficiency — getting more from your current team before scaling it.\"",
-    "- Promises:",
-    "  - award: \"We help founders increase revenue per SDR before the next hire.\"",
-    "  - funding: \"We help founders get more from their current GTM motion before the next growth stage demands it.\"",
-    "  - IPO: \"We help founders build GTM predictability before the roadshow demands it.\"",
-    "  - expansion: \"We help founders scale GTM into new markets without losing pipeline visibility.\"",
+    "- QUESTION: One question that surfaces a real gap. Prefer forced-choice (A or B?) or mechanism questions over open-ended ones. Specific enough that a generic answer wouldn't work.",
     "",
-    "RevOps:",
-    "- Bridge: \"The same operational discipline that drove [X] externally should apply to your pipeline data internally.\"",
-    "- Promises:",
-    "  - award: \"We help RevOps teams build one source of truth for pipeline activity.\"",
-    "  - stat: \"We help RevOps eliminate the spreadsheet layer between CRM and reality.\"",
-    "  - funding: \"We help RevOps teams build one source of truth before growth complexity compounds it.\"",
-    "  - expansion: \"We help RevOps teams consolidate pipeline data across regions into one view.\"",
-    "  - IPO: \"We help RevOps teams build the reporting infrastructure that audit-readiness requires.\"",
+    "- PROMISE: Close with a 1-sentence promise. See PROMISE GUIDELINES below for the exact formula.",
     "",
-    "Marketing:",
-    "- Bridge: \"Winning on [X] externally doesn't always translate to SDR follow-up speed on the leads it generates.\"",
-    "- Promises:",
-    "  - award: \"We help marketing teams see exactly what happens to leads after SDR handoff.\"",
-    "  - stat: \"We help marketing close the attribution gap between MQL and booked meeting.\"",
-    "  - funding: \"We help marketing teams measure SDR follow-up speed on every campaign.\"",
-    "  - expansion: \"We help marketing teams measure SDR follow-up speed on every campaign in every market.\"",
+    "---",
     "",
-    "Custom:",
-    "- User provides free-text pain and promise",
-    "- System still enforces 4-part structure",
+    "STRUCTURAL VARIANTS — pick the best fit for each signal (return the variant name in your JSON):",
+    variantsSection,
     "",
     "---",
     "",
@@ -2257,13 +2350,41 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "",
     "---",
     "",
+    "PROMISE GUIDELINES:",
+    "- Formula: [evidence-backed outcome claim] — [soft peer-level CTA referencing the prospect by name or scale]",
+    "- Good example: 'Teams at similar scale cut manager review time by 60% — happy to show you what that looks like for Hostinger.'",
+    "- If sender context has proof points: use one specific proof point. Don't invent stats.",
+    "- If sender context has no proof: state the outcome claim from the 'Outcome' field in sender context, then add a soft CTA.",
+    "- The promise must be tied to the specific signal in the hook — not a generic capability.",
+    "- Position: use your judgment — either a separate sentence after the question, or woven naturally into/after it.",
+    "- Never sound like a brochure. Peer-level confidence, not a sales pitch.",
+    "- If NO sender context: use a generic pain-focused soft close only. Example: 'Happy to show you what that looks like at that scale.' Do NOT invent a product claim.",
+    "- The promise sentence must appear inside the `hook` text. The `promise` JSON field is a separate extracted copy of that sentence — do not use it as a replacement.",
+    "",
+    "---",
+    "",
+    "TONE DIRECTIVES:",
+    "- Write like a smart colleague who noticed something interesting — not an SDR performing a pitch.",
+    "- State the signal plainly. Draw the connection simply. Ask the question directly. That's it.",
+    "- No dramatic em-dash bridges. No 'that kind of X means Y' constructions. Let the reader connect the dots.",
+    "- Contractions are fine. Short sentences are better than long ones. Trust the reader.",
+    "- Use their exact numbers and names. Specificity does the work — you don't need to explain why it matters.",
+    "- A brief human acknowledgment (award, milestone) is OK if it feels natural. Not flattery — just human.",
+    "- The goal is: recipient reads it and thinks 'hm, how did they know that's actually a problem for me', not 'wow that was a slick opener'.",
+    "",
+    "---",
+    "",
+    FEW_SHOT_EXAMPLES,
+    "",
+    "---",
+    "",
     "TRIGGER PRIORITY + SCORING GUIDANCE:",
     "- ipo: score 95+ (best personas: Founder/CEO, VP Sales, RevOps)",
     "- funding: score 90-94 (best personas: all)",
     "- expansion: score 80-89 (best personas: RevOps, SDR Manager, Marketing)",
     "- hiring (100+): score 80-85 (best personas: SDR Manager, VP Sales)",
     "",
-    "CHARACTER LIMIT: 400 characters maximum. Write concisely — the 4-part structure should fit naturally within this limit.",
+    "CHARACTER LIMIT: 400 characters maximum. Write concisely.",
     "",
     "---",
     "",
@@ -2272,24 +2393,29 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "  \"hook\": \"[full 2-3 sentence hook]\",",
     "  \"trigger\": \"[the specific thing referenced]\",",
     "  \"bridge_quality\": \"strong | moderate | weak\",",
-    "  \"promise\": \"[the closing promise sentence isolated]\",",
-    "  \"trigger_type\": \"award | stat | case_study | hiring | funding | IPO | expansion\"",
+    "  \"promise\": \"[evidence-backed outcome + soft CTA, 1 sentence, tied to the signal]\",",
+    "  \"trigger_type\": \"award | stat | case_study | hiring | funding | ipo | expansion\",",
+    "  \"structural_variant\": \"direct-challenger | curiosity-gap | pain-forward | signal-mirror\"",
     "}",
     "",
-    
-    "Selected persona: " + personaLine + ".",
+    ...(messagingStyle !== "evidence" ? [
+      "",
+      STYLE_BLOCKS[messagingStyle],
+    ] : []),
     ...(customPersona ? [
       "Custom persona inputs:",
       "- Pain: " + customPersona.pain,
       "- Promise: " + customPersona.promise,
     ] : []),
     ...(senderContext ? [
-      "Sender context (reference only):",
+      "Sender context (weave naturally — do not copy verbatim):",
       "- Outcome: " + senderContext.primaryOutcome,
       "- Buyer roles: " + senderContext.buyerRoles.join(', '),
       ...(senderContext.voiceTone ? ["- Voice tone: " + senderContext.voiceTone] : []),
+      ...(senderContext.whatYouSell ? ["- What you sell: " + senderContext.whatYouSell] : []),
+      ...(senderContext.proof?.length ? ["- Proof points (pick one if relevant): " + senderContext.proof.join(" | ")] : []),
     ] : []),
-  ].join("\\n");
+  ].join("\n");
 }
 
 export function buildUserPrompt(
@@ -2667,11 +2793,19 @@ export function hasValidQuestionStructure(hook: string): boolean {
  * Reject hooks that use first-person framing (we/our/us/I).
  * Hooks should always center the prospect with second-person framing.
  */
-function hasFirstPersonFraming(hook: string): boolean {
-  // Match standalone first-person words, not inside quotes
+function hasFirstPersonFraming(hook: string, messagingStyle: MessagingStyle = "evidence"): boolean {
   // Remove quoted sections first to avoid false positives on evidence quotes
   const withoutQuotes = hook.replace(/[""\u201C][^""\u201D]*[""\u201D]/g, "");
-  return /\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b|(?:^|\.\s+)I\s/i.test(withoutQuotes);
+
+  // Challenger and Risk: ban ALL first-person
+  if (messagingStyle === "challenger" || messagingStyle === "risk") {
+    return /\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b|(?:^|\.\s+)I\s/i.test(withoutQuotes);
+  }
+
+  // Evidence and Implication: allow "we" in final sentence only
+  const sentences = withoutQuotes.split(/(?<=[.!?])\s+/);
+  const nonFinalSentences = sentences.slice(0, -1).join(" ");
+  return /\bwe\b|\bwe'(re|ve|ll)\b|\bour\b|\bours\b|\bus\b|(?:^|\.\s+)I\s/i.test(nonFinalSentences);
 }
 
 /**
@@ -2774,6 +2908,7 @@ function assessBridgeQuality(hookText: string, evidenceSnippet: string): "strong
 export function validateHook(
   raw: ClaudeHookPayload,
   sourceLookup?: Map<number, ClassifiedSource>,
+  messagingStyle?: MessagingStyle,
 ): Hook | null {
   const angle = (raw.angle || "trigger").toLowerCase() as Angle;
   if (!VALID_ANGLES.includes(angle)) return null;
@@ -2821,7 +2956,7 @@ export function validateHook(
   }
 
   // You-first framing: reject hooks that use first-person (we/our/us/I)
-  if (hasFirstPersonFraming(hook)) return null;
+  if (hasFirstPersonFraming(hook, messagingStyle)) return null;
 
   // Market-stat framing: reject "your team" / "you're dealing with" unless evidence
   // is company-specific (contains the company name or is from a first-party source).
@@ -2926,9 +3061,25 @@ export function validateHook(
   const rawTriggerType = ((raw as any).trigger_type || "").toLowerCase().replace(/-/g, "_") as TriggerType;
   const triggerType = VALID_TRIGGER_TYPES.includes(rawTriggerType) ? rawTriggerType : undefined;
 
-  // Normalize promise (optional — graceful degradation)
+  // Normalize promise — required. If the JSON field is missing, attempt to extract
+  // the last sentence of the hook text. If the last sentence ends with "?" the
+  // 4-part structure is incomplete (promise was never written) → reject the hook.
   const rawPromise = ((raw as any).promise || "").trim();
-  const promise: string | undefined = rawPromise.length > 0 ? rawPromise : undefined;
+  let promise: string | undefined = rawPromise.length > 0 ? rawPromise : undefined;
+  if (!promise) {
+    // Split on sentence boundaries, take last non-empty chunk
+    const sentences = hook.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+    const lastSentence = sentences[sentences.length - 1] ?? "";
+    if (lastSentence.endsWith("?")) {
+      // Hook ends on a question — promise is missing, reject
+      return null;
+    }
+    promise = lastSentence.length > 0 ? lastSentence : undefined;
+  }
+  if (!promise) return null;
+
+  // Normalize structural_variant (optional)
+  const structuralVariant: string | undefined = ((raw as any).structural_variant || "").trim() || undefined;
 
   // Assess bridge quality (prefer model-provided value when valid)
   const rawBridgeQuality = ((raw as any).bridge_quality || "").toLowerCase();
@@ -2967,6 +3118,7 @@ export function validateHook(
     trigger_type: triggerType,
     promise: promise || undefined,
     bridge_quality: bridgeQuality,
+    structural_variant: structuralVariant,
   };
 }
 
@@ -2994,6 +3146,7 @@ export function publishGate(
   rawHooks: ClaudeHookPayload[],
   sourceLookup: Map<number, ClassifiedSource>,
   options?: PublishGateOptions,
+  messagingStyle?: MessagingStyle,
 ): Hook[] {
   const includeMarketContext = options?.includeMarketContext ?? false;
 
@@ -3025,7 +3178,7 @@ export function publishGate(
       diagnostics.push({ idx, news_item: newsItem, status: "drop:source_filtered_out" });
       continue;
     }
-    const validated = validateHook(rawWithItem, filteredLookup);
+    const validated = validateHook(rawWithItem, filteredLookup, messagingStyle);
     if (validated) {
       diagnostics.push({ idx, news_item: newsItem, status: "pass:validateHook", tier: validated.evidence_tier, anchorScore: filteredLookup.get(newsItem)?.anchorScore });
       validHooks.push(validated);
@@ -3067,7 +3220,7 @@ export function publishGate(
  * Used for static/demo hooks that are already in Hook shape (not ClaudeHookPayload).
  * Returns the hook if it passes, null if it fails.
  */
-export function publishGateValidateHook(hook: Hook): Hook | null {
+export function publishGateValidateHook(hook: Hook, messagingStyle?: MessagingStyle): Hook | null {
   const payload: ClaudeHookPayload = {
     news_item: hook.news_item,
     angle: hook.angle,
@@ -3081,7 +3234,7 @@ export function publishGateValidateHook(hook: Hook): Hook | null {
     psych_mode: hook.psych_mode,
     why_this_works: hook.why_this_works,
   };
-  return validateHook(payload);
+  return validateHook(payload, undefined, messagingStyle);
 }
 
 /**
@@ -3098,6 +3251,7 @@ export function publishGateFinal(
   hooks: Hook[],
   companyDomain?: string,
   options?: PublishGateOptions,
+  messagingStyle?: MessagingStyle,
 ): Hook[] {
   const includeMarketContext = options?.includeMarketContext ?? false;
   const domainLower = (companyDomain || "").toLowerCase();
@@ -3146,7 +3300,7 @@ export function publishGateFinal(
       psych_mode: hook.psych_mode,
       why_this_works: hook.why_this_works,
     };
-    const validated = validateHook(payload);
+    const validated = validateHook(payload, undefined, messagingStyle);
     if (!validated) {
       diagnostics.push({ idx, news_item: hook.news_item, status: "drop:validateHook_failed", source_url: hook.source_url || "", tier: hook.evidence_tier });
       continue;
@@ -3517,6 +3671,7 @@ export async function generateHooksForUrl(opts: {
   includeMarketContext?: boolean;
   senderContext?: SenderContext | null;
   targetRole?: TargetRole | null;
+  messagingStyle?: MessagingStyle;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
   const tavilyApiKey = process.env.TAVILY_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
@@ -3550,13 +3705,14 @@ export async function generateHooksForUrl(opts: {
 
   const _senderContext = opts.senderContext ?? null;
   const _targetRole = opts.targetRole ?? null;
+  const _messagingStyle = opts.messagingStyle ?? "evidence";
 
   // If no company-anchored sources, show low signal with specific guidance
   if (!hasAnchoredSources) {
     const sourceLookup = new Map<number, ClassifiedSource>();
     usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-    const systemPrompt = buildSystemPrompt(_senderContext, _targetRole);
+    const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
     const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
     const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
@@ -3574,7 +3730,7 @@ export async function generateHooksForUrl(opts: {
   const sourceLookup = new Map<number, ClassifiedSource>();
   usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-  const systemPrompt = buildSystemPrompt(_senderContext, _targetRole);
+  const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
   const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
   const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 

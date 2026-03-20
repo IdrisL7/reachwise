@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "GetSignalHooks — Evidence-first hooks from any company URL";
+export const alt = "GetSignalHooks — Signal-backed opening lines from any company URL";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -66,7 +66,7 @@ export default function Image() {
             maxWidth: "900px",
           }}
         >
-          Evidence-first hooks from any company URL
+          Signal-backed opening lines from any company URL
         </h1>
         <p
           style={{
@@ -78,7 +78,7 @@ export default function Image() {
             lineHeight: 1.5,
           }}
         >
-          AI-powered research turns public signals into cold email hooks with real quotes, sources, and dates.
+          AI-powered research turns public signals into personalised opening lines with real quotes, sources, and dates.
         </p>
         <div
           style={{

@@ -144,7 +144,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center px-4">
       <Suspense>
         <ResetPasswordForm />
       </Suspense>

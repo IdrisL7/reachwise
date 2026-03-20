@@ -6,7 +6,7 @@ import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
-  variable: "--font-geist-sans",
+  variable: "--font-body",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });

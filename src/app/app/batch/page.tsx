@@ -263,10 +263,12 @@ const BatchMode = () => {
                     onChange={(e) => setSelectedRole(e.target.value)}
                     disabled={processingState === 'processing' || processingState === 'uploading'}
                   >
-                    <option>VP Sales / Head of Sales</option>
-                    <option>RevOps / SalesOps</option>
-                    <option>CEO / Founder</option>
-                    <option>Marketing Director</option>
+                    <option value="VP Sales">VP Sales</option>
+                    <option value="RevOps">RevOps</option>
+                    <option value="SDR Manager">SDR Manager</option>
+                    <option value="Marketing">Marketing</option>
+                    <option value="Founder/CEO">Founder/CEO</option>
+                    <option value="Not sure / Any role">Any role</option>
                   </select>
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>

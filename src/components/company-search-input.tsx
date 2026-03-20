@@ -50,7 +50,7 @@ function getSourceBadgeStyle(label: string): string {
 
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-3 w-full rounded-lg border border-[#252830] bg-[#0e0f10] px-4 py-2.5">
+    <div className="flex items-center gap-3 w-full rounded-lg border border-white/[0.06] bg-[#0e0f10] px-4 py-2.5">
       <div className="relative overflow-hidden h-5 w-20 rounded bg-[#1e2025] shrink-0">
         <div className="absolute inset-0 animate-shimmer bg-gradient-to-r from-transparent via-zinc-700/20 to-transparent" />
       </div>
@@ -296,7 +296,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
           <button
             type="button"
             onClick={resetSearch}
-            className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors ml-1"
+            className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors ml-1 p-2 -mr-2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#030014]"
             aria-label="Clear selection"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -339,6 +339,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 15.803a7.5 7.5 0 0 0 10.607 0z" />
             </svg>
             <input
+              id="company-search"
               ref={inputRef}
               type="text"
               value={searchQuery}
@@ -358,7 +359,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
 
           {/* Dropdown panel */}
           {showDropdown && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-20 animate-slide-in-bottom rounded-xl border border-[#252830] bg-[#14161a]/95 backdrop-blur-sm shadow-2xl overflow-hidden">
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-20 animate-slide-in-bottom rounded-xl border border-white/[0.06] bg-[#14161a]/95 backdrop-blur-sm shadow-2xl overflow-hidden">
               {/* Recent searches — shown when query is empty */}
               {searchQuery === "" && recentSearches.length > 0 && (
                 <div className="p-2">
@@ -378,7 +379,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                           onCompanyNameChange(name);
                           runSearch(name);
                         }}
-                        className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#14161a] ${
                           activeIndex === i ? "bg-[#1a1c22] text-zinc-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22]"
                         }`}
                       >
@@ -387,7 +388,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                       <button
                         type="button"
                         onClick={() => removeRecentSearch(name)}
-                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-600 hover:text-zinc-400 transition-all mr-1"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 text-zinc-600 hover:text-zinc-400 transition-all mr-1 focus-visible:opacity-100 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#14161a]"
                         aria-label="Remove from recent"
                       >
                         <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -420,7 +421,7 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                           setIsFocused(true);
                           runSearch(company.name);
                         }}
-                        className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                        className={`flex items-center gap-3 w-full text-left px-3 py-2 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#14161a] ${
                           activeIndex === leadsOffset + i ? "bg-[#1a1c22] text-zinc-200" : "text-zinc-400 hover:text-zinc-200 hover:bg-[#1a1c22]"
                         }`}
                       >
@@ -458,10 +459,10 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                         type="button"
                         onClick={() => selectSource(source)}
                         style={{ animationDelay: `${i * 50}ms` }}
-                        className={`animate-fade-in flex items-center gap-3 w-full rounded-lg border px-4 py-2.5 text-left transition-all group ${
+                        className={`animate-fade-in flex items-center gap-3 w-full rounded-lg border px-4 py-2.5 text-left transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-inset ${
                           activeIndex === sourcesOffset + i
                             ? "border-violet-500/40 bg-violet-500/5 ring-1 ring-inset ring-violet-500/20"
-                            : "border-[#252830] bg-[#0e0f10] hover:border-violet-500/40 hover:bg-[#111319]"
+                            : "border-white/[0.06] bg-[#0e0f10] hover:border-violet-500/40 hover:bg-[#111319]"
                         }`}
                       >
                         <span
@@ -537,19 +538,24 @@ export function CompanySearchInput({ onSourceSelected, onCompanyNameChange }: Pr
                 Already have a URL? Paste it directly
               </button>
             ) : (
-              <input
-                type="text"
-                placeholder="https://techcrunch.com/..."
-                value={directUrl}
-                onChange={(e) => setDirectUrl(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && directUrl.trim()) {
-                    e.preventDefault();
-                    onSourceSelected(directUrl.trim(), searchQuery.trim());
-                  }
-                }}
-                className="mt-1 w-full bg-[#030014] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-purple-500 outline-none transition-all"
-              />
+              <>
+                <label htmlFor="direct-url" className="sr-only">Direct article URL</label>
+                <input
+                  id="direct-url"
+                  type="text"
+                  placeholder="https://techcrunch.com/..."
+                  value={directUrl}
+                  onChange={(e) => setDirectUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && directUrl.trim()) {
+                      e.preventDefault();
+                      onSourceSelected(directUrl.trim(), searchQuery.trim());
+                    }
+                  }}
+                  className="mt-1 w-full bg-[#030014] border border-white/10 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:border-purple-500 outline-none transition-all"
+                />
+              </>
+
             )}
           </div>
         </div>

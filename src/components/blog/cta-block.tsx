@@ -6,7 +6,7 @@ export function CTABlock() {
       <div className="flex flex-col items-center justify-between gap-6 text-center md:flex-row md:text-left">
         <div>
           <h3 className="text-2xl font-bold text-white">Ready to supercharge your cold emails?</h3>
-          <p className="mt-2 text-base text-zinc-400">Get started with GetSignalHooks today and craft compelling hooks that convert.</p>
+          <p className="mt-2 text-base text-zinc-400">Get started with GetSignalHooks today and craft personalised opening lines that get replies.</p>
         </div>
         <Link
           href="/register"

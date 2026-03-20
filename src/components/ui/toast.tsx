@@ -54,6 +54,7 @@ export function Toast({ message, variant = "success", onDismiss }: ToastProps) {
       <span>{message}</span>
       <button
         onClick={onDismiss}
+        aria-label="Dismiss notification"
         className="ml-2 opacity-60 hover:opacity-100 transition-opacity"
       >
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

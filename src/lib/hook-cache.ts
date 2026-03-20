@@ -3,15 +3,17 @@ import { eq } from "drizzle-orm";
 
 // Bump this whenever tier rules, gating logic, or prompt templates change.
 // Cached entries with a different version will be treated as stale.
-export const RULES_VERSION = 19;
+export const RULES_VERSION = 25;
 
-async function hashUrl(url: string, targetRole?: string): Promise<string> {
+async function hashUrl(url: string, targetRole?: string, messagingStyle?: string): Promise<string> {
   const normalized = url
     .replace(/^https?:\/\/(www\.)?/, "")
     .replace(/\/$/, "")
     .toLowerCase();
-  // Include targetRole in the hash so each persona gets its own cache entry
-  const input = targetRole ? `${normalized}::role=${targetRole}` : normalized;
+  // Include targetRole and messagingStyle so each combination gets its own cache entry
+  const rolePart = targetRole ? `::role=${targetRole}` : "";
+  const stylePart = messagingStyle && messagingStyle !== "evidence" ? `::style=${messagingStyle}` : "";
+  const input = `${normalized}${rolePart}${stylePart}`;
   const encoder = new TextEncoder();
   const data = encoder.encode(input);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -31,8 +33,9 @@ export async function getCachedHooks(
   url: string,
   currentProfileUpdatedAt?: string | null,
   targetRole?: string,
+  messagingStyle?: string,
 ): Promise<CachedHookResult | null> {
-  const urlHash = await hashUrl(url, targetRole);
+  const urlHash = await hashUrl(url, targetRole, messagingStyle);
   const [cached] = await db
     .select()
     .from(schema.hookCache)
@@ -67,8 +70,9 @@ export async function setCachedHooks(
   profileUpdatedAt?: string | null,
   targetRole?: string,
   variants?: unknown,
+  messagingStyle?: string,
 ) {
-  const urlHash = await hashUrl(url, targetRole);
+  const urlHash = await hashUrl(url, targetRole, messagingStyle);
   const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
 
   await db

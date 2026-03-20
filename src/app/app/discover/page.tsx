@@ -231,7 +231,7 @@ export default function DiscoverPage() {
 
       {hasSearched && !loading && results.length === 0 && !error && (
         <div className="border border-dashed border-white/10 rounded-2xl p-8 text-center">
-          <p className="text-slate-500 text-sm">No companies matched this search. Try broader filters — wider location or fewer tech constraints.</p>
+          <p className="text-slate-500 text-sm">No companies found. Try different keywords, a broader industry description, or add a location.</p>
         </div>
       )}
     </div>

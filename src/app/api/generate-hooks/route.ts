@@ -24,6 +24,7 @@ import {
   type Hook,
   type TargetRole,
   type IntentSignalInput,
+  type MessagingStyle,
   TARGET_ROLES,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
@@ -68,6 +69,7 @@ function diagnosePublishGateFinalDrops(
   hooks: Hook[],
   companyDomain: string | undefined,
   targetRole: TargetRole | null,
+  messagingStyle?: MessagingStyle,
 ): Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> {
   const domainLower = (companyDomain || "").toLowerCase();
   const out: Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> = [];
@@ -99,7 +101,7 @@ function diagnosePublishGateFinalDrops(
         confidence: hook.confidence,
         psych_mode: hook.psych_mode,
         why_this_works: hook.why_this_works,
-      });
+      }, undefined, messagingStyle);
       if (!validated) reason = "drop:validateHook_failed";
     }
 
@@ -130,6 +132,7 @@ export async function POST(request: Request) {
       targetRole?: string;
       customPain?: string;
       customPromise?: string;
+      messagingStyle?: MessagingStyle;
     } | null;
 
     const rawUrl = body?.url?.trim();
@@ -141,6 +144,11 @@ export async function POST(request: Request) {
         : undefined;
     const customPain = body?.customPain?.trim();
     const customPromise = body?.customPromise?.trim();
+    const VALID_MESSAGING_STYLES: MessagingStyle[] = ["evidence", "challenger", "implication", "risk"];
+    const messagingStyle: MessagingStyle =
+      body?.messagingStyle && VALID_MESSAGING_STYLES.includes(body.messagingStyle)
+        ? body.messagingStyle
+        : "evidence";
 
     const traceId = crypto.randomUUID().slice(0, 8);
     console.log("[generate-hooks] request start", {
@@ -225,11 +233,19 @@ export async function POST(request: Request) {
       );
     }
 
-    // Auth — allow unauthenticated demo (3 per day per IP)
-    const session = await auth();
-    const isDemo = !session?.user?.id;
+    // Internal API key bypass (used by n8n / cron automations)
+    const internalKey = request.headers.get("x-api-key");
+    const pipelineKey = process.env.PIPELINE_API_KEY;
+    const isPipelineKey = !!(pipelineKey && request.headers.get("authorization") === `Bearer ${pipelineKey}`);
+    const isInternalCall = isPipelineKey || !!(internalKey && internalKey === process.env.CRON_SECRET);
 
-    if (isDemo) {
+    // Auth — allow unauthenticated demo (3 per day per IP)
+    const session = isInternalCall ? null : await auth();
+    const isDemo = !isInternalCall && !session?.user?.id;
+
+    if (isInternalCall) {
+      // skip: rate limit, quota, session enforcement
+    } else if (isDemo) {
       const demoLimited = await checkRateLimit(getClientIp(request), "demo:hooks");
       if (demoLimited) return demoLimited;
     } else {
@@ -237,14 +253,14 @@ export async function POST(request: Request) {
       if (rateLimited) return rateLimited;
 
       // Quota check (trial + monthly limit + increment)
-      const quotaError = await checkHookQuota(session.user.id);
+      const quotaError = await checkHookQuota(session!.user!.id);
       if (quotaError) return quotaError;
     }
 
-    // Resolve workspace profile for cache busting (skip for demo)
+    // Resolve workspace profile for cache busting (skip for demo and internal)
     let profileUpdatedAt: string | null = null;
     let _senderContext: Awaited<ReturnType<typeof getWorkspaceProfile>> = null;
-    if (!isDemo) {
+    if (!isDemo && !isInternalCall) {
       try {
         const workspaceId = await resolveWorkspaceId(session!.user!.id);
         [_senderContext, profileUpdatedAt] = await Promise.all([
@@ -309,7 +325,7 @@ export async function POST(request: Request) {
     let isFastPath = false;
 
     try {
-      const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole);
+      const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole, messagingStyle);
       if (cachedResult) {
         // Check rules_version — if stale, treat as cache miss and regenerate fresh
         if (cachedResult.rulesVersion !== RULES_VERSION) {
@@ -352,7 +368,7 @@ export async function POST(request: Request) {
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
               const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-              const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona);
+              const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona, messagingStyle);
               const userPrompt = buildUserPrompt(url, [userSrc], context);
               const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
 
@@ -483,7 +499,7 @@ export async function POST(request: Request) {
 
           // 4. Build prompts and call Claude
           const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-          const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona);
+          const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona, messagingStyle);
           const promptSignals: IntentSignalInput[] = rawSignals
             .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
             .map((s) => ({
@@ -512,7 +528,7 @@ export async function POST(request: Request) {
           // 5. First pass: publishGate with source lookup (anchored-source filtering)
           candidateHooks = publishGate(rawHooks, sourceLookup, {
             includeMarketContext: false,
-          });
+          }, messagingStyle);
 
           console.log("[generate-hooks] candidate hooks after publishGate", {
             traceId,
@@ -572,7 +588,7 @@ export async function POST(request: Request) {
       })),
     });
 
-    const publishDiagnostics = diagnosePublishGateFinalDrops(candidateHooks, companyDomain || undefined, targetRole ?? null);
+    const publishDiagnostics = diagnosePublishGateFinalDrops(candidateHooks, companyDomain || undefined, targetRole ?? null, messagingStyle);
     console.log("[generate-hooks] publishGateFinal diagnostics", {
       traceId,
       diagnostics: publishDiagnostics,
@@ -583,8 +599,8 @@ export async function POST(request: Request) {
     // Only keep the unanchored-source check (Rule B), which already passes since source
     // URL is on the company domain.
     const gated = isFastPath ? candidateHooks : publishGateFinal(candidateHooks, companyDomain, {
-      includeMarketContext: false,
-    });
+      includeMarketContext: true,
+    }, messagingStyle);
 
     console.log("[generate-hooks] after publishGateFinal", {
       traceId,
@@ -653,20 +669,22 @@ export async function POST(request: Request) {
     });
 
     if (!hasAnchored) {
-      console.log("[generate-hooks] showing suggestion: no anchored sources");
-      finalTop = top.slice(0, 1);
-      finalOverflow = [];
-      suggestion = noAnchorSuggestion;
+      console.log("[generate-hooks] low signal: no anchored sources — showing hooks with low signal badge");
+      // Do NOT cap hooks or show the blocking suggestion.
+      // lowSignal badge communicates quality instead.
       finalLowSignal = true;
     } else if (isLowSignal) {
-      console.log("[generate-hooks] showing suggestion: low signal");
-      finalTop = top.slice(0, 1);
-      finalOverflow = [];
-      suggestion = lowSignalSuggestion;
+      // Show all hooks — just flag as low signal so the badge renders
       finalLowSignal = true;
     } else if (gated.length === 0) {
-      console.log("[generate-hooks] showing suggestion: no hooks survived publish gate");
-      suggestion = noAnchorSuggestion;
+      // No hooks survived publish gate — fall back to candidateHooks with lowered quality
+      // (avoids blank screen when all hooks were dropped by anchor check)
+      console.log("[generate-hooks] no hooks survived publish gate — falling back to candidateHooks");
+      finalTop = candidateHooks.slice(0, 3).map((hook) => {
+        const quality = scoreHookQuality(hook, companyDomain || undefined);
+        return { ...hook, evidence_tier: "B" as const, quality_score: quality, quality_label: getQualityLabel(quality) };
+      });
+      finalOverflow = [];
       finalLowSignal = true;
     }
 
@@ -704,11 +722,11 @@ export async function POST(request: Request) {
           hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
         } catch {}
       }
-      setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole, hookVariants.length > 0 ? hookVariants : undefined).catch(() => {});
+      setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole, hookVariants.length > 0 ? hookVariants : undefined, messagingStyle).catch(() => {});
     } else if (cached && (tierId === "pro" || tierId === "concierge")) {
       // Load variants from cache
       try {
-        const cr = await getCachedHooks(url!, profileUpdatedAt, targetRole);
+        const cr = await getCachedHooks(url!, profileUpdatedAt, targetRole, messagingStyle);
         if (cr?.variants) hookVariants = cr.variants as typeof hookVariants;
       } catch {}
     }
@@ -741,7 +759,7 @@ export async function POST(request: Request) {
         prefetchedSignals !== null
           ? Promise.resolve(prefetchedSignals)
           : researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
-        getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, true),
+        getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, true, companyName || undefined),
       ]);
 
       if (intentResult.status === "fulfilled") {
@@ -765,7 +783,7 @@ export async function POST(request: Request) {
       }
     } else {
       try {
-        companyIntel = await getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, false);
+        companyIntel = await getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, false, companyName || undefined);
       } catch {
         // Non-blocking
       }

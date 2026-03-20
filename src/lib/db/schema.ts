@@ -419,6 +419,36 @@ export const drafts = sqliteTable("drafts", {
 
 // ── Notifications ──
 
+// ── Demo email capture ──
+
+export const demoSignups = sqliteTable("demo_signups", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  email: text("email").notNull(),
+  source: text("source").notNull().default("demo_gate"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("demo_signups_email_idx").on(table.email),
+]);
+
+// ── Shared hooks (public) ──
+
+export const sharedHooks = sqliteTable("shared_hooks", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  hookText: text("hook_text").notNull(),
+  sourceTitle: text("source_title"),
+  sourceUrl: text("source_url"),
+  sourceSnippet: text("source_snippet"),
+  evidenceTier: text("evidence_tier"),
+  triggerType: text("trigger_type"),
+  promise: text("promise"),
+  bridgeQuality: text("bridge_quality"),
+  angle: text("angle"),
+  targetCompanyName: text("target_company_name"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+});
+
+// ── Notifications ──
+
 export const notifications = sqliteTable("notifications", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
   userId: text("user_id").notNull().references(() => users.id),

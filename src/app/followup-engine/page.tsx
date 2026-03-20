@@ -6,7 +6,10 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Follow-Up Engine — GetSignalHooks",
   description:
-    "Automate multi-channel follow-ups with guardrails. Import leads, generate evidence-backed sequences, and execute safely with approvals, caps, and stop-on-reply.",
+    "Automate multi-channel follow-ups with guardrails. Import leads, generate signal-backed sequences, and execute safely with approvals, caps, and stop-on-reply.",
+  alternates: {
+    canonical: "https://www.getsignalhooks.com/followup-engine",
+  },
 };
 
 const steps = [
@@ -20,7 +23,7 @@ const steps = [
     number: "2",
     title: "Research-backed hook generation",
     description:
-      "For every lead, GetSignalHooks crawls the company's public web presence and generates evidence-based hooks anchored on real signals — recent news, product launches, job postings, case studies, and more. Each follow-up gets a fresh angle so your sequence never feels repetitive.",
+      "For every lead, GetSignalHooks crawls the company's public web presence and generates signal-backed opening lines anchored on real signals — recent news, product launches, job postings, case studies, and more. Each follow-up gets a fresh angle so your sequence never feels repetitive.",
   },
   {
     number: "3",
@@ -30,15 +33,15 @@ const steps = [
   },
   {
     number: "4",
-    title: "n8n sends, tracks, and reports",
+    title: "Automated sending, tracking, and reporting",
     description:
-      "An n8n workflow runs on a schedule, checking which leads are due for a follow-up. It calls the Follow-Up Engine API, sends the email via your SMTP provider, and records the result. You monitor everything from the internal dashboard — sends, replies, and sequence progress.",
+      "Emails go out on schedule, automatically. Each send is logged, replies are detected and stop the sequence, and your dashboard updates in real time — no manual intervention needed.",
   },
 ];
 
 export default function FollowUpEnginePage() {
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0a0a0b] text-zinc-100 font-[family-name:var(--font-body)]">
       <Navbar />
 
       <main className="mx-auto max-w-3xl px-6 pb-28 pt-32 lg:pt-40">
@@ -47,7 +50,7 @@ export default function FollowUpEnginePage() {
           <p className="mb-4 text-[0.9375rem] font-semibold text-violet-400">
             Follow-Up Engine
           </p>
-          <h1 className="text-[clamp(2.25rem,4vw,3.25rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white">
+          <h1 className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,4vw,3.25rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white">
             Automated follow-ups, powered by real research
           </h1>
           <p className="mt-5 text-[1.0625rem] leading-[1.7] text-zinc-400">

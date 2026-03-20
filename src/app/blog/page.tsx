@@ -1,18 +1,20 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getAllPosts } from "@/lib/blog";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = {
   title: "Blog | GetSignalHooks",
   description:
-    "Guides, how-tos, and comparison content to help outbound teams write evidence-first hooks that convert.",
+    "Guides, how-tos, and comparison content to help outbound teams write signal-backed opening lines that convert.",
   alternates: {
     canonical: "https://www.getsignalhooks.com/blog",
   },
   openGraph: {
     title: "GetSignalHooks Blog",
     description:
-      "Guides, how-tos, and comparison content to help outbound teams write evidence-first hooks that convert.",
+      "Guides, how-tos, and comparison content to help outbound teams write signal-backed opening lines that convert.",
     url: "https://www.getsignalhooks.com/blog",
     type: "website",
   },
@@ -20,7 +22,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "GetSignalHooks Blog",
     description:
-      "Guides and comparison articles for outbound teams using evidence-first hook strategies.",
+      "Guides and comparison articles for outbound teams using signal-backed outbound strategies.",
   },
 };
 
@@ -28,17 +30,19 @@ export default async function BlogIndexPage() {
   const posts = await getAllPosts();
 
   return (
-    <main className="min-h-screen bg-[#080808] px-6 py-16 text-zinc-100 sm:px-8 lg:px-12">
+    <>
+      <Navbar />
+      <main className="min-h-screen bg-[#0a0a0b] px-6 pt-32 lg:pt-40 pb-16 text-zinc-100 sm:px-8 lg:px-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-10">
-          <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-violet-300">
+          <p className="mb-2 text-sm font-medium uppercase tracking-wider text-violet-300">
             GetSignalHooks Blog
           </p>
-          <h1 className="text-4xl font-semibold tracking-tight text-zinc-50 sm:text-5xl">
+          <h1 className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,4vw,3.25rem)] font-bold tracking-[-0.02em] text-zinc-50">
             Outbound playbooks built on real buying signals
           </h1>
           <p className="mt-4 max-w-3xl text-zinc-400">
-            Tactical guides, practical how-tos, and honest comparisons to help sales teams write hooks people actually reply to.
+            Tactical guides, practical how-tos, and honest comparisons to help sales teams write opening lines people actually reply to.
           </p>
         </div>
 
@@ -79,5 +83,7 @@ export default async function BlogIndexPage() {
         )}
       </div>
     </main>
+      <Footer />
+    </>
   );
 }

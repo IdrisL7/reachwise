@@ -59,7 +59,7 @@ export default async function AppLayout({
   const tierId = freshUser?.tierId || session.user.tierId;
 
   return (
-    <div className="min-h-screen flex bg-canvas text-text-primary font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen flex bg-canvas text-text-primary font-[family-name:var(--font-body)]">
       {/* Left sidebar — desktop only */}
       <aside className="hidden lg:flex flex-col w-[220px] fixed h-full bg-surface border-r border-white/[0.06] z-40">
         {/* Logo */}

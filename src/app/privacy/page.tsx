@@ -3,11 +3,14 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — GetSignalHooks",
+  alternates: {
+    canonical: "https://www.getsignalhooks.com/privacy",
+  },
 };
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-300">
+    <div className="min-h-screen bg-[#0a0a0b] text-zinc-300">
       <div className="mx-auto max-w-3xl px-6 py-20">
         <Link
           href="/"

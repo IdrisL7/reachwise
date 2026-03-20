@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 const FORMSPREE_ENDPOINT = "https://formspree.io/f/mqedoejr";
 
@@ -37,12 +39,16 @@ export default function ContactPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0a0a0b] text-zinc-100 font-[family-name:var(--font-body)]">
+      <Navbar />
       <main className="mx-auto max-w-xl px-6 py-16">
-        <h1 className="text-3xl font-bold text-white">Get started with GetSignalHooks</h1>
+        <p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-violet-400/70">
+          Private beta
+        </p>
+        <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold text-white">Request beta access</h1>
         <p className="mt-4 text-zinc-400">
-          Tell us a bit about how you&apos;re doing outbound today and we&apos;ll follow up with access
-          and examples tailored to you.
+          Tell us about your market and we&apos;ll send back example hooks for your exact ICP — before you
+          commit to anything. We reply within one business day.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-4">
@@ -60,6 +66,7 @@ export default function ContactPage() {
               <input
                 name="name"
                 required
+                aria-required="true"
                 className="mt-1 w-full rounded-md bg-zinc-900 px-3 py-2 text-sm text-zinc-100 border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </label>
@@ -72,6 +79,7 @@ export default function ContactPage() {
                 type="email"
                 name="email"
                 required
+                aria-required="true"
                 className="mt-1 w-full rounded-md bg-zinc-900 px-3 py-2 text-sm text-zinc-100 border border-zinc-800 focus:outline-none focus:ring-2 focus:ring-violet-500"
               />
             </label>
@@ -125,7 +133,7 @@ export default function ContactPage() {
 
           {status === "success" && (
             <p className="text-sm text-emerald-400 mt-2">
-              Thanks for reaching out. We&apos;ll get back to you soon.
+              Done — we&apos;ll send example hooks for your market within one business day.
             </p>
           )}
           {status === "error" && (
@@ -135,6 +143,7 @@ export default function ContactPage() {
           )}
         </form>
       </main>
+      <Footer />
     </div>
   );
 }

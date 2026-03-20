@@ -82,7 +82,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
   };
 
   return (
-    <main className="min-h-screen bg-[#080808] px-6 py-14 text-zinc-100 sm:px-8 lg:px-12">
+    <main className="min-h-screen bg-[#0a0a0b] px-6 py-14 text-zinc-100 sm:px-8 lg:px-12">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleJsonLd) }} />
 
       <article className="mx-auto max-w-3xl">

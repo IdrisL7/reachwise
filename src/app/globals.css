@@ -8,7 +8,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-body);
   --font-mono: var(--font-geist-mono);
   --font-display: var(--font-syne);
   --animate-shimmer: shimmer 2s infinite;
@@ -45,7 +45,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  font-family: var(--font-body), system-ui, sans-serif;
 }
 
 /* Shimmer animation for skeleton loaders */
@@ -128,3 +128,11 @@ body {
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .animate-gate-in { animation: gateIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in-up,
+  .animate-stagger-1, .animate-stagger-2, .animate-stagger-3,
+  .animate-stagger-4, .animate-stagger-5,
+  .animate-gate-in,
+  .animate-fade-in { animation: none !important; }
+}

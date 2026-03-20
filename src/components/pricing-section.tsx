@@ -22,7 +22,7 @@ function detectCurrency(): Currency {
 function FeatureItem({ feature }: { feature: TierFeature }) {
   const content = (
     <>
-      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
+      <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-500" />
       {feature.text}
     </>
   );
@@ -32,7 +32,7 @@ function FeatureItem({ feature }: { feature: TierFeature }) {
       <li>
         <Link
           href={feature.link}
-          className="flex items-start gap-2.5 text-violet-300/90 underline decoration-violet-500/30 underline-offset-2 transition-colors hover:text-violet-300 hover:decoration-violet-500/60"
+          className="flex items-start gap-2.5 text-zinc-400 underline decoration-zinc-600/40 underline-offset-2 transition-colors hover:text-zinc-200 hover:decoration-zinc-500/60 rounded-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-violet-500"
         >
           {content}
         </Link>
@@ -78,16 +78,17 @@ export function PricingSection() {
   return (
     <section
       id="pricing"
+      aria-labelledby="pricing-heading"
       className="border-t border-white/[0.06] bg-[#0a0a0b]"
     >
       <div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10 lg:py-24">
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-4 text-[0.9375rem] font-semibold text-amber-500">
+            <p className="mb-4 text-[0.9375rem] font-semibold text-zinc-500">
               7-day free trial · no card required
             </p>
-            <h2 className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-              Pricing that fits how you already do outbound
+            <h2 id="pricing-heading" className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
+              No migration. No lock-in. Just better outbound.
             </h2>
             <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
               Keep your existing lists and tools. Use GetSignalHooks as the
@@ -96,13 +97,13 @@ export function PricingSection() {
           </div>
         </Reveal>
 
-        <div className="mx-auto mt-6 flex items-center justify-center gap-1 rounded-full border border-zinc-700/40 bg-zinc-800/30 p-1 w-fit">
+        <div className="mx-auto mt-6 flex items-center justify-center gap-1 rounded-xl border border-zinc-700/40 bg-zinc-800/30 p-1 w-fit">
           {(["usd", "gbp", "eur"] as Currency[]).map((c) => (
             <button
               key={c}
               onClick={() => setCurrency(c)}
               aria-pressed={currency === c}
-              className={`px-3.5 py-1.5 rounded-full text-[0.8125rem] font-medium transition-all ${
+              className={`px-3.5 py-2.5 rounded-lg text-[0.8125rem] font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b] ${
                 currency === c
                   ? "bg-violet-600 text-white shadow-sm"
                   : "text-zinc-500 hover:text-zinc-300"
@@ -123,35 +124,35 @@ export function PricingSection() {
           {TIERS.map((tier, i) => (
             <Reveal key={tier.id} delay={i * 0.1}>
             <div
-              className={`group rounded-xl border p-7 transition-all duration-300 hover:-translate-y-0.5 relative ${
+              className={`rounded-xl border p-7 transition-[border-color,box-shadow] duration-300 relative ${
                 tier.highlighted
-                  ? "border-violet-500/30 bg-gradient-to-br from-[#15132a]/80 to-[#0f0f18]/60 shadow-[0_2px_24px_rgba(139,92,246,0.08)] hover:border-violet-500/50 hover:shadow-[0_4px_32px_rgba(139,92,246,0.12)]"
-                  : "border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 shadow-[0_2px_16px_rgba(0,0,0,0.2)] hover:border-violet-500/20 hover:shadow-[0_4px_24px_rgba(139,92,246,0.06)]"
+                  ? "border-zinc-300/60 bg-[#f5f4f0] shadow-[0_2px_24px_rgba(0,0,0,0.12)]"
+                  : "border-zinc-700/30 bg-[#111118] shadow-[0_2px_16px_rgba(0,0,0,0.2)] hover:border-zinc-600/40"
               }`}
             >
               {tier.highlighted && (
-                <div className="absolute -top-3 left-7 rounded-full bg-violet-600 px-3 py-0.5 text-[0.6875rem] font-bold text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]">
+                <div className="absolute -top-3 left-7 rounded bg-violet-600 px-3 py-0.5 text-[0.6875rem] font-bold text-white">
                   Popular
                 </div>
               )}
-              <h3 className="text-[1.1875rem] font-bold text-white">
+              <h3 className={`text-[1.1875rem] font-bold ${tier.highlighted ? "text-zinc-900" : "text-white"}`}>
                 {tier.name}
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
-                <span className="text-[2.75rem] font-bold tracking-tight text-white">
+                <span className={`text-[2.75rem] font-bold tracking-tight ${tier.highlighted ? "text-zinc-900" : "text-white"}`}>
                   {SYMBOLS[currency]}{tier.price[currency]}
                 </span>
-                <span className="text-[0.875rem] text-zinc-500">/month</span>
+                <span className={`text-[0.875rem] ${tier.highlighted ? "text-zinc-600" : "text-zinc-500"}`}>/month</span>
               </div>
-              <p className="mt-3 text-[0.9375rem] leading-[1.6] text-zinc-400">
+              <p className={`mt-3 text-[0.9375rem] leading-[1.6] ${tier.highlighted ? "text-zinc-700" : "text-zinc-400"}`}>
                 {tier.description}
               </p>
-              <ul className="mt-6 space-y-3 text-[0.875rem] leading-[1.5] text-zinc-400">
+              <ul className={`mt-6 space-y-3 text-[0.875rem] leading-[1.5] ${tier.highlighted ? "text-zinc-700" : "text-zinc-400"}`}>
                 {tier.features.map((feature) => (
                   <FeatureItem key={feature.text} feature={feature} />
                 ))}
               </ul>
-              <p className="mt-6 text-[0.8125rem] leading-[1.5] text-zinc-500">
+              <p className={`mt-6 text-[0.8125rem] leading-[1.5] ${tier.highlighted ? "text-zinc-600" : "text-zinc-500"}`}>
                 {tier.bestFor}
               </p>
               {currentTier === tier.id ? (
@@ -170,10 +171,10 @@ export function PricingSection() {
                         handleCheckout(tier.id, tier.id === "starter");
                       }
                     }}
-                    className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-all duration-200 hover:scale-[1.02] cursor-pointer disabled:opacity-50 disabled:hover:scale-100 ${
+                    className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-colors duration-150 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
                       tier.highlighted
-                        ? "bg-violet-600 text-white shadow-[0_0_16px_rgba(139,92,246,0.2)] hover:bg-violet-500 hover:shadow-[0_0_24px_rgba(139,92,246,0.35)] active:scale-[0.97]"
-                        : "border border-zinc-600/40 text-zinc-300 hover:border-violet-500/40 hover:text-white hover:shadow-[0_2px_12px_rgba(139,92,246,0.06)]"
+                        ? "bg-violet-600 text-white hover:bg-violet-500 focus-visible:ring-offset-[#f5f4f0]"
+                        : "border border-zinc-600/40 text-zinc-300 hover:border-violet-500/40 hover:text-white focus-visible:ring-offset-[#0a0a0b]"
                     }`}
                   >
                     {checkoutLoading === tier.id ? "Redirecting..." : tier.cta}
@@ -181,7 +182,7 @@ export function PricingSection() {
                   {tier.id === "concierge" && (
                     <Link
                       href="/contact"
-                      className="flex h-9 items-center justify-center rounded-lg text-[0.8125rem] font-medium border border-zinc-600/40 text-zinc-400 hover:text-white hover:border-violet-500/40 transition-all duration-200"
+                      className="flex h-11 items-center justify-center rounded-lg text-[0.8125rem] font-medium border border-zinc-600/40 text-zinc-400 hover:text-white hover:border-violet-500/40 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
                     >
                       or Book a call
                     </Link>
@@ -193,11 +194,6 @@ export function PricingSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-8 max-w-5xl text-center">
-          <p className="text-[0.8125rem] leading-[1.5] text-zinc-500">
-            We don&apos;t store submitted URLs. We don&apos;t invent facts. If evidence is weak, we label it or don&apos;t generate.
-          </p>
-        </div>
       </div>
     </section>
   );

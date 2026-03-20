@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { Navbar } from "@/components/navbar";
+import { Footer } from "@/components/footer";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center px-4">
+    <>
+      <Navbar />
+      <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center px-4">
       <div className="text-center">
         <p className="text-7xl font-bold text-violet-500 mb-4">404</p>
         <h1 className="text-2xl font-bold text-zinc-100 mb-2">
@@ -27,5 +31,7 @@ export default function NotFound() {
         </div>
       </div>
     </div>
+      <Footer />
+    </>
   );
 }

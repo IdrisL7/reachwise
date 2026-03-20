@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Hook {
@@ -125,6 +125,43 @@ export function HookCard({
   onPushToCrm,
 }: HookCardProps) {
   const [showDetails, setShowDetails] = useState(false);
+  const [sharingHook, setSharingHook] = useState(false);
+  const [shareLabel, setShareLabel] = useState("Share");
+  const [wonReply, setWonReply] = useState(false);
+  const [showSharePrompt, setShowSharePrompt] = useState(false);
+
+  async function handleShare() {
+    if (!hook.generated_hook_id) return;
+    setSharingHook(true);
+    try {
+      const res = await fetch("/api/hooks/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ hookId: hook.generated_hook_id }),
+      });
+      const data = await res.json().catch(() => null);
+      if (data?.shareUrl) {
+        await navigator.clipboard.writeText(data.shareUrl).catch(() => {});
+        setShareLabel("Copied link ✓");
+        setTimeout(() => setShareLabel("Share"), 2000);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSharingHook(false);
+    }
+  }
+
+  async function handleWin() {
+    if (!hook.generated_hook_id || wonReply) return;
+    setWonReply(true);
+    setShowSharePrompt(true);
+    fetch("/api/hooks/win", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hookId: hook.generated_hook_id }),
+    }).catch(() => {});
+  }
 
   const variantEntry = hookVariants.find((v) => v.hook_index === index);
   const active = activeChannel[index] || "email";
@@ -175,7 +212,10 @@ export function HookCard({
         <Badge variant={angleVariant(hook.angle)}>{hook.angle}</Badge>
         <span className="flex items-center gap-1 text-xs text-zinc-500">
           <span className={`w-2 h-2 rounded-full shrink-0 ${confColor}`} />
-          {hook.confidence}
+          <span className="sr-only">
+            {hook.confidence === "high" ? "High" : hook.confidence === "med" ? "Medium" : "Low"} confidence
+          </span>
+          <span aria-hidden="true">{hook.confidence}</span>
         </span>
         {targetRole && targetRole !== "Not sure / Any role" && targetRole !== "General" && (
           <Badge variant="role" className="text-[10px]">
@@ -184,60 +224,67 @@ export function HookCard({
         )}
         <button
           onClick={() => setShowDetails(v => !v)}
-          className="text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors ml-auto"
+          aria-expanded={showDetails}
+          aria-controls={`hook-details-${index}`}
+          className="flex items-center gap-0.5 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors ml-auto"
         >
-          {showDetails ? "▴ Less" : "▾ Details"}
+          <span>{showDetails ? "Hide details" : "Show details"}</span>
+          <ChevronDown
+            className={`w-3 h-3 transition-transform duration-200 ${showDetails ? "rotate-180" : ""}`}
+          />
         </button>
       </div>
 
       {/* Collapsible detail badges */}
-      <AnimatePresence>
-        {showDetails && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden mb-3"
-          >
-            <div className="flex items-center gap-1.5 flex-wrap pt-1">
-              {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
-              {typeof hook.quality_score === "number" && (
-                <Badge
-                  variant={
-                    hook.quality_score >= 90 ? "fresh"
-                      : hook.quality_score >= 70 ? "trigger"
-                      : hook.quality_score >= 50 ? "older"
-                      : "risk"
-                  }
-                  className="text-[10px]"
-                >
-                  {hook.quality_label || "Score"} {hook.quality_score}
-                </Badge>
-              )}
-              {hook.psych_mode && (
-                <Badge
-                  variant="psych"
-                  title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
-                  className="cursor-help"
-                >
-                  {psychModeLabels[hook.psych_mode] || hook.psych_mode}
-                </Badge>
-              )}
-              {hook.trigger_type && (
-                <Badge variant="trigger" className="text-[10px]">
-                  {hook.trigger_type.replace(/_/g, " ")}
-                </Badge>
-              )}
-              {hook.bridge_quality === "weak" && (
-                <Badge variant="older" className="text-[10px]" title="Bridge has weak connection to evidence">
-                  weak bridge
-                </Badge>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: showDetails ? "1fr" : "0fr",
+          transition: "grid-template-rows 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+      >
+        <div
+          id={`hook-details-${index}`}
+          style={{ overflow: "hidden" }}
+          className="mb-3"
+        >
+          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+            {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
+            {typeof hook.quality_score === "number" && (
+              <Badge
+                variant={
+                  hook.quality_score >= 90 ? "fresh"
+                    : hook.quality_score >= 70 ? "trigger"
+                    : hook.quality_score >= 50 ? "older"
+                    : "risk"
+                }
+                className="text-[10px]"
+              >
+                {hook.quality_label || "Score"} {hook.quality_score}
+              </Badge>
+            )}
+            {hook.psych_mode && (
+              <Badge
+                variant="psych"
+                title={hook.why_this_works || psychModeLabels[hook.psych_mode] || hook.psych_mode}
+                className="cursor-help"
+              >
+                {psychModeLabels[hook.psych_mode] || hook.psych_mode}
+              </Badge>
+            )}
+            {hook.trigger_type && (
+              <Badge variant="trigger" className="text-[10px]">
+                {hook.trigger_type.replace(/_/g, " ")}
+              </Badge>
+            )}
+            {hook.bridge_quality === "weak" && (
+              <Badge variant="older" className="text-[10px]" title="Bridge has weak connection to evidence">
+                weak bridge
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Role sharpening prompt */}
       {(targetRole === "Not sure / Any role" || targetRole === "General") && (
@@ -305,6 +352,15 @@ export function HookCard({
         >
           {copiedEvidence === index ? "Copied!" : "Copy + Evidence"}
         </button>
+        {hook.generated_hook_id && (
+          <button
+            onClick={handleShare}
+            disabled={sharingHook}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 disabled:opacity-50 transition-colors"
+          >
+            {sharingHook ? "Sharing..." : shareLabel}
+          </button>
+        )}
         <button
           onClick={() => onGenerateEmail(hook, index)}
           disabled={generatingEmail === index}
@@ -329,7 +385,31 @@ export function HookCard({
             {pushingCrm ? "Pushing..." : pushedToCrm ? "Pushed" : "Push to CRM"}
           </button>
         )}
+        {hook.generated_hook_id && !wonReply && (
+          <button
+            onClick={handleWin}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700/60 bg-transparent text-zinc-600 hover:text-emerald-400 hover:border-emerald-700/50 transition-colors ml-auto"
+          >
+            Got a reply?
+          </button>
+        )}
+        {wonReply && (
+          <span className="text-xs text-emerald-400 ml-auto">Nice work!</span>
+        )}
       </div>
+
+      {/* Reply win share prompt */}
+      {showSharePrompt && hook.generated_hook_id && (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-emerald-800/30 bg-emerald-900/10 px-3 py-2 animate-slide-in-bottom">
+          <p className="text-xs text-emerald-300">Want to share this hook with your team?</p>
+          <button
+            onClick={() => { handleShare(); setShowSharePrompt(false); }}
+            className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-md border border-emerald-700/50 bg-emerald-900/20 text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            Share link
+          </button>
+        </div>
+      )}
 
       {/* Generated email */}
       {generatedEmails[index] && (

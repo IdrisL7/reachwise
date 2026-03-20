@@ -5,7 +5,7 @@ import Link from "next/link";
 import ContextWalletModal from "@/components/context-wallet-modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, ChevronDown, CheckCircle } from 'lucide-react';
-import { CompanySearchInput } from "./company-search-input";
+import { CompanySearchInput } from "@/components/company-search-input";
 import { HookCard } from "./hook-card";
 import { IntentSignals } from "./intent-signals";
 import { UpgradePrompt } from "./upgrade-prompt";
@@ -65,7 +65,6 @@ export default function HooksPage() {
   const [lowSignal, setLowSignal] = useState(false);
   const [hasProfile, setHasProfile] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showGateModal, setShowGateModal] = useState(false);
   const [copiedEvidence, setCopiedEvidence] = useState<number | null>(null);
   const [generatingEmail, setGeneratingEmail] = useState<number | null>(null);
   const [generatedEmails, setGeneratedEmails] = useState<Record<number, GeneratedEmail>>({});
@@ -82,11 +81,16 @@ export default function HooksPage() {
   const [findingContacts, setFindingContacts] = useState(false);
   const [contactsResult, setContactsResult] = useState<{ created: number; skipped: number } | null>(null);
   const [contactsError, setContactsError] = useState<string | null>(null);
-  const [skippedGate, setSkippedGate] = useState(false);
   const [hasCopied, setHasCopied] = useState(false);
-  const pendingGenerate = useRef(false);
+  const [showFirstHookNudge, setShowFirstHookNudge] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("first-hook-seen");
+    }
+    return false;
+  });
   const lowSignalTracked = useRef(false);
   const hooksGeneratedFirstTracked = useRef(false);
+  const prevRoleRef = useRef<string | null>(null);
   const [customRoleInput, setCustomRoleInput] = useState("");
   const [showCustomRole, setShowCustomRole] = useState(false);
   const [customPain, setCustomPain] = useState("");
@@ -119,6 +123,12 @@ export default function HooksPage() {
     }
     return "Not sure / Any role";
   });
+  const [messagingStyle, setMessagingStyle] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("gsh_messagingStyle") || "evidence";
+    }
+    return "evidence";
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -146,14 +156,48 @@ export default function HooksPage() {
     });
   }, []);
 
-  const shouldGate = !hasProfile && hooksUsed === 0 && !skippedGate;
-  const profileRequired = !hasProfile && skippedGate;
+  // Persist role selection across sessions
+  useEffect(() => {
+    localStorage.setItem("gsh_targetRole", targetRole);
+  }, [targetRole]);
 
-  const progressSteps = [
-    { label: "Profile", done: hasProfile },
-    { label: "Generate", done: hooks.length > 0 },
-    { label: "Copy", done: hasCopied },
-  ];
+  // Persist messaging style across sessions
+  useEffect(() => {
+    localStorage.setItem("gsh_messagingStyle", messagingStyle);
+  }, [messagingStyle]);
+
+  const prevStyleRef = useRef<string | null>(null);
+
+  // Auto-regenerate when role changes after hooks are already displayed
+  useEffect(() => {
+    if (prevRoleRef.current === null) {
+      prevRoleRef.current = targetRole;
+      return;
+    }
+    if (prevRoleRef.current === targetRole) return;
+    prevRoleRef.current = targetRole;
+
+    if (hooks.length === 0 || loading || (!url && !companyName)) return;
+    if (targetRole === "Custom" && !customRoleInput.trim()) return;
+
+    doGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetRole]);
+
+  // Auto-regenerate when messaging style changes after hooks are already displayed
+  useEffect(() => {
+    if (prevStyleRef.current === null) {
+      prevStyleRef.current = messagingStyle;
+      return;
+    }
+    if (prevStyleRef.current === messagingStyle) return;
+    prevStyleRef.current = messagingStyle;
+
+    if (hooks.length === 0 || loading || (!url && !companyName)) return;
+
+    doGenerate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagingStyle]);
 
   function markCopied() {
     if (!hasCopied) {
@@ -163,7 +207,6 @@ export default function HooksPage() {
   }
 
   async function copyHook(text: string, index: number) {
-    if (profileRequired) { setShowGateModal(true); return; }
     const active = activeChannel[index] || "email";
     if (active !== "email") {
       const variantEntry = hookVariants.find((v) => v.hook_index === index);
@@ -181,7 +224,6 @@ export default function HooksPage() {
   }
 
   async function copyHookWithEvidence(hook: Hook, index: number) {
-    if (profileRequired) { setShowGateModal(true); return; }
     const active = activeChannel[index] || "email";
     const hookText = (() => {
       if (active === "email") return hook.text;
@@ -197,7 +239,6 @@ export default function HooksPage() {
   }
 
   async function generateEmail(hook: Hook, index: number) {
-    if (profileRequired) { setShowGateModal(true); return; }
     setGeneratingEmail(index);
     try {
       const res = await fetch("/api/generate-email", {
@@ -228,7 +269,6 @@ export default function HooksPage() {
   }
 
   async function copyEmail(email: GeneratedEmail, index: number) {
-    if (profileRequired) { setShowGateModal(true); return; }
     const content = `Subject: ${email.subject}\n\n${email.body}`;
     await navigator.clipboard.writeText(content);
     setCopiedEmail(index); markCopied();
@@ -306,11 +346,12 @@ export default function HooksPage() {
 
   function runWithUrl(newUrl: string) {
     setUrl(newUrl);
-    setTimeout(() => generateHooks({ preventDefault: () => {} } as React.FormEvent), 50);
+    doGenerate(newUrl);
   }
 
-  const doGenerate = useCallback(async () => {
-    if (!url && !companyName) return;
+  const doGenerate = useCallback(async (urlOverride?: string) => {
+    const effectiveUrl = urlOverride ?? url;
+    if (!effectiveUrl && !companyName) return;
 
     setLoading(true);
     setError("");
@@ -340,7 +381,7 @@ export default function HooksPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          url: url ? (url.match(/^https?:\/\//) ? url : `https://${url}`) : undefined,
+          url: effectiveUrl ? (effectiveUrl.match(/^https?:\/\//) ? effectiveUrl : `https://${effectiveUrl}`) : undefined,
           companyName: companyName || undefined,
           targetRole: targetRole !== "Not sure / Any role" && targetRole !== "General"
             ? (targetRole === "Custom" ? customRoleInput.trim() || undefined : targetRole)
@@ -348,6 +389,7 @@ export default function HooksPage() {
           customPain: targetRole === "Custom" && customPain.trim() ? customPain.trim() : undefined,
           customPromise: targetRole === "Custom" && customPromise.trim() ? customPromise.trim() : undefined,
           context: userTier !== "starter" && pitchContext.trim() ? pitchContext.trim() : undefined,
+          messagingStyle: messagingStyle !== "evidence" ? messagingStyle : undefined,
         }),
       });
 
@@ -411,17 +453,21 @@ export default function HooksPage() {
       if (data.webUrls) setWebUrls(data.webUrls);
       if (data.companyDomain) setCompanyDomain(data.companyDomain);
 
+      const wasFirstHook = (hooksUsed ?? 0) === 0;
       setHooksUsed((prev) => (prev ?? 0) + 1);
-      if (!hooksGeneratedFirstTracked.current && (hooksUsed ?? 0) === 0) {
+      if (!hooksGeneratedFirstTracked.current && wasFirstHook) {
         hooksGeneratedFirstTracked.current = true;
         trackEvent("hooks_generated_first");
+        if (!localStorage.getItem("first-hook-seen")) {
+          setShowFirstHookNudge(true);
+        }
       }
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [url, companyName, targetRole, customRoleInput, customPain, customPromise, pitchContext, userTier, hooksUsed]);
+  }, [url, companyName, targetRole, messagingStyle, customRoleInput, customPain, customPromise, pitchContext, userTier, hooksUsed]);
 
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
@@ -430,38 +476,12 @@ export default function HooksPage() {
       setError("Enter a role name or pick one from the dropdown.");
       return;
     }
-    if (shouldGate) {
-      pendingGenerate.current = true;
-      setShowProfileModal(true);
-      trackEvent("jit_profile_shown");
-      return;
-    }
-    if (profileRequired) {
-      pendingGenerate.current = true;
-      setShowGateModal(true);
-      return;
-    }
     await doGenerate();
   }
 
   function handleProfileSaved() {
     setShowProfileModal(false);
     setHasProfile(true);
-    trackEvent("jit_profile_saved");
-    if (pendingGenerate.current) { pendingGenerate.current = false; doGenerate(); }
-  }
-
-  function handleGateSkipped() {
-    setShowProfileModal(false);
-    setSkippedGate(true);
-    trackEvent("jit_profile_skipped");
-    if (pendingGenerate.current) { pendingGenerate.current = false; doGenerate(); }
-  }
-
-  function handleGateModalSave() {
-    setShowGateModal(false);
-    setShowProfileModal(true);
-    pendingGenerate.current = true;
   }
 
   const EXAMPLE_COMPANIES = [
@@ -492,7 +512,7 @@ export default function HooksPage() {
 
         {/* Input Console */}
         <form onSubmit={generateHooks} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-8 shadow-2xl mb-8">
-          <div className="grid grid-cols-12 gap-6 items-end">
+          <div className="grid grid-cols-12 gap-6 items-end mb-4">
             <div className="col-span-6">
               <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">
                 Target Company
@@ -519,11 +539,11 @@ export default function HooksPage() {
                   className="w-full bg-[#030014] border border-white/10 rounded-xl p-4 text-sm appearance-none outline-none focus:border-purple-500"
                 >
                   <option value="VP Sales">VP Sales</option>
-                  <option value="RevOps">RevOps / SalesOps</option>
-                  <option value="Founder/CEO">Founder / CEO</option>
+                  <option value="RevOps">RevOps</option>
+                  <option value="SDR Manager">SDR Manager</option>
                   <option value="Marketing">Marketing</option>
-                  <option value="Customer Success">Customer Success</option>
-                  <option value="Not sure / Any role">Not sure / Any role</option>
+                  <option value="Founder/CEO">Founder/CEO</option>
+                  <option value="Not sure / Any role">Any role</option>
                 </select>
                 <ChevronDown className="absolute right-4 top-4 text-slate-600 pointer-events-none" size={18} />
               </div>
@@ -536,6 +556,26 @@ export default function HooksPage() {
               >
                 {loading ? "Generating..." : "Generate"}
               </button>
+            </div>
+          </div>
+          <div className="grid grid-cols-12 gap-6 items-end">
+            <div className="col-span-6 col-start-7">
+              <label className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2 block">
+                Messaging Style
+              </label>
+              <div className="relative">
+                <select
+                  value={messagingStyle}
+                  onChange={(e) => setMessagingStyle(e.target.value)}
+                  className="w-full bg-[#030014] border border-white/10 rounded-xl p-4 text-sm appearance-none outline-none focus:border-purple-500"
+                >
+                  <option value="evidence">Evidence — anchor to the signal</option>
+                  <option value="challenger">Challenger — reframe their reality</option>
+                  <option value="implication">Implication — amplify the consequence</option>
+                  <option value="risk">Risk — frame the cost of inaction</option>
+                </select>
+                <ChevronDown className="absolute right-4 top-4 text-slate-600 pointer-events-none" size={18} />
+              </div>
             </div>
           </div>
         </form>
@@ -599,7 +639,7 @@ export default function HooksPage() {
                     setUrl(example.url);
                     setTargetRole(example.role);
                     localStorage.setItem("gsh_targetRole", example.role);
-                    setTimeout(() => generateHooks({ preventDefault: () => {} } as React.FormEvent), 50);
+                    doGenerate(example.url);
                   }}
                   className="px-4 py-2 rounded-full border border-white/10 bg-white/5 text-xs font-bold hover:bg-white/10 transition-colors"
                 >
@@ -729,6 +769,21 @@ export default function HooksPage() {
             <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 items-start">
               {/* Left: hooks list */}
               <div className="space-y-4">
+                {showFirstHookNudge && (
+                  <div className="rounded-xl border border-violet-500/20 bg-violet-500/[0.06] px-5 py-4 text-sm text-violet-300 flex items-center justify-between gap-4 animate-fade-in">
+                    <span>Your first hook. Copy it, paste it into your next email, and see what happens.</span>
+                    <button
+                      onClick={() => {
+                        setShowFirstHookNudge(false);
+                        localStorage.setItem("first-hook-seen", "1");
+                      }}
+                      className="shrink-0 text-violet-400 hover:text-violet-200 transition-colors"
+                      aria-label="Dismiss"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
                 <div className="flex items-center gap-3 justify-between">
                   <h2 className="text-lg font-semibold">
                     Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
@@ -865,7 +920,7 @@ export default function HooksPage() {
                 )}
 
                 {/* Profile nudge */}
-                {!hasProfile && !shouldGate && (
+                {!hasProfile && (
                   <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl px-4 py-3 text-sm text-zinc-400">
                     Want hooks that connect to your pitch?{" "}
                     <button
@@ -882,42 +937,13 @@ export default function HooksPage() {
           );
         })()}
 
-        {/* Profile-required gate modal */}
-        {showGateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70">
-            <div className="bg-zinc-900 border border-zinc-700 rounded-xl p-6 max-w-md mx-4 shadow-2xl animate-scale-in">
-              <h3 className="text-lg font-semibold text-zinc-100 mb-3">
-                Add your profile to continue
-              </h3>
-              <p className="text-sm text-zinc-400 mb-5 leading-relaxed">
-                To copy, export, or generate more hooks, add your 60-second profile so we can connect the signal to your offer.
-              </p>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleGateModalSave}
-                  className="bg-violet-600 hover:bg-violet-500 text-white font-medium px-4 py-2 rounded-lg text-sm shadow-[0_0_16px_rgba(139,92,246,0.2)] transition-all duration-200"
-                >
-                  Add profile (60 seconds)
-                </button>
-                <button
-                  onClick={() => setShowGateModal(false)}
-                  className="text-sm text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {showProfileModal && (
           <ContextWalletModal
-            showClose={!shouldGate}
-            showSkip={shouldGate}
-            gateMode={shouldGate || pendingGenerate.current}
-            onClose={() => { setShowProfileModal(false); pendingGenerate.current = false; }}
+            showClose
+            showSkip={false}
+            gateMode={false}
+            onClose={() => setShowProfileModal(false)}
             onSave={handleProfileSaved}
-            onSkip={handleGateSkipped}
           />
         )}
 

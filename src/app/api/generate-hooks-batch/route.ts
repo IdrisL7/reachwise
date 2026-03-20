@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
-import { generateHooksForUrl, generateChannelVariants, type Hook } from "@/lib/hooks";
+import { generateHooksForUrl, generateChannelVariants, type Hook, type MessagingStyle } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
 import { checkTrialActive, checkBatchSize, getLimits } from "@/lib/tier-guard";
 import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
@@ -20,6 +20,7 @@ type BatchItemInput = {
 type BatchRequest = {
   items: BatchItemInput[];
   maxHooksPerUrl?: number;
+  messagingStyle?: MessagingStyle;
 };
 
 type BatchItemResult = {
@@ -89,6 +90,11 @@ export async function POST(request: Request) {
     }
 
     const maxHooksPerUrl = body.maxHooksPerUrl;
+    const VALID_MESSAGING_STYLES: MessagingStyle[] = ["evidence", "challenger", "implication", "risk"];
+    const messagingStyle: MessagingStyle =
+      body.messagingStyle && VALID_MESSAGING_STYLES.includes(body.messagingStyle)
+        ? body.messagingStyle
+        : "evidence";
 
     const results: BatchItemResult[] = await Promise.all(
       body.items.map(async (item): Promise<BatchItemResult> => {
@@ -103,6 +109,7 @@ export async function POST(request: Request) {
             url,
             pitchContext: item.pitchContext,
             count: maxHooksPerUrl,
+            messagingStyle,
           });
           let itemVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> | undefined;
           if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {

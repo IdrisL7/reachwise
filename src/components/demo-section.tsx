@@ -47,7 +47,7 @@ function AnglePill({ angle }: { angle: string }) {
     tradeoff: "bg-amber-500/10 text-amber-400 border-amber-500/20",
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[angle] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>
+    <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[angle] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>
       {angle}
     </span>
   );
@@ -60,7 +60,7 @@ function ConfidencePill({ confidence }: { confidence: string }) {
     low: "bg-zinc-500/10 text-zinc-500 border-zinc-700/20",
   };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[confidence] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>
+    <span className={`inline-flex items-center rounded-md border px-2.5 py-0.5 text-[0.6875rem] font-semibold ${styles[confidence] || "bg-zinc-500/10 text-zinc-400 border-zinc-600/20"}`}>
       {confidence}
     </span>
   );
@@ -74,7 +74,7 @@ function TierBadge({ tier }: { tier: string }) {
   };
   return (
     <>
-      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.6875rem] font-bold ${styles[tier] || styles["C"]}`}>
+      <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[0.6875rem] font-bold ${styles[tier] || styles["C"]}`}>
         Tier {tier}
       </span>
       {tier === "B" && (

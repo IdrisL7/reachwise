@@ -1,9 +1,9 @@
 export function WhoItsForSection() {
   return (
-    <section className="border-t border-white/[0.06] bg-[#0b0b10]">
+    <section className="border-t border-white/[0.06] bg-[#0a0a0b]">
       <div className="mx-auto max-w-[90rem] px-6 py-20 lg:px-10 lg:py-28">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="mb-4 text-[0.9375rem] font-semibold text-violet-400">
+          <p className="mb-4 text-[0.9375rem] font-semibold text-amber-500">
             Who it is for
           </p>
           <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
@@ -15,7 +15,7 @@ export function WhoItsForSection() {
           {[
             {
               title: "SDRs & BDRs",
-              desc: "Evidence-backed hooks across email, LinkedIn, and calls. Approve drafts in your inbox or let sequences run fully autonomous.",
+              desc: "Signal-backed opening lines across email, LinkedIn, and calls. Approve drafts in your inbox or let sequences run fully autonomous.",
             },
             {
               title: "Agency owners",

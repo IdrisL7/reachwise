@@ -118,14 +118,6 @@ export default function WatchlistPage() {
             </span>
           )}
         </div>
-        {!tierLocked && (
-          <button
-            onClick={() => { setShowModal(true); setSubmitError(null); setInput(""); }}
-            className="bg-teal-500 hover:bg-teal-400 px-6 py-2 rounded-lg font-bold text-black text-sm transition-colors"
-          >
-            + Add Company
-          </button>
-        )}
       </div>
 
       {/* Tier gate overlay */}

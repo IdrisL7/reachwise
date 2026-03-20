@@ -82,7 +82,7 @@ function RegisterForm() {
       </h1>
       <p className="text-zinc-500 text-center text-sm mb-8">
         Already have an account?{" "}
-        <Link href="/login" className="text-emerald-400 hover:underline">
+        <Link href="/login" className="text-violet-400 hover:underline">
           Sign in
         </Link>
       </p>
@@ -94,58 +94,63 @@ function RegisterForm() {
       )}
 
       {checkoutMessage && (
-        <div className="bg-emerald-900/30 border border-emerald-800 text-emerald-300 px-4 py-3 rounded-lg mb-4 text-sm">
+        <div className="bg-violet-900/30 border border-violet-800 text-violet-200 px-4 py-3 rounded-lg mb-4 text-sm">
           {checkoutMessage}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-sm text-zinc-400 mb-1.5">Name</label>
+          <label htmlFor="register-name" className="block text-sm text-zinc-400 mb-1.5">Name</label>
           <input
+            id="register-name"
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600"
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
             placeholder="Jane Doe"
           />
         </div>
         <div>
-          <label className="block text-sm text-zinc-400 mb-1.5">Email</label>
+          <label htmlFor="register-email" className="block text-sm text-zinc-400 mb-1.5">Email</label>
           <input
+            id="register-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600"
+            aria-required="true"
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
             placeholder="you@company.com"
           />
         </div>
         <div>
-          <label className="block text-sm text-zinc-400 mb-1.5">
+          <label htmlFor="register-password" className="block text-sm text-zinc-400 mb-1.5">
             Password
           </label>
           <input
+            id="register-password"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
+            aria-required="true"
             minLength={8}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-600"
+            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-2.5 text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
             placeholder="Min 8 characters"
           />
         </div>
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors"
+          className="w-full bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-medium py-2.5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
         >
           {loading ? "Creating account..." : "Create account"}
         </button>
         <p className="text-xs text-zinc-600 text-center">
           {tierParam && tierParam !== "starter"
             ? `You'll be redirected to checkout for the ${tierParam.charAt(0).toUpperCase() + tierParam.slice(1)} plan.`
-            : <>7-day free trial on Starter. No charge until day 8. <Link href="/#pricing" className="text-emerald-400 hover:underline">View plans</Link>.</>}
+            : <>7-day free trial on Starter. No charge until day 8. <Link href="/#pricing" className="text-violet-400 hover:underline">View plans</Link>.</>}
         </p>
       </form>
     </div>
@@ -154,7 +159,7 @@ function RegisterForm() {
 
 export default function RegisterPage() {
   return (
-    <div className="min-h-screen bg-[#080808] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-[#0a0a0b] flex items-center justify-center px-4">
       <Suspense>
         <RegisterForm />
       </Suspense>

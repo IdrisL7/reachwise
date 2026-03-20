@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Edit3, Trash2, X } from 'lucide-react';
+import { Edit3, Trash2, X, Plus } from 'lucide-react';
 
 interface SequenceStep {
   order: number;
@@ -34,6 +34,20 @@ const TEMPLATE_STEPS: Record<string, SequenceStep[]> = {
   ],
 };
 
+const CHANNELS = [
+  { value: 'email', label: 'Email' },
+  { value: 'linkedin_connection', label: 'LinkedIn Connection' },
+  { value: 'linkedin_message', label: 'LinkedIn Message' },
+  { value: 'cold_call', label: 'Cold Call' },
+  { value: 'video_script', label: 'Video Script' },
+];
+
+const STEP_TYPES = [
+  { value: 'first', label: 'First Touch' },
+  { value: 'bump', label: 'Bump' },
+  { value: 'breakup', label: 'Breakup' },
+];
+
 function getTagInfo(seq: Sequence): { label: string; color: string } {
   if (seq.isDefault) return { label: 'Default', color: 'bg-purple-500/10 text-purple-400' };
   const hasNonEmail = seq.steps.some(s => s.channel !== 'email');
@@ -62,6 +76,12 @@ export default function SequencesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  const [editingSeq, setEditingSeq] = useState<Sequence | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSteps, setEditSteps] = useState<SequenceStep[]>([]);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   async function fetchSequences() {
     setLoading(true);
     setError(null);
@@ -83,7 +103,7 @@ export default function SequencesPage() {
     setSequences(prev => prev.filter(s => s.id !== id));
     try {
       const res = await fetch(`/api/sequences/${id}`, { method: 'DELETE' });
-      if (!res.ok) fetchSequences(); // rollback on failure
+      if (!res.ok) fetchSequences();
     } catch {
       fetchSequences();
     }
@@ -115,6 +135,41 @@ export default function SequencesPage() {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function handleEditSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editingSeq || !editName.trim() || editSteps.length === 0) return;
+    setEditSubmitting(true);
+    setEditError(null);
+    try {
+      const steps = editSteps.map((s, i) => ({ ...s, order: i + 1 }));
+      const res = await fetch(`/api/sequences/${editingSeq.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName.trim(), steps }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setEditError(data.error ?? 'Failed to save'); return; }
+      setEditingSeq(null);
+      fetchSequences();
+    } catch {
+      setEditError('Failed to save');
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
+
+  function updateEditStep(idx: number, patch: Partial<SequenceStep>) {
+    setEditSteps(prev => prev.map((s, i) => i === idx ? { ...s, ...patch } : s));
+  }
+
+  function removeEditStep(idx: number) {
+    setEditSteps(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function addEditStep() {
+    setEditSteps(prev => [...prev, { order: prev.length + 1, channel: 'email', delayDays: 3, type: 'bump' }]);
   }
 
   return (
@@ -171,7 +226,16 @@ export default function SequencesPage() {
                 <div className="flex justify-between mb-4">
                   <span className={`text-[10px] ${tag.color} px-2 py-1 rounded font-black uppercase tracking-widest`}>{tag.label}</span>
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Edit3 size={14} className="text-slate-500 cursor-pointer hover:scale-[1.02]" onClick={() => {}} />
+                    <Edit3
+                      size={14}
+                      className="text-slate-500 cursor-pointer hover:scale-[1.02]"
+                      onClick={() => {
+                        setEditingSeq(seq);
+                        setEditName(seq.name);
+                        setEditSteps(seq.steps);
+                        setEditError(null);
+                      }}
+                    />
                     <Trash2 size={14} className="text-red-500/50 cursor-pointer hover:scale-[1.02]" onClick={() => handleDelete(seq.id)} />
                   </div>
                 </div>
@@ -255,6 +319,95 @@ export default function SequencesPage() {
                 className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {submitting ? 'Creating…' : 'Create Sequence'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {editingSeq && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#0B0F1A] border border-white/10 rounded-2xl p-8 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold">Edit Sequence</h3>
+              <button onClick={() => setEditingSeq(null)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit} className="space-y-5">
+              <div>
+                <label className="text-[10px] uppercase font-black text-slate-500 block mb-2">Sequence Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="e.g. SaaS Founder Outreach"
+                  className="w-full bg-[#030014] border border-white/10 rounded-lg px-4 py-3 text-sm outline-none focus:border-purple-500"
+                  required
+                />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-black text-slate-500 block mb-2">Steps</label>
+                <div className="space-y-2">
+                  {editSteps.map((step, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-3 rounded-lg border border-white/10 bg-[#030014]">
+                      <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest w-5 shrink-0">{idx + 1}</span>
+                      <select
+                        value={step.channel}
+                        onChange={e => updateEditStep(idx, { channel: e.target.value })}
+                        className="flex-1 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs outline-none focus:border-purple-500 text-slate-300"
+                      >
+                        {CHANNELS.map(c => (
+                          <option key={c.value} value={c.value} className="bg-[#0B0F1A]">{c.label}</option>
+                        ))}
+                      </select>
+                      <select
+                        value={step.type}
+                        onChange={e => updateEditStep(idx, { type: e.target.value })}
+                        className="w-28 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs outline-none focus:border-purple-500 text-slate-300"
+                      >
+                        {STEP_TYPES.map(t => (
+                          <option key={t.value} value={t.value} className="bg-[#0B0F1A]">{t.label}</option>
+                        ))}
+                      </select>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <input
+                          type="number"
+                          min={0}
+                          value={step.delayDays}
+                          onChange={e => updateEditStep(idx, { delayDays: Math.max(0, parseInt(e.target.value) || 0) })}
+                          className="w-10 bg-transparent border border-white/10 rounded px-2 py-1.5 text-xs outline-none focus:border-purple-500 text-slate-300 text-center"
+                        />
+                        <span className="text-[10px] text-slate-600">d</span>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={editSteps.length <= 1}
+                        onClick={() => removeEditStep(idx)}
+                        className="text-red-500/40 hover:text-red-500/80 disabled:opacity-20 disabled:cursor-not-allowed transition-colors shrink-0"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addEditStep}
+                  className="mt-2 flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  <Plus size={12} /> Add Step
+                </button>
+              </div>
+              {editError && (
+                <p className="text-red-400 text-sm">{editError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={editSubmitting || !editName.trim() || editSteps.length === 0}
+                className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {editSubmitting ? 'Saving…' : 'Save Changes'}
               </button>
             </form>
           </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as Sentry from "@sentry/nextjs";
+import Link from "next/link";
 import { useEffect } from "react";
 
 export default function GlobalError({
@@ -16,7 +17,7 @@ export default function GlobalError({
 
   return (
     <html>
-      <body className="min-h-screen bg-[#080808] flex items-center justify-center px-4">
+      <body className="min-h-screen bg-[#0a0a0b] flex items-center justify-center px-4">
         <div className="text-center">
           <p className="text-5xl font-bold text-red-500 mb-4">Error</p>
           <h1 className="text-2xl font-bold text-zinc-100 mb-2">
@@ -25,12 +26,20 @@ export default function GlobalError({
           <p className="text-zinc-500 mb-8 max-w-sm mx-auto">
             An unexpected error occurred. Our team has been notified.
           </p>
-          <button
-            onClick={reset}
-            className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
-          >
-            Try again
-          </button>
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={reset}
+              className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors"
+            >
+              Try again
+            </button>
+            <Link
+              href="/"
+              className="border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 text-sm font-medium px-5 py-2.5 rounded-lg transition-colors"
+            >
+              ← Back to home
+            </Link>
+          </div>
         </div>
       </body>
     </html>

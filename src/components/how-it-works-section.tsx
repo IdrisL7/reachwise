@@ -8,13 +8,13 @@ const steps = [
     title: "Find a real signal",
     desc: "Paste any company URL. We pull evidence from first-party sources and reputable coverage — funding rounds, new hires, product launches — each with a quote, source, and date.",
     visual: (
-      <div className="mt-5 rounded-xl border border-white/[0.07] bg-[#030014] px-4 py-3 flex items-center gap-3">
+      <div className="mt-5 rounded-xl border border-white/[0.07] bg-[#0a0a0b] px-4 py-3 flex items-center gap-3">
         <svg className="h-4 w-4 shrink-0 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 15.803a7.5 7.5 0 0 0 10.607 0z" />
         </svg>
         <span className="text-sm text-zinc-500">e.g. Gong</span>
         <span className="ml-auto flex items-center gap-1.5 text-[0.6875rem] text-zinc-600">
-          <span className="h-1.5 w-1.5 rounded-full bg-violet-500 animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-violet-500 motion-safe:animate-pulse" />
           Searching…
         </span>
       </div>
@@ -23,7 +23,7 @@ const steps = [
   {
     num: "02",
     title: "Generate hooks matched to the buyer",
-    desc: "Pick the role you're targeting. We write Trigger, Risk, and Tradeoff opening lines grounded in the evidence — no invented claims.",
+    desc: "Pick the role you're targeting. We write opening lines from different angles — what changed, what's at risk, what trade-off they're facing — all grounded in the evidence.",
     visual: (
       <div className="mt-4 space-y-2">
         {[
@@ -43,7 +43,7 @@ const steps = [
     title: "Send with receipts",
     desc: "Copy the hook, generate a full email in one click, and export to CSV, Apollo, or Clay. Every message ships with a cited source your rep can defend.",
     visual: (
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div aria-hidden="true" className="mt-4 flex flex-wrap gap-2">
         {["Copy Hook", "Generate Email", "Export CSV"].map((label) => (
           <span
             key={label}
@@ -59,27 +59,24 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="border-t border-white/[0.06] bg-[#0a0a0b]">
+    <section id="how-it-works" aria-labelledby="how-it-works-heading" className="border-t border-white/[0.06] bg-[#0a0a0b]">
       <div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10 lg:py-24">
 
         <Reveal>
           <div className="mb-12 lg:mb-16">
-            <p className="mb-3 font-mono text-[0.75rem] font-medium uppercase tracking-widest text-zinc-600">
-              How it works
-            </p>
-            <h2 className="font-[family-name:var(--font-display)] text-[clamp(2rem,3.5vw,3.25rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
+            <h2 id="how-it-works-heading" className="font-[family-name:var(--font-display)] text-[clamp(2rem,3.5vw,3.25rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
               Three steps. Zero invented facts.
             </h2>
           </div>
         </Reveal>
 
         {/* Bento grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 lg:h-[560px]">
+        <div className="grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-2 gap-4 lg:min-h-[560px]">
 
           {/* Large tile — step 01, spans 2 rows */}
           <Reveal delay={0} className="lg:row-span-2">
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/80 to-[#0f0f16]/60 p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.25)]">
-              <p className="font-mono text-[0.6875rem] font-medium text-zinc-600 tracking-widest mb-4">
+            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.25)]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
                 {steps[0].num}
               </p>
               <h3 className="text-[1.25rem] font-bold text-white leading-[1.2]">
@@ -88,7 +85,7 @@ export function HowItWorksSection() {
               <p className="mt-3 text-[0.9375rem] leading-[1.65] text-zinc-400">
                 {steps[0].desc}
               </p>
-              <div className="mt-auto pt-6">
+              <div className="mt-auto pt-6" aria-hidden="true">
                 {steps[0].visual}
                 {/* Source result preview */}
                 <div className="mt-2 rounded-xl border border-white/[0.06] bg-[#14161a]/80 p-3 space-y-2">
@@ -111,8 +108,8 @@ export function HowItWorksSection() {
 
           {/* Step 02 — top right */}
           <Reveal delay={0.12}>
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
-              <p className="font-mono text-[0.6875rem] font-medium text-zinc-600 tracking-widest mb-4">
+            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
                 {steps[1].num}
               </p>
               <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
@@ -121,7 +118,7 @@ export function HowItWorksSection() {
               <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
                 {steps[1].desc}
               </p>
-              <div className="mt-auto pt-4">
+              <div className="mt-auto pt-4" aria-hidden="true">
                 {steps[1].visual}
               </div>
             </div>
@@ -129,8 +126,8 @@ export function HowItWorksSection() {
 
           {/* Step 03 — bottom right */}
           <Reveal delay={0.24}>
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-gradient-to-br from-[#131320]/60 to-[#0f0f16]/40 p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
-              <p className="font-mono text-[0.6875rem] font-medium text-zinc-600 tracking-widest mb-4">
+            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
                 {steps[2].num}
               </p>
               <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
@@ -139,7 +136,7 @@ export function HowItWorksSection() {
               <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
                 {steps[2].desc}
               </p>
-              <div className="mt-auto pt-4">
+              <div className="mt-auto pt-4" aria-hidden="true">
                 {steps[2].visual}
               </div>
             </div>

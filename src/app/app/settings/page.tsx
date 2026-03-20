@@ -12,6 +12,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [portalLoading, setPortalLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/ai-config")
@@ -24,6 +25,17 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  async function openBillingPortal() {
+    setPortalLoading(true);
+    try {
+      const res = await fetch("/api/stripe/portal", { method: "POST" });
+      const data = await res.json();
+      if (data.url) window.location.href = data.url;
+    } finally {
+      setPortalLoading(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -86,6 +98,20 @@ export default function SettingsPage() {
             className="w-full bg-purple-600 py-4 rounded-xl font-bold shadow-lg shadow-purple-500/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed transition-all"
           >
             {saving ? "Saving…" : saved ? "Saved" : "Save AI Configuration"}
+          </button>
+        </div>
+      </section>
+
+      <section>
+        <h3 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-6">Billing</h3>
+        <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-8">
+          <p className="text-sm text-slate-400 mb-6">Manage your subscription, update payment details, or view invoices.</p>
+          <button
+            onClick={openBillingPortal}
+            disabled={portalLoading}
+            className="bg-white/5 border border-white/10 hover:bg-white/10 transition-colors px-6 py-3 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {portalLoading ? "Opening…" : "Manage Billing →"}
           </button>
         </div>
       </section>

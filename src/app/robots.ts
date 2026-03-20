@@ -6,7 +6,17 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/app/", "/api/"],
+        disallow: [
+          "/app/",
+          "/api/",
+          "/login",
+          "/register",
+          "/forgot-password",
+          "/reset-password",
+          "/setup",
+          "/unsubscribed",
+          "/internal/",
+        ],
       },
     ],
     sitemap: "https://www.getsignalhooks.com/sitemap.xml",

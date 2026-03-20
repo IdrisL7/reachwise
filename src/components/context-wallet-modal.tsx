@@ -179,7 +179,7 @@ export default function ContextWalletModal({
         )}
 
         <h2 className="text-xl font-bold text-zinc-100 mb-1">
-          {gateMode ? "Make these hooks about your offer (60 seconds)" : "Add your 60-second profile"}
+          {gateMode ? "Before we generate — 60 seconds to personalise your hooks" : "Add your 60-second profile"}
         </h2>
         <p className="text-sm text-zinc-400 mb-6">
           {gateMode
@@ -373,7 +373,7 @@ export default function ContextWalletModal({
             onClick={onSkip}
             className="w-full mt-2 text-sm text-zinc-500 hover:text-zinc-300 py-2 transition-colors"
           >
-            Skip (generic output)
+            Generate a demo hook instead — won&apos;t mention your product
           </button>
         )}
       </div>

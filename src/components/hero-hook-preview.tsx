@@ -13,11 +13,11 @@ export function HeroHookPreview() {
         <div className="p-4 border-b border-white/5 flex justify-between bg-white/5">
           <div className="flex items-center gap-2 text-slate-400 font-mono text-xs">
             <Search size={14}/>
-            shopify.com
+            Shopify
           </div>
           <div className="px-2 py-1 bg-purple-500/20 rounded border border-purple-500/30 text-[10px] text-purple-300 font-bold flex items-center gap-1">
             <Zap size={10} fill="currentColor" />
-            Lead Score: 98
+            Tier A · Verified
           </div>
         </div>
         <div className="p-6 space-y-4">

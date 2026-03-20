@@ -139,7 +139,7 @@ export default function SetupWizard() {
   const currentIndex = steps.findIndex((s) => s.id === step);
 
   return (
-    <div className="min-h-screen bg-[#080808] text-zinc-100 font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen bg-[#0a0a0b] text-zinc-100 font-[family-name:var(--font-body)]">
       <Navbar />
 
       <main className="max-w-2xl mx-auto px-6 py-20">
