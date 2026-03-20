@@ -10,6 +10,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-syne);
   --animate-shimmer: shimmer 2s infinite;
   --animate-fade-in: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-slide-in-bottom: slideInFromBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -17,7 +18,19 @@
   --animate-slide-in-right: slideInFromRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
   --color-canvas: #0a0a0b;
   --color-surface: #141416;
+  --color-surface-elevated: #131320;
   --color-brand: #7c3aed;
+  /* ─── Design Tokens ─────────────────────────────────────────
+     Use bg-canvas, bg-surface, bg-surface-2, bg-surface-3,
+     border-border-subtle, border-border-default,
+     text-text-primary, text-text-secondary
+  ────────────────────────────────────────────────────────────── */
+  --color-surface-2: #14161a;
+  --color-surface-3: #1a1c22;
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-border-default: rgba(255, 255, 255, 0.10);
+  --color-text-primary: #eceae6;
+  --color-text-secondary: #878a8f;
   --shadow-inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
   --shadow-accent-glow: 0 0 20px -5px rgba(124, 58, 237, 0.2);
 }
@@ -108,3 +121,10 @@ body {
 .animate-stagger-3 { animation: slideInFromBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) 200ms both; }
 .animate-stagger-4 { animation: slideInFromBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) 300ms both; }
 .animate-stagger-5 { animation: slideInFromBottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) 400ms both; }
+
+/* Gate-in animation for demo section */
+@keyframes gateIn {
+  from { opacity: 0; transform: scale(0.98) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.animate-gate-in { animation: gateIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }

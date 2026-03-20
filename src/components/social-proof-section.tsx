@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { Reveal } from "./ui/reveal";
 
 const stats = [
   {
@@ -14,32 +17,37 @@ const stats = [
 export function SocialProofSection() {
   return (
     <section className="border-t border-white/[0.06] bg-[#0a0a12]">
-      <div className="mx-auto max-w-[90rem] px-6 py-14 lg:px-10 lg:py-20">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-violet-400/70">
-            Just launched
-          </p>
-          <h2 className="text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-white">
-            We&apos;d rather show you than tell you
-          </h2>
-          <p className="mt-3 text-[1rem] leading-[1.6] text-zinc-400">
-            No fake testimonials. Try the demo above &mdash; the output quality is the proof.
-          </p>
-        </div>
+      <div className="mx-auto max-w-[90rem] px-6 py-12 lg:px-10 lg:py-16">
+        <Reveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="mb-3 text-[0.8125rem] font-semibold uppercase tracking-wider text-amber-500/70">
+              Now in beta
+            </p>
+            <h2 className="font-[family-name:var(--font-display)] text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-white">
+              We&apos;d rather show you than tell you
+            </h2>
+            <p className="mt-3 text-[1rem] leading-[1.6] text-zinc-400">
+              No fake testimonials. Try the demo above &mdash; the output quality is the proof.
+            </p>
+          </div>
+        </Reveal>
 
-        <div className="mx-auto mt-10 flex max-w-md items-center justify-center gap-12 sm:gap-16">
-          {stats.map((stat) => (
-            <div key={stat.label} className="text-center">
-              <p className="text-[clamp(2rem,4vw,3rem)] font-bold text-white tracking-[-0.02em]">
-                {stat.value}
-              </p>
-              <p className="mt-1 text-[0.8125rem] text-zinc-500">
-                {stat.label}
-              </p>
-            </div>
-          ))}
-        </div>
+        <Reveal delay={0.1}>
+          <div className="mx-auto mt-10 flex max-w-md items-center justify-center gap-12 sm:gap-16">
+            {stats.map((stat) => (
+              <div key={stat.label} className="text-center">
+                <p className="text-[clamp(2rem,4vw,3rem)] font-bold text-white tracking-[-0.02em]">
+                  {stat.value}
+                </p>
+                <p className="mt-1 text-[0.8125rem] text-zinc-500">
+                  {stat.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </Reveal>
 
+        <Reveal delay={0.18}>
         <div className="mt-8 flex justify-center">
           <Link
             href="#demo"
@@ -51,6 +59,7 @@ export function SocialProofSection() {
             </svg>
           </Link>
         </div>
+        </Reveal>
       </div>
     </section>
   );

@@ -1,3 +1,7 @@
+"use client";
+
+import { Reveal } from "./ui/reveal";
+
 const trustItems = [
   {
     icon: (
@@ -5,7 +9,7 @@ const trustItems = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
-    text: "Every hook includes a cited snippet, source title, date, and link.",
+    text: "Every opening line includes a cited snippet, source title, date, and link.",
   },
   {
     icon: (
@@ -29,17 +33,18 @@ const trustItems = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
       </svg>
     ),
-    text: "No invented facts \u2014 weak evidence is labeled low confidence or not generated.",
+    text: "Signals are verified against public sources \u2014 no hearsay, no fabricated context.",
   },
 ];
 
 export function TrustBlock() {
   return (
     <section className="border-t border-white/[0.06] bg-[#0c0c14]/50">
-      <div className="mx-auto max-w-5xl px-6 py-10 lg:py-12">
+      <div className="mx-auto max-w-5xl px-6 py-12 lg:py-16">
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {trustItems.map((item, i) => (
-            <div key={i} className="flex items-start gap-3.5 rounded-xl border border-zinc-800/40 bg-zinc-900/30 p-4 transition-colors hover:border-zinc-700/50">
+            <Reveal key={i} delay={i * 0.08}>
+            <div className="flex items-start gap-3.5 rounded-xl border border-zinc-800/40 bg-zinc-900/30 p-4 transition-colors hover:border-zinc-700/50">
               <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-600/10 text-violet-400">
                 {item.icon}
               </div>
@@ -47,6 +52,7 @@ export function TrustBlock() {
                 {item.text}
               </p>
             </div>
+            </Reveal>
           ))}
         </div>
       </div>

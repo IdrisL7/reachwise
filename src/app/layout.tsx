@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, Geist_Mono, Syne } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { Providers } from "@/components/providers";
 import { CookieConsent } from "@/components/cookie-consent";
 import "./globals.css";
 
-const geistSans = Geist({
+const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-geist-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 const geistMono = Geist_Mono({
@@ -15,15 +16,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const syne = Syne({
+  subsets: ["latin"],
+  weight: ["700", "800"],
+  variable: "--font-syne",
+});
+
 export const metadata: Metadata = {
-  title: "GetSignalHooks — Evidence-first hooks from any company URL",
+  title: "GetSignalHooks — Signal-backed opening lines from any company URL",
   description:
-    "Generate research-backed outbound sales hooks anchored on real public signals. AI-powered hook generation, follow-up automation, and CRM integrations for modern sales teams.",
+    "Generate personalised opening lines anchored on real company signals. Signal-backed outbound, follow-up automation, and CRM integrations for modern sales teams.",
   metadataBase: new URL("https://www.getsignalhooks.com"),
   openGraph: {
-    title: "GetSignalHooks — Evidence-first hooks from any company URL",
+    title: "GetSignalHooks — Signal-backed opening lines from any company URL",
     description:
-      "Generate research-backed outbound sales hooks anchored on real public signals. Stop guessing, start sending messages worth reading.",
+      "Generate personalised opening lines anchored on real company signals. Stop guessing, start sending messages worth reading.",
     url: "https://www.getsignalhooks.com",
     siteName: "GetSignalHooks",
     type: "website",
@@ -31,9 +38,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GetSignalHooks — Evidence-first hooks from any company URL",
+    title: "GetSignalHooks — Signal-backed opening lines from any company URL",
     description:
-      "AI-powered hook generation anchored on real public signals. 7-day free trial.",
+      "Signal-backed opening lines anchored on real company signals. 7-day free trial.",
   },
   alternates: {
     canonical: "https://www.getsignalhooks.com",
@@ -56,7 +63,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${plusJakartaSans.variable} ${geistMono.variable} ${syne.variable} antialiased`}
       >
         <Providers>{children}</Providers>
         <CookieConsent />

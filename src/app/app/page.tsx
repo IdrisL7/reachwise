@@ -85,24 +85,37 @@ export default async function DashboardPage() {
 
       {/* First-run welcome for new users */}
       {isNewUser && (
-        <div className="border border-[#252830] bg-[#14161a] rounded-xl p-6 mb-6 animate-scale-in">
-          <p className="text-xs text-[#878a8f] uppercase tracking-widest mb-2 font-medium">Get started</p>
-          <h2 className="text-base font-semibold mb-1">Welcome to GetSignalHooks</h2>
-          <p className="text-sm text-[#878a8f] mb-4">Two steps to your first outbound hook.</p>
-          <div className="flex flex-col sm:flex-row gap-3">
+        <>
+          <div className="border border-[#252830] bg-[#14161a] rounded-xl p-6 mb-6 animate-scale-in">
+            <p className="text-xs text-[#878a8f] uppercase tracking-widest mb-2 font-medium">Get started</p>
+            <h2 className="text-base font-semibold mb-1">Generate your first hook</h2>
+            <p className="text-sm text-[#878a8f] mb-4">Paste any company URL and see a sourced opening line in under 30 seconds.</p>
             <Link href="/app/hooks" className="inline-flex items-center gap-2 text-sm text-[#eceae6] hover:text-white transition-colors group">
-              <span className="font-mono text-[#878a8f] text-xs">01</span>
-              Generate your first hooks
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"><path d="m9 18 6-6-6-6"/></svg>
-            </Link>
-            <span className="hidden sm:block text-[#252830] self-center">|</span>
-            <Link href="/app/leads" className="inline-flex items-center gap-2 text-sm text-[#eceae6] hover:text-white transition-colors group">
-              <span className="font-mono text-[#878a8f] text-xs">02</span>
-              Import your leads
+              Generate a hook
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-50 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all"><path d="m9 18 6-6-6-6"/></svg>
             </Link>
           </div>
-        </div>
+
+          {/* Example output card */}
+          <div className="border border-[#252830] bg-[#14161a] rounded-xl p-5 mb-6 animate-stagger-1">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-medium uppercase tracking-wider text-[#878a8f]">Example output</p>
+              <div className="flex items-center gap-1.5">
+                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Tier A</span>
+                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium border bg-violet-500/10 text-violet-300 border-violet-500/20">First-party</span>
+                <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[0.5625rem] font-medium border bg-zinc-800 text-zinc-400 border-zinc-700/50">Fresh</span>
+              </div>
+            </div>
+            <p className="text-sm leading-[1.65] text-[#eceae6] mb-3">
+              "Noticed Notion just shipped AI-powered databases last week — curious whether your team is rethinking how you structure customer data, or doubling down on the existing stack."
+            </p>
+            <div className="border-t border-[#252830] pt-3 mt-3">
+              <p className="text-[11px] text-[#878a8f]">
+                <span className="font-medium text-zinc-500">Signal:</span> Notion · Product launch · notion.so/blog/ai-database
+              </p>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Usage strip */}
@@ -142,7 +155,6 @@ export default async function DashboardPage() {
             <p className="text-sm font-semibold capitalize">{tierId}</p>
           </div>
           {isOnTrial && !trialExpired && <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded">Trial</span>}
-          {tierId !== "concierge" && <Link href="/#pricing" className="text-[11px] text-violet-400 hover:text-violet-300">Upgrade →</Link>}
         </div>
       </div>
 

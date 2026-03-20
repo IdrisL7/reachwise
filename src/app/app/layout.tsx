@@ -19,15 +19,6 @@ const navGroups = [
     ],
   },
   {
-    label: "Execution",
-    items: [
-      { href: "/app/sequences", label: "Sequences" },
-      { href: "/app/watchlist", label: "Watchlist" },
-      { href: "/app/inbox", label: "Inbox" },
-      { href: "/app/templates", label: "Templates" },
-    ],
-  },
-  {
     label: "Data",
     items: [
       { href: "/app/leads", label: "Leads" },
@@ -68,14 +59,14 @@ export default async function AppLayout({
   const tierId = freshUser?.tierId || session.user.tierId;
 
   return (
-    <div className="min-h-screen flex bg-[#0a0a0b] text-[#eceae6] font-[family-name:var(--font-geist-sans)]">
+    <div className="min-h-screen flex bg-canvas text-text-primary font-[family-name:var(--font-geist-sans)]">
       {/* Left sidebar — desktop only */}
-      <aside className="hidden lg:flex flex-col w-[220px] fixed h-full bg-[#141416] border-r border-white/[0.06] z-40">
+      <aside className="hidden lg:flex flex-col w-[220px] fixed h-full bg-surface border-r border-white/[0.06] z-40">
         {/* Logo */}
         <div className="flex items-center h-12 px-4 border-b border-white/[0.04] shrink-0">
           <Link href="/app" className="flex items-center gap-2.5">
             <SignalHooksLogo />
-            <span className="text-sm font-semibold text-[#eceae6]">SignalHooks</span>
+            <span className="text-sm font-semibold text-text-primary">SignalHooks</span>
           </Link>
         </div>
 
@@ -90,7 +81,7 @@ export default async function AppLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="relative flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] transition-colors aria-[current=page]:text-white aria-[current=page]:bg-white/[0.03] aria-[current=page]:before:absolute aria-[current=page]:before:left-0 aria-[current=page]:before:top-1/2 aria-[current=page]:before:-translate-y-1/2 aria-[current=page]:before:h-4 aria-[current=page]:before:w-0.5 aria-[current=page]:before:bg-violet-500 aria-[current=page]:before:rounded-full"
+                  className="relative flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-sm text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.03] transition-colors aria-[current=page]:text-white aria-[current=page]:bg-white/[0.03] aria-[current=page]:before:absolute aria-[current=page]:before:left-0 aria-[current=page]:before:top-1/2 aria-[current=page]:before:-translate-y-1/2 aria-[current=page]:before:h-4 aria-[current=page]:before:w-0.5 aria-[current=page]:before:bg-violet-500 aria-[current=page]:before:rounded-full"
                 >
                   {item.label}
                 </Link>
@@ -121,7 +112,7 @@ export default async function AppLayout({
       {/* Main content */}
       <div className="flex-1 lg:ml-[220px] flex flex-col min-h-screen">
         {/* Top bar */}
-        <header className="h-12 sticky top-0 z-30 backdrop-blur-md bg-[#0a0a0b]/80 border-b border-white/[0.06] flex items-center px-4 sm:px-6">
+        <header className="h-12 sticky top-0 z-30 backdrop-blur-md bg-canvas/80 border-b border-white/[0.06] flex items-center px-4 sm:px-6">
           {/* Mobile: logo + nav */}
           <div className="flex lg:hidden items-center gap-0.5 flex-1 min-w-0">
             <Link href="/app" className="mr-2 shrink-0">
@@ -132,7 +123,7 @@ export default async function AppLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="px-2 py-1.5 text-xs text-[#878a8f] hover:text-[#eceae6] aria-[current=page]:text-white aria-[current=page]:bg-[#1c1e20] rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
+                  className="px-2 py-1.5 text-xs text-text-secondary hover:text-text-primary aria-[current=page]:text-white aria-[current=page]:bg-[#1c1e20] rounded-md hover:bg-zinc-800 transition-colors whitespace-nowrap"
                 >
                   {item.label}
                 </Link>
@@ -143,20 +134,12 @@ export default async function AppLayout({
 
           {/* Right side */}
           <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-            <span className="text-xs text-[#878a8f] hidden sm:block">
+            <span className="text-xs text-text-secondary hidden sm:block">
               {session.user.email}
             </span>
             <span className="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded capitalize lg:px-2">
               {tierId}
             </span>
-            {tierId !== "concierge" && (
-              <Link
-                href="/#pricing"
-                className="text-xs bg-violet-600 hover:bg-violet-500 text-white px-2 py-0.5 rounded transition-colors lg:px-2.5"
-              >
-                Upgrade
-              </Link>
-            )}
             <SignOutButton />
           </div>
         </header>
@@ -167,7 +150,7 @@ export default async function AppLayout({
           </Suspense>
         )}
 
-        <main className="px-4 sm:px-6 py-6 max-w-5xl w-full">{children}</main>
+        <main className="px-4 sm:px-6 py-6 max-w-5xl w-full mx-auto">{children}</main>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TIERS, type TierFeature } from "@/lib/tiers";
+import { Reveal } from "./ui/reveal";
 
 type Currency = "usd" | "gbp" | "eur";
 const SYMBOLS: Record<Currency, string> = { usd: "$", gbp: "\u00a3", eur: "\u20ac" };
@@ -77,27 +78,30 @@ export function PricingSection() {
   return (
     <section
       id="pricing"
-      className="border-t border-white/[0.06] bg-[#0b0b10]"
+      className="border-t border-white/[0.06] bg-[#0a0a0b]"
     >
-      <div className="mx-auto max-w-[90rem] px-6 py-20 lg:px-10 lg:py-28">
-        <div className="mx-auto max-w-2xl text-center">
-          <p className="mb-4 text-[0.9375rem] font-semibold text-violet-400">
-            Pricing
-          </p>
-          <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-            Pricing that fits how you already do outbound
-          </h2>
-          <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Keep your existing lists and tools. Use GetSignalHooks as the
-            evidence-first layer that makes your messages worth sending.
-          </p>
-        </div>
+      <div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10 lg:py-24">
+        <Reveal>
+          <div className="mx-auto max-w-2xl text-center">
+            <p className="mb-4 text-[0.9375rem] font-semibold text-amber-500">
+              7-day free trial · no card required
+            </p>
+            <h2 className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
+              Pricing that fits how you already do outbound
+            </h2>
+            <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
+              Keep your existing lists and tools. Use GetSignalHooks as the
+              signal-backed layer that makes your messages worth sending.
+            </p>
+          </div>
+        </Reveal>
 
         <div className="mx-auto mt-6 flex items-center justify-center gap-1 rounded-full border border-zinc-700/40 bg-zinc-800/30 p-1 w-fit">
           {(["usd", "gbp", "eur"] as Currency[]).map((c) => (
             <button
               key={c}
               onClick={() => setCurrency(c)}
+              aria-pressed={currency === c}
               className={`px-3.5 py-1.5 rounded-full text-[0.8125rem] font-medium transition-all ${
                 currency === c
                   ? "bg-violet-600 text-white shadow-sm"
@@ -116,9 +120,9 @@ export function PricingSection() {
         )}
 
         <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-3 lg:mt-20">
-          {TIERS.map((tier) => (
+          {TIERS.map((tier, i) => (
+            <Reveal key={tier.id} delay={i * 0.1}>
             <div
-              key={tier.id}
               className={`group rounded-xl border p-7 transition-all duration-300 hover:-translate-y-0.5 relative ${
                 tier.highlighted
                   ? "border-violet-500/30 bg-gradient-to-br from-[#15132a]/80 to-[#0f0f18]/60 shadow-[0_2px_24px_rgba(139,92,246,0.08)] hover:border-violet-500/50 hover:shadow-[0_4px_32px_rgba(139,92,246,0.12)]"
@@ -185,6 +189,7 @@ export function PricingSection() {
                 </div>
               )}
             </div>
+            </Reveal>
           ))}
         </div>
 
