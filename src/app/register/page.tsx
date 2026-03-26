@@ -52,10 +52,18 @@ function RegisterForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ event: "register_completed" }),
         }).catch(() => {});
-        // Redirect to Stripe checkout — trial for starter, direct for others
         setLoading(false);
+        const selectedTier = tierParam || "free";
+
+        // Free tier — skip Stripe entirely, go straight to the app
+        if (selectedTier === "free") {
+          setCheckoutMessage(`Account created! Check ${email} to verify your email. Taking you to the app...`);
+          window.location.href = "/app/hooks";
+          return;
+        }
+
+        // Paid tiers — redirect to Stripe checkout
         setCheckoutMessage(`Account created! Check ${email} to verify your email. Redirecting to checkout...`);
-        const selectedTier = tierParam || "starter";
         const isTrial = selectedTier === "starter";
         const checkoutRes = await fetch("/api/stripe/checkout", {
           method: "POST",
@@ -148,9 +156,9 @@ function RegisterForm() {
           {loading ? "Creating account..." : "Create account"}
         </button>
         <p className="text-xs text-zinc-600 text-center">
-          {tierParam && tierParam !== "starter"
+          {tierParam && tierParam !== "free"
             ? `You'll be redirected to checkout for the ${tierParam.charAt(0).toUpperCase() + tierParam.slice(1)} plan.`
-            : <>7-day free trial on Starter. No charge until day 8. <Link href="/#pricing" className="text-violet-400 hover:underline">View plans</Link>.</>}
+            : <>Free — 10 hooks, no card required. <Link href="/#pricing" className="text-violet-400 hover:underline">View paid plans</Link>.</>}
         </p>
       </form>
     </div>

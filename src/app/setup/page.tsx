@@ -205,14 +205,34 @@ export default function SetupWizard() {
         {/* Step: Welcome */}
         {step === "welcome" && (
           <div>
-            <h1 className="text-3xl font-bold mb-4">Setup Wizard</h1>
-            <p className="text-zinc-400 mb-6">
-              This wizard will help you configure GetSignalHooks with API
-              access, CRM integration, and workflow automation.
+            <h1 className="text-3xl font-bold mb-4">Developer Integration Setup</h1>
+            <p className="text-zinc-400 mb-4">
+              This wizard configures GetSignalHooks for API access, CRM integration (HubSpot / Salesforce), and workflow automation via n8n.
             </p>
+
+            {/* Escape hatch for regular users */}
+            <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-5 py-4 mb-6 flex items-start gap-3">
+              <svg className="h-5 w-5 text-violet-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div>
+                <p className="text-sm text-zinc-300 font-medium mb-1">Just using the web app?</p>
+                <p className="text-sm text-zinc-500 mb-3">You don&apos;t need this wizard. Go straight to the hook generator.</p>
+                <a
+                  href="/app/hooks"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-400 hover:text-violet-300 transition-colors"
+                >
+                  Start generating hooks
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </a>
+              </div>
+            </div>
+
             <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 mb-6">
               <label className="block text-sm text-zinc-400 mb-2">
-                Enter your admin bearer token to begin:
+                Admin bearer token <span className="text-zinc-600">(FOLLOWUP_ENGINE_API_TOKEN)</span>
               </label>
               <input
                 type="password"

@@ -94,6 +94,7 @@ interface HookCardProps {
   pushingCrm?: boolean;
   pushedToCrm?: boolean;
   showCrmPush?: boolean;
+  userTierId?: string;
   onCopyHook: (text: string, index: number) => void;
   onCopyHookWithEvidence: (hook: Hook, index: number) => void;
   onGenerateEmail: (hook: Hook, index: number) => void;
@@ -118,6 +119,7 @@ export function HookCard({
   pushingCrm,
   pushedToCrm,
   showCrmPush,
+  userTierId,
   onCopyHook,
   onCopyHookWithEvidence,
   onGenerateEmail,
@@ -418,6 +420,21 @@ export function HookCard({
           <p className="text-sm text-[#eceae6] font-medium mb-3">{generatedEmails[index].subject}</p>
           <p className="text-xs text-[#878a8f] mb-1">Body:</p>
           <p className="text-sm text-[#eceae6] whitespace-pre-line">{generatedEmails[index].body}</p>
+        </div>
+      )}
+
+      {/* Upgrade nudge for free/starter users */}
+      {(userTierId === "starter" || userTierId === "free") && (
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.04] px-3 py-2">
+          <p className="text-[11px] text-zinc-500">
+            Export to Apollo / Clay &mdash; available on Scale
+          </p>
+          <a
+            href="/#pricing"
+            className="text-[11px] font-semibold text-violet-400 hover:text-violet-300 transition-colors shrink-0 ml-3"
+          >
+            Upgrade →
+          </a>
         </div>
       )}
     </div>

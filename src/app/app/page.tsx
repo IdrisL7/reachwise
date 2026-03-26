@@ -74,7 +74,7 @@ export default async function DashboardPage() {
       )}
 
       {/* Trial countdown banner */}
-      {isOnTrial && !trialExpired && trialDaysLeft <= 3 && (
+      {isOnTrial && !trialExpired && trialDaysLeft <= 7 && (
         <div className="border-b border-amber-800/40 bg-amber-950/20 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 mb-6 animate-fade-in">
           <p className="text-sm text-amber-300/80">
             {trialDaysLeft} {trialDaysLeft === 1 ? "day" : "days"} left on your free trial.{" "}
