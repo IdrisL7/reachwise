@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+
+interface Sequence {
+  id: string;
+  name: string;
+}
 
 interface Hook {
   text: string;
@@ -143,6 +148,15 @@ export function HookCard({
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [savedTemplate, setSavedTemplate] = useState<"idle" | "saving" | "saved">("idle");
 
+  // Send Sequence modal state
+  const [seqModalOpen, setSeqModalOpen] = useState(false);
+  const [sequences, setSequences] = useState<Sequence[]>([]);
+  const [seqLoading, setSeqLoading] = useState(false);
+  const [seqSubmitting, setSeqSubmitting] = useState(false);
+  const [seqError, setSeqError] = useState<string | null>(null);
+  const [seqSuccess, setSeqSuccess] = useState(false);
+  const [seqForm, setSeqForm] = useState({ email: "", name: "", sequenceId: "" });
+
   async function handleShare() {
     if (!hook.generated_hook_id) return;
     setSharingHook(true);
@@ -193,6 +207,72 @@ export function HookCard({
       setSavedTemplate("saved");
     } catch {
       setSavedTemplate("idle");
+    }
+  }
+
+  // Fetch sequences when modal opens
+  useEffect(() => {
+    if (!seqModalOpen) return;
+    setSeqLoading(true);
+    setSeqError(null);
+    setSeqSuccess(false);
+    setSeqForm({ email: "", name: "", sequenceId: "" });
+    fetch("/api/sequences")
+      .then((r) => r.json())
+      .then((data) => {
+        const seqs = data.sequences || [];
+        setSequences(seqs);
+        if (seqs.length > 0) setSeqForm((f) => ({ ...f, sequenceId: seqs[0].id }));
+      })
+      .catch(() => setSeqError("Failed to load sequences"))
+      .finally(() => setSeqLoading(false));
+  }, [seqModalOpen]);
+
+  async function handleSendSequence(e: React.FormEvent) {
+    e.preventDefault();
+    if (!seqForm.email.trim() || !seqForm.sequenceId) return;
+    setSeqSubmitting(true);
+    setSeqError(null);
+    try {
+      // 1. Create lead
+      const leadRes = await fetch("/api/leads", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leads: [
+            {
+              email: seqForm.email.trim(),
+              name: seqForm.name.trim() || undefined,
+              company_website: companyUrl || (companyDomain ? `https://${companyDomain}` : undefined),
+              company_name: companyName || companyDomain || undefined,
+              source: "hook_sequence",
+            },
+          ],
+        }),
+      });
+      const leadData = await leadRes.json();
+      if (!leadRes.ok) throw new Error(leadData?.message || "Failed to create lead");
+      const leadId = leadData.leads?.[0]?.id;
+      if (!leadId) throw new Error("Lead was not created — the email may already exist.");
+
+      // 2. Assign lead to sequence
+      const assignRes = await fetch("/api/lead-sequences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          leadId,
+          sequenceId: seqForm.sequenceId,
+          approvalMode: true,
+        }),
+      });
+      const assignData = await assignRes.json();
+      if (!assignRes.ok) throw new Error(assignData?.error || "Failed to assign sequence");
+
+      setSeqSuccess(true);
+    } catch (err: any) {
+      setSeqError(err?.message || "Something went wrong");
+    } finally {
+      setSeqSubmitting(false);
     }
   }
 
@@ -425,6 +505,14 @@ export function HookCard({
             {pushingCrm ? "Pushing..." : pushedToCrm ? "Pushed" : "Push to CRM"}
           </button>
         )}
+        {userTierId === "pro" && (
+          <button
+            onClick={() => setSeqModalOpen(true)}
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 transition-colors"
+          >
+            Send Sequence
+          </button>
+        )}
         {hook.generated_hook_id && !wonReply && (
           <button
             onClick={handleWin}
@@ -473,11 +561,11 @@ export function HookCard({
         </div>
       )}
 
-      {/* Upgrade nudge for free/starter users */}
-      {(userTierId === "starter" || userTierId === "free") && (
+      {/* Upgrade nudge for free users */}
+      {userTierId === "free" && (
         <div className="mt-3 flex items-center justify-between rounded-lg border border-violet-500/20 bg-violet-500/[0.04] px-3 py-2">
           <p className="text-[11px] text-zinc-500">
-            Export to Apollo / Clay &mdash; available on Scale
+            Export to Apollo / Clay &mdash; available on Pro
           </p>
           <a
             href="/#pricing"
@@ -485,6 +573,110 @@ export function HookCard({
           >
             Upgrade →
           </a>
+        </div>
+      )}
+
+      {/* Send Sequence Modal */}
+      {seqModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          onClick={() => setSeqModalOpen(false)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/60" />
+
+          {/* Modal */}
+          <div
+            className="relative w-full max-w-md mx-4 bg-[#14161a] border border-[#252830] rounded-xl p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold text-zinc-100">Send Sequence</h3>
+              <button
+                onClick={() => setSeqModalOpen(false)}
+                className="text-zinc-500 hover:text-zinc-300 transition-colors text-lg leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {seqSuccess ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-emerald-400 mb-3">Sequence started successfully!</p>
+                <p className="text-xs text-zinc-500 mb-4">Drafts will appear in your Inbox for review before sending.</p>
+                <div className="flex gap-2 justify-center">
+                  <a
+                    href="/app/inbox"
+                    className="text-xs font-medium px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors"
+                  >
+                    Go to Inbox
+                  </a>
+                  <button
+                    onClick={() => setSeqModalOpen(false)}
+                    className="text-xs font-medium px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : seqLoading ? (
+              <div className="text-center py-6">
+                <p className="text-xs text-zinc-500">Loading sequences...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSendSequence}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Recipient email *</label>
+                    <input
+                      type="email"
+                      required
+                      value={seqForm.email}
+                      onChange={(e) => setSeqForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="jane@company.com"
+                      className="w-full text-sm px-3 py-2 rounded-lg bg-[#0e0f10] border border-[#252830] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-700 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Recipient name</label>
+                    <input
+                      type="text"
+                      value={seqForm.name}
+                      onChange={(e) => setSeqForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Jane Smith"
+                      className="w-full text-sm px-3 py-2 rounded-lg bg-[#0e0f10] border border-[#252830] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-emerald-700 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Sequence</label>
+                    <select
+                      value={seqForm.sequenceId}
+                      onChange={(e) => setSeqForm((f) => ({ ...f, sequenceId: e.target.value }))}
+                      required
+                      className="w-full text-sm px-3 py-2 rounded-lg bg-[#0e0f10] border border-[#252830] text-zinc-200 focus:outline-none focus:border-emerald-700 transition-colors appearance-none"
+                    >
+                      {sequences.length === 0 && <option value="">No sequences available</option>}
+                      {sequences.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {seqError && (
+                  <p className="mt-3 text-xs text-rose-400">{seqError}</p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={seqSubmitting || sequences.length === 0}
+                  className="w-full mt-5 text-sm font-medium px-4 py-2.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {seqSubmitting ? "Starting..." : "Start Sequence"}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     const rateLimited = await checkRateLimit(getClientIp(request), "auth:discover");
     if (rateLimited) return rateLimited;
 
-    const tierId = ((session.user as any).tierId || "starter") as "starter" | "pro" | "concierge";
+    const tierId = ((session.user as any).tierId || "free") as "free" | "pro";
     if (!checkFeature(tierId, "leadDiscovery")) {
       return featureError("Lead Discovery");
     }

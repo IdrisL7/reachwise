@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Edit3, Trash2, X, Plus } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Edit3, Trash2, X, Plus, Pause, Play } from 'lucide-react';
 
 interface SequenceStep {
   order: number;
@@ -17,6 +17,21 @@ interface Sequence {
   isDefault: number;
   createdAt: string;
   updatedAt: string;
+}
+
+interface LeadSequenceAssignment {
+  id: string;
+  leadId: string;
+  leadEmail: string;
+  leadName: string | null;
+  companyName: string | null;
+  sequenceId: string;
+  sequenceName: string;
+  currentStep: number;
+  totalSteps: number;
+  status: "active" | "paused" | "completed";
+  lastContactedAt: string | null;
+  startedAt: string;
 }
 
 const TEMPLATE_STEPS: Record<string, SequenceStep[]> = {
@@ -66,6 +81,19 @@ function formatDate(dateStr: string): string {
   }
 }
 
+function StatusBadge({ status }: { status: LeadSequenceAssignment["status"] }) {
+  const styles: Record<string, string> = {
+    active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    paused: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    completed: "bg-zinc-500/10 text-zinc-400 border-zinc-500/20",
+  };
+  return (
+    <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${styles[status] ?? styles.completed}`}>
+      {status}
+    </span>
+  );
+}
+
 export default function SequencesPage() {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +110,12 @@ export default function SequencesPage() {
   const [editSubmitting, setEditSubmitting] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
+  // Active lead-sequences state
+  const [assignments, setAssignments] = useState<LeadSequenceAssignment[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(true);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+
   async function fetchSequences() {
     setLoading(true);
     setError(null);
@@ -97,7 +131,74 @@ export default function SequencesPage() {
     }
   }
 
-  useEffect(() => { fetchSequences(); }, []);
+  const fetchAssignments = useCallback(async () => {
+    setAssignmentsLoading(true);
+    setAssignmentsError(null);
+    try {
+      const res = await fetch('/api/lead-sequences');
+      if (!res.ok) throw new Error('Failed to load active sequences');
+      const data = await res.json();
+      setAssignments(data.assignments ?? []);
+    } catch (e: unknown) {
+      setAssignmentsError(e instanceof Error ? e.message : 'Failed to load active sequences');
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSequences();
+    fetchAssignments();
+  }, [fetchAssignments]);
+
+  async function handlePause(assignment: LeadSequenceAssignment) {
+    setTogglingIds(prev => new Set(prev).add(assignment.id));
+    try {
+      const res = await fetch('/api/followups/pause', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: assignment.leadId, reason: 'manual' }),
+      });
+      if (!res.ok) {
+        // Fallback: directly update lead-sequence status
+        await fetch(`/api/lead-sequences/${assignment.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'paused' }),
+        });
+      }
+      await fetchAssignments();
+    } catch {
+      // Optimistic rollback not needed — we just refetch
+      await fetchAssignments();
+    } finally {
+      setTogglingIds(prev => {
+        const next = new Set(prev);
+        next.delete(assignment.id);
+        return next;
+      });
+    }
+  }
+
+  async function handleResume(assignment: LeadSequenceAssignment) {
+    setTogglingIds(prev => new Set(prev).add(assignment.id));
+    try {
+      await fetch(`/api/lead-sequences/${assignment.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'active' }),
+      });
+      await fetchAssignments();
+    } catch {
+      await fetchAssignments();
+    } finally {
+      setTogglingIds(prev => {
+        const next = new Set(prev);
+        next.delete(assignment.id);
+        return next;
+      });
+    }
+  }
 
   async function handleDelete(id: string) {
     setSequences(prev => prev.filter(s => s.id !== id));
@@ -265,6 +366,121 @@ export default function SequencesPage() {
         </div>
       )}
 
+      {/* ── Active Sequences Section ── */}
+      <div className="mt-12">
+        <h3 className="text-2xl font-bold mb-6">Active Sequences</h3>
+
+        {assignmentsError && (
+          <div className="bg-red-900/40 border border-red-700 text-red-300 px-6 py-4 rounded-xl mb-6 text-sm">
+            {assignmentsError}
+          </div>
+        )}
+
+        {assignmentsLoading ? (
+          <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 animate-pulse">
+            <div className="space-y-4">
+              {[0, 1, 2].map(i => (
+                <div key={i} className="flex gap-4 items-center">
+                  <div className="h-4 w-32 bg-white/10 rounded" />
+                  <div className="h-4 w-24 bg-white/10 rounded" />
+                  <div className="h-4 w-20 bg-white/10 rounded" />
+                  <div className="h-4 w-16 bg-white/10 rounded ml-auto" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : assignments.length === 0 ? (
+          <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-10 text-center">
+            <p className="text-slate-400 text-sm">
+              No active sequences. Start one by generating hooks and clicking &quot;Send Sequence&quot;.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl overflow-hidden">
+            {/* Table header */}
+            <div className="grid grid-cols-[1fr_1fr_1fr_100px_90px_110px_80px] gap-4 px-6 py-3 border-b border-white/5 text-[10px] text-slate-500 uppercase font-black tracking-widest">
+              <span>Lead</span>
+              <span>Company</span>
+              <span>Sequence</span>
+              <span>Progress</span>
+              <span>Status</span>
+              <span>Last Contacted</span>
+              <span className="text-right">Action</span>
+            </div>
+
+            {/* Table rows */}
+            {assignments.map((a) => (
+              <div
+                key={a.id}
+                className="grid grid-cols-[1fr_1fr_1fr_100px_90px_110px_80px] gap-4 px-6 py-4 border-b border-white/5 last:border-b-0 items-center hover:bg-white/[0.02] transition-colors"
+              >
+                {/* Lead */}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{a.leadName || 'Unknown'}</p>
+                  <p className="text-xs text-slate-500 truncate">{a.leadEmail}</p>
+                </div>
+
+                {/* Company */}
+                <p className="text-sm text-slate-300 truncate">{a.companyName || '—'}</p>
+
+                {/* Sequence */}
+                <p className="text-sm text-slate-300 truncate">{a.sequenceName}</p>
+
+                {/* Progress */}
+                <div>
+                  <p className="text-sm font-semibold">
+                    Step {a.currentStep} of {a.totalSteps}
+                  </p>
+                  <div className="mt-1 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-purple-500 rounded-full transition-all"
+                      style={{ width: a.totalSteps > 0 ? `${(a.currentStep / a.totalSteps) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Status */}
+                <StatusBadge status={a.status} />
+
+                {/* Last Contacted */}
+                <p className="text-xs text-slate-500">
+                  {a.lastContactedAt ? formatDate(a.lastContactedAt) : '—'}
+                </p>
+
+                {/* Action */}
+                <div className="flex justify-end">
+                  {a.status === 'active' && (
+                    <button
+                      onClick={() => handlePause(a)}
+                      disabled={togglingIds.has(a.id)}
+                      className="flex items-center gap-1 text-xs text-amber-400 hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Pause sequence"
+                    >
+                      <Pause size={13} />
+                      <span>Pause</span>
+                    </button>
+                  )}
+                  {a.status === 'paused' && (
+                    <button
+                      onClick={() => handleResume(a)}
+                      disabled={togglingIds.has(a.id)}
+                      className="flex items-center gap-1 text-xs text-emerald-400 hover:text-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      title="Resume sequence"
+                    >
+                      <Play size={13} />
+                      <span>Resume</span>
+                    </button>
+                  )}
+                  {a.status === 'completed' && (
+                    <span className="text-xs text-slate-600">Done</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#0B0F1A] border border-white/10 rounded-2xl p-8 w-full max-w-md">
@@ -318,7 +534,7 @@ export default function SequencesPage() {
                 disabled={submitting || !modalName.trim()}
                 className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {submitting ? 'Creating…' : 'Create Sequence'}
+                {submitting ? 'Creating...' : 'Create Sequence'}
               </button>
             </form>
           </div>
@@ -407,7 +623,7 @@ export default function SequencesPage() {
                 disabled={editSubmitting || !editName.trim() || editSteps.length === 0}
                 className="w-full bg-purple-600 hover:bg-purple-700 py-3 rounded-xl font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {editSubmitting ? 'Saving…' : 'Save Changes'}
+                {editSubmitting ? 'Saving...' : 'Save Changes'}
               </button>
             </form>
           </div>

@@ -1,5 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import {
   fetchSourcesWithGating,
   fetchUserProvidedSource,
@@ -288,7 +288,7 @@ export async function POST(request: Request) {
     }
 
     const companyDomain = getDomain(url);
-    const tierId = isDemo ? "starter" : ((session?.user as any)?.tierId || "starter");
+    const tierId = isDemo ? "free" : ((session?.user as any)?.tierId || "free");
 
     // Check cache first (keyed by URL + targetRole)
     let candidateHooks: Hook[] | null = null;
@@ -402,7 +402,7 @@ export async function POST(request: Request) {
         // 1. Gather and classify sources with signal gating + anchor scoring
         let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
-        if (tierId === "pro" || tierId === "concierge") {
+        if (tierId === "pro") {
           try {
             rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", exaApiKey!, claudeApiKey);
             prefetchedSignals = rawSignals;
@@ -691,19 +691,19 @@ export async function POST(request: Request) {
     // Cache hooks for next time:
     // - Fresh results: always cache
     // - Stale cached results (wrong rules_version): re-cache with corrected payload
-    // Generate multi-channel variants for Pro/Concierge
+    // Generate multi-channel variants for Pro
     let hookVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> = [];
 
     if (roleGated.length > 0 && (!cached || cacheStale)) {
-      // Generate variants for Pro/Concierge before caching
-      if (tierId === "pro" || tierId === "concierge") {
+      // Generate variants for Pro before caching
+      if (tierId === "pro") {
         try {
           const withVars = await generateChannelVariants(roleGated, claudeApiKey, targetRole);
           hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
         } catch {}
       }
       setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole, hookVariants.length > 0 ? hookVariants : undefined, messagingStyle).catch(() => {});
-    } else if (cached && (tierId === "pro" || tierId === "concierge")) {
+    } else if (cached && (tierId === "pro")) {
       // Load variants from cache
       try {
         const cr = await getCachedHooks(url!, profileUpdatedAt, targetRole, messagingStyle);
@@ -730,44 +730,39 @@ export async function POST(request: Request) {
       }))
       .slice(0, 6);
 
-    // Intent scoring + company intel
-    let intentData = null;
-    let companyIntel = null;
+    // Intent scoring + company intel — fire-and-forget via after()
+    // These are returned separately; don't block hook delivery.
+    const intentData = null;
+    const companyIntel = null;
 
-    if (tierId === "pro" || tierId === "concierge") {
-      const [intentResult, intelResult] = await Promise.allSettled([
-        prefetchedSignals !== null
-          ? Promise.resolve(prefetchedSignals)
-          : researchIntentSignals(url, companyName || companyDomain || "", exaApiKey, claudeApiKey),
-        getCompanyIntelligence(url, exaApiKey, claudeApiKey, true, companyName || undefined),
-      ]);
-
-      if (intentResult.status === "fulfilled") {
-        const signals = intentResult.value;
-        const score = computeIntentScore(signals);
-        intentData = {
-          score,
-          temperature: getTemperature(score),
-          signals: signals.map((s) => ({
-            type: s.type,
-            summary: s.summary,
-            confidence: s.confidence,
-            sourceUrl: s.sourceUrl,
-            detectedAt: s.detectedAt,
-          })),
-        };
-      }
-
-      if (intelResult.status === "fulfilled") {
-        companyIntel = intelResult.value;
-      }
-    } else {
+    // Schedule enrichment to run after response is sent (Vercel waitUntil under the hood)
+    after(async () => {
       try {
-        companyIntel = await getCompanyIntelligence(url, exaApiKey, claudeApiKey, false, companyName || undefined);
-      } catch {
-        // Non-blocking
+        if (tierId === "pro") {
+          const [intentResult, intelResult] = await Promise.allSettled([
+            prefetchedSignals !== null
+              ? Promise.resolve(prefetchedSignals)
+              : researchIntentSignals(url!, companyName || companyDomain || "", exaApiKey!, claudeApiKey!),
+            getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, true, companyName || undefined),
+          ]);
+
+          if (intentResult.status === "fulfilled") {
+            const signals = intentResult.value;
+            const score = computeIntentScore(signals);
+            console.log("[generate-hooks] background enrichment (pro) complete", {
+              traceId,
+              intentScore: score,
+              signalCount: signals.length,
+              intelSuccess: intelResult.status === "fulfilled",
+            });
+          }
+        } else {
+          await getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, false, companyName || undefined).catch(() => {});
+        }
+      } catch (err) {
+        console.error("[generate-hooks] background enrichment failed", { traceId, error: err });
       }
-    }
+    });
 
     let batchId: string | undefined;
     if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
@@ -836,7 +831,7 @@ export async function POST(request: Request) {
       hookVariants,
       intent: intentData,
       companyIntel,
-      isBasicIntel: tierId === "starter",
+      isBasicIntel: tierId === "free",
       _diagnostics: sourceDiagnostics ?? undefined,
     });
   } catch (error) {

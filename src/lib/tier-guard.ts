@@ -11,9 +11,7 @@ interface TierLimits {
 
 const TIER_LIMITS: Record<TierId, TierLimits> = {
   free: { hooksPerMonth: 10, batchSize: 3, discoverySearchesPerMonth: 0 },
-  starter: { hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 },
   pro: { hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 },
-  concierge: { hooksPerMonth: 10000, batchSize: 75, discoverySearchesPerMonth: 200 },
 };
 
 export function tierError(message: string, code = "TIER_LIMIT") {
@@ -46,7 +44,7 @@ export function checkFeature(
 
 /** Get tier limits for a user */
 export function getLimits(tierId: TierId): TierLimits {
-  return TIER_LIMITS[tierId] || TIER_LIMITS.starter;
+  return TIER_LIMITS[tierId] || TIER_LIMITS.free;
 }
 
 /** Check if the user's trial has expired and they have no active subscription */
@@ -102,7 +100,7 @@ export async function checkHookQuota(userId: string): Promise<NextResponse | nul
 
   if (!user) return tierError("User not found.", "USER_NOT_FOUND");
 
-  const tierId = (user.tierId as TierId) || "starter";
+  const tierId = (user.tierId as TierId) || "free";
   const limits = getLimits(tierId);
 
   const now = new Date();
@@ -169,7 +167,7 @@ export async function checkDiscoveryQuota(userId: string): Promise<NextResponse 
 
   if (!user) return tierError("User not found.", "USER_NOT_FOUND");
 
-  const tierId = (user.tierId as TierId) || "starter";
+  const tierId = (user.tierId as TierId) || "free";
   const limits = getLimits(tierId);
 
   if (limits.discoverySearchesPerMonth <= 0) {

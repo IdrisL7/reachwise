@@ -64,11 +64,10 @@ function RegisterForm() {
 
         // Paid tiers — redirect to Stripe checkout
         setCheckoutMessage(`Account created! Check ${email} to verify your email. Redirecting to checkout...`);
-        const isTrial = selectedTier === "starter";
         const checkoutRes = await fetch("/api/stripe/checkout", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tierId: selectedTier, trial: isTrial }),
+          body: JSON.stringify({ tierId: selectedTier }),
         });
         const checkoutData = await checkoutRes.json();
         if (checkoutData.url) {

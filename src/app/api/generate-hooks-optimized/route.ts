@@ -204,7 +204,7 @@ export async function POST(request: Request) {
     }
 
     const companyDomain = getDomain(url);
-    const tierId = isDemo ? "starter" : ((session?.user as any)?.tierId || "starter");
+    const tierId = isDemo ? "free" : ((session?.user as any)?.tierId || "free");
 
     // **CHECK CACHE FIRST** (with new enhanced cache)
     PerformanceMonitor.start(`cache-lookup-${traceId}`);
@@ -275,8 +275,8 @@ export async function POST(request: Request) {
           { name: 'source-fetching', timeout: 15000, retries: 1 }
         ),
         
-        // Intent signals for Pro/Concierge (run in parallel)
-        (tierId === "pro" || tierId === "concierge") 
+        // Intent signals for Pro (run in parallel)
+        (tierId === "pro") 
           ? EnhancedCache.getIntentSignals(url, companyName || companyDomain || "") ||
             callExternalAPI(
               () => researchIntentSignals(url, companyName || companyDomain || "", exaApiKey, claudeApiKey),
@@ -290,7 +290,7 @@ export async function POST(request: Request) {
         // Company intelligence (run in parallel)  
         EnhancedCache.getCompanyIntel(url) ||
         callExternalAPI(
-          () => getCompanyIntelligence(url, exaApiKey, claudeApiKey, tierId === "pro" || tierId === "concierge"),
+          () => getCompanyIntelligence(url, exaApiKey, claudeApiKey, tierId === "pro"),
           { name: 'company-intel', timeout: 8000, retries: 1 }
         ).then(intel => {
           EnhancedCache.setCompanyIntel(url, intel);
@@ -394,8 +394,8 @@ export async function POST(request: Request) {
         anchorScore: s.anchorScore,
       }));
 
-      // Generate variants for Pro/Concierge (async, don't block response)
-      if (candidateHooks.length > 0 && (tierId === "pro" || tierId === "concierge")) {
+      // Generate variants for Pro (async, don't block response)
+      if (candidateHooks.length > 0 && (tierId === "pro")) {
         generateChannelVariants(candidateHooks, claudeApiKey, targetRole)
           .then(withVars => {
             hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));

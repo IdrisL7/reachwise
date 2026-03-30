@@ -60,10 +60,9 @@ export default function FollowUpEnginePage() {
             each time. It plugs into your existing workflow and runs hands-free.
           </p>
           <p className="mt-4 text-[0.9375rem] text-zinc-500">
-            Available on{" "}
-            <span className="font-medium text-violet-400">Pro</span> and{" "}
-            <span className="font-medium text-violet-400">Concierge</span>{" "}
-            plans.
+            Available on the{" "}
+            <span className="font-medium text-violet-400">Pro</span>{" "}
+            plan.
           </p>
         </div>
 

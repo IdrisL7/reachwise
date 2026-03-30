@@ -73,7 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id;
-        token.tierId = (user as any).tierId || "starter";
+        token.tierId = (user as any).tierId || "free";
         token.isEmailVerified = !!(user as any).emailVerified;
         token.lastRefreshed = Date.now();
         token.issuedAt = Date.now();
@@ -94,7 +94,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             .limit(1);
 
           if (freshUser) {
-            token.tierId = freshUser.tierId || "starter";
+            token.tierId = freshUser.tierId || "free";
             token.isEmailVerified = !!freshUser.emailVerified;
 
             // Invalidate session if password was changed after this token was issued
@@ -120,7 +120,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async session({ session, token }) {
       if (token && token.id) {
         session.user.id = token.id as string;
-        session.user.tierId = (token.tierId as TierId) || "starter";
+        session.user.tierId = (token.tierId as TierId) || "free";
         (session.user as any).isEmailVerified = (token.isEmailVerified as boolean) ?? false;
       }
       return session;

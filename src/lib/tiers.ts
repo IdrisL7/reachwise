@@ -2,7 +2,7 @@
 // Tier definitions & feature flags
 // ---------------------------------------------------------------------------
 
-export type TierId = "free" | "starter" | "pro" | "concierge";
+export type TierId = "free" | "pro";
 
 export interface TierFeature {
   text: string;
@@ -44,7 +44,7 @@ export const TIERS: Tier[] = [
     bestFor:
       "Anyone curious about evidence-first outbound — no card required, no time limit.",
     features: [
-      { text: "10 hooks lifetime (no card required)" },
+      { text: "10 hooks/month (no card required)" },
       { text: "Evidence-backed email hooks (Trigger / Risk / Tradeoff) + receipts" },
       { text: "Role selection (VP Sales / RevOps / Founder / etc.)" },
       { text: "Company intelligence panel" },
@@ -64,87 +64,26 @@ export const TIERS: Tier[] = [
       companyIntel: true,
       leadDiscovery: false,
     },
-    cta: "Start for free",
-  },
-  {
-    id: "starter",
-    name: "Pro",
-    price: { usd: 79, gbp: 65, eur: 74 },
-    description: "Evidence-backed hooks with CSV export and sequences.",
-    bestFor:
-      "Founders and solo SDRs running outbound who want research-backed hooks without the hours.",
-    features: [
-      { text: "50 hooks/month" },
-      { text: "Evidence-backed email hooks (Trigger / Risk / Tradeoff) + receipts" },
-      { text: "Basic email sequences (3-step)" },
-      { text: "CSV export (Apollo, Clay, Instantly)" },
-      { text: "Role selection (VP Sales / RevOps / Founder / etc.)" },
-    ],
-    flags: {
-      hooks: true,
-      batchHooks: true,
-      followUpEngine: false,
-      n8nTemplate: false,
-      doneForYouSetup: false,
-      prioritySupport: false,
-      multiChannel: false,
-      sequences: true,
-      intentScoring: false,
-      agenticExecution: false,
-      replyAnalysis: false,
-      companyIntel: true,
-      leadDiscovery: false,
-    },
-    cta: "Start 7-day free trial",
+    cta: "Get started",
+    highlighted: false,
   },
   {
     id: "pro",
-    name: "Scale",
-    price: { usd: 179, gbp: 149, eur: 169 },
-    description: "Multi-channel outbound with intent scoring and guardrails.",
+    name: "Pro",
+    price: { usd: 79, gbp: 65, eur: 74 },
+    description: "Full-power outbound with intent scoring, sequences, and multi-channel.",
     bestFor:
-      "Teams that run outbound daily and want evidence-backed sequences across email, LinkedIn, calls, and video.",
+      "Founders and teams running outbound daily who want evidence-backed hooks, sequences, and lead discovery.",
     features: [
-      { text: "Everything in Pro" },
-      { text: "Unlimited hooks" },
+      { text: "750 hooks/month" },
+      { text: "Everything in Free" },
       { text: "Multi-channel variants (email + LinkedIn + call + video)" },
       { text: "Custom sequence builder + templates" },
       { text: "Intent scoring + lead temperature badges" },
-      { text: "Inbox for drafts + approvals (optional)" },
-    ],
-    flags: {
-      hooks: true,
-      batchHooks: true,
-      followUpEngine: true,
-      n8nTemplate: true,
-      doneForYouSetup: false,
-      prioritySupport: false,
-      multiChannel: true,
-      sequences: true,
-      intentScoring: true,
-      agenticExecution: true,
-      replyAnalysis: true,
-      companyIntel: true,
-      leadDiscovery: true,
-    },
-    cta: "Get started",
-    highlighted: true,
-  },
-  {
-    id: "concierge",
-    name: "Concierge",
-    price: { usd: 599, gbp: 499, eur: 559 },
-    description: "Set it up and let it run \u2014 we handle execution.",
-    bestFor:
-      "Teams that want the full platform managed end-to-end: hooks, sequences, intent scoring, and reply handling.",
-    features: [
-      { text: "Everything in Scale" },
-      {
-        text: "Autonomous execution via n8n templates (guardrails + logging included)",
-        link: "/followup-engine",
-      },
-      { text: "Advanced reply analysis + suggested responses" },
-      { text: "White-glove onboarding + integration support" },
+      { text: "Lead discovery (50 searches/month)" },
+      { text: "CSV export (Apollo, Clay, Instantly)" },
+      { text: "Follow-up engine + reply analysis" },
+      { text: "Priority support" },
     ],
     flags: {
       hooks: true,
@@ -161,7 +100,8 @@ export const TIERS: Tier[] = [
       companyIntel: true,
       leadDiscovery: true,
     },
-    cta: "Get started",
+    cta: "Upgrade",
+    highlighted: true,
   },
 ];
 

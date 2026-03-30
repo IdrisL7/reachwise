@@ -42,7 +42,7 @@ Every hook follows Signal → Implication → Question structure and ends with a
 ### Email generation
 Users can also generate full cold emails from any hook. The email is anchored on the hook's evidence and follows Signal → Implication → Question structure. Users can choose tone (concise, warm, direct) and sequence step (first touch, bump, breakup).
 
-### Follow-Up Engine (Pro & Concierge)
+### Follow-Up Engine (Pro)
 Automated follow-up sequences that watch outbound, generate research-backed emails with fresh angles, and send them on schedule via n8n. No templates, no repeats — the engine rotates between trigger, risk, and tradeoff hooks.
 
 ### Integrations
@@ -52,9 +52,8 @@ Automated follow-up sequences that watch outbound, generate research-backed emai
 - n8n workflow templates included
 
 ### Pricing
-- Starter: £29/mo — ~200 hook generations, batch up to 10 URLs, 7-day free trial
-- Pro: £149/mo — ~750 generations, batch up to 75 URLs, Follow-Up Engine, n8n templates
-- Concierge: £499/mo — Everything in Pro + done-for-you setup, priority Slack support, sequence strategy & copy review, deliverability monitoring
+- Free: $0 — 10 hooks/month, basic company intel, no card required
+- Pro: $79/mo — 750 hooks/month, multi-channel sequences, intent scoring, lead discovery, Follow-Up Engine
 
 ### Target audience
 - SDRs & BDRs who want to skip generic openers
@@ -72,7 +71,7 @@ Users can add a 60-second sender profile (what you sell, ICP, buyer roles, prima
 ## Demo capability
 When a prospect asks to see a demo or try it, tell them they can:
 1. Use the demo section on the landing page (scroll down)
-2. Sign up for the 7-day free trial on the Starter plan
+2. Sign up for a free account
 3. If they give you a company URL in the chat, offer to show them what the output looks like by generating hooks
 
 When they provide a URL for a demo, respond with:

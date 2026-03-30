@@ -22,9 +22,9 @@ export async function POST(request: NextRequest) {
 
   // 2. Tier gate
   const tierId = (session?.user as any)?.tierId;
-  if (tierId !== "pro" && tierId !== "concierge") {
+  if (tierId !== "pro") {
     return NextResponse.json(
-      { error: "Upgrade to Pro or Concierge to find contacts.", code: "UPGRADE_REQUIRED" },
+      { error: "Upgrade to Pro to find contacts.", code: "UPGRADE_REQUIRED" },
       { status: 403 },
     );
   }

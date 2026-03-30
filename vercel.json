@@ -19,6 +19,14 @@
     {
       "path": "/api/cron/watchlist-scan",
       "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/send-approved",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/sequence-runner",
+      "schedule": "0 */4 * * *"
     }
   ]
 }

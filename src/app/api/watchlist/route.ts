@@ -6,9 +6,8 @@ import { getDomain } from "@/lib/hooks";
 import { TIERS } from "@/lib/tiers";
 
 const WATCHLIST_CAPS: Record<string, number> = {
-  starter: 0, // locked
+  free: 0, // locked
   pro: 100,
-  concierge: 500,
 };
 
 export async function GET() {
@@ -32,12 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tierId = (session.user as any).tierId || "starter";
+  const tierId = (session.user as any).tierId || "free";
   const cap = WATCHLIST_CAPS[tierId] ?? 0;
 
   if (cap === 0) {
     return NextResponse.json(
-      { error: "Watchlist is available on Pro and Concierge." },
+      { error: "Watchlist is available on the Pro plan." },
       { status: 403 },
     );
   }

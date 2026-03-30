@@ -103,9 +103,9 @@ export async function POST(req: NextRequest) {
         await db
           .update(schema.users)
           .set({
-            tierId: "starter",
+            tierId: "free",
             stripeSubscriptionId: null,
-            trialEndsAt: new Date().toISOString(), // Set expired trial to block free access
+            trialEndsAt: null,
           })
           .where(eq(schema.users.id, userId));
       }
@@ -132,13 +132,13 @@ export async function POST(req: NextRequest) {
         if ((invoice.attempt_count || 0) >= 3) {
           await db
             .update(schema.users)
-            .set({ tierId: "starter", stripeSubscriptionId: null })
+            .set({ tierId: "free", stripeSubscriptionId: null })
             .where(eq(schema.users.id, failedUser.id));
 
           await sendEmail({
             to: failedUser.email,
             subject: "Your GetSignalHooks subscription has been paused",
-            body: `Hi ${failedUser.name || "there"},\n\nWe weren't able to process your payment after multiple attempts. Your account has been downgraded to the Starter plan.\n\nTo restore your subscription, please update your payment method:\n${settingsUrl}\n\nIf you need help, just reply to this email.\n\n— The GetSignalHooks Team`,
+            body: `Hi ${failedUser.name || "there"},\n\nWe weren't able to process your payment after multiple attempts. Your account has been downgraded to the Free plan.\n\nTo restore your subscription, please update your payment method:\n${settingsUrl}\n\nIf you need help, just reply to this email.\n\n— The GetSignalHooks Team`,
             userId: failedUser.id,
           }).catch((err) => console.error("Failed to send dunning email:", err));
 
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
         if (refundedUser) {
           await db
             .update(schema.users)
-            .set({ tierId: "starter", stripeSubscriptionId: null })
+            .set({ tierId: "free", stripeSubscriptionId: null })
             .where(eq(schema.users.id, refundedUser.id));
 
           logAudit({

@@ -10,7 +10,7 @@ import { generateUnsubscribeToken } from "@/app/api/auth/unsubscribe/route";
 //   Day 0: Welcome (sent inline during registration via verification email)
 //   Day 1: "Generate your first hooks" nudge
 //   Day 3: "Import your leads" nudge
-//   Day 6: Trial ending reminder (Starter only)
+//   Day 6: Upgrade nudge (Free only)
 
 const ONBOARDING_EMAILS = [
   {
@@ -31,9 +31,9 @@ const ONBOARDING_EMAILS = [
     daysSinceSignup: 6,
     tag: "onboarding_day6_trial",
     subject: "Your trial ends tomorrow — here's what you'll keep",
-    tierFilter: "starter" as const,
+    tierFilter: "free" as const,
     body: (name: string) =>
-      `Hi ${name || "there"},\n\nYour 7-day free trial ends tomorrow. After that, your Starter plan (£29/month) will begin.\n\nHere's what you get:\n- ~200 hook generations per month\n- Batch mode for up to 10 URLs\n- Evidence snippets and source citations\n\nWant more? Upgrade to Pro (£149/month) for the Follow-Up Engine, which auto-generates follow-up sequences with angle rotation.\n\nManage your subscription: https://www.getsignalhooks.com/app/settings\n\n— The GetSignalHooks Team`,
+      `Hi ${name || "there"},\n\nYou've been using GetSignalHooks for almost a week — nice!\n\nReady for more? Upgrade to Pro ($79/month) for:\n- 750 hooks per month\n- Multi-channel sequences\n- Intent scoring + lead discovery\n- CSV export (Apollo, Clay, Instantly)\n\nUpgrade now: https://www.getsignalhooks.com/#pricing\n\nManage your account: https://www.getsignalhooks.com/app/settings\n\n— The GetSignalHooks Team`,
   },
 ];
 

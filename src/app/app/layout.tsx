@@ -11,24 +11,22 @@ import { SignalHooksLogo } from "@/components/ui/signalhooks-logo";
 
 const navGroups = [
   {
-    label: "Prospecting",
+    label: "Outreach",
     items: [
       { href: "/app/hooks", label: "Hooks" },
-      { href: "/app/batch", label: "Batch" },
-      { href: "/app/discover", label: "Discover" },
+      { href: "/app/sequences", label: "Sequences" },
+      { href: "/app/inbox", label: "Inbox" },
     ],
   },
   {
-    label: "Data",
+    label: "Library",
     items: [
-      { href: "/app/leads", label: "Leads" },
-      { href: "/app/integrations", label: "Integrations" },
+      { href: "/app/templates", label: "Templates" },
     ],
   },
   {
-    label: "Insights",
+    label: "Account",
     items: [
-      { href: "/app/analytics", label: "Analytics" },
       { href: "/app/settings", label: "Settings" },
     ],
   },
@@ -37,9 +35,9 @@ const navGroups = [
 const allNavItems = navGroups.flatMap((g) => g.items);
 const primaryNav = [
   { href: "/app/hooks", label: "Hooks" },
-  { href: "/app/batch", label: "Batch" },
-  { href: "/app/discover", label: "Discover" },
-  { href: "/app/leads", label: "Leads" },
+  { href: "/app/sequences", label: "Sequences" },
+  { href: "/app/inbox", label: "Inbox" },
+  { href: "/app/templates", label: "Templates" },
 ];
 const secondaryNav = allNavItems.filter((item) => !primaryNav.find((p) => p.href === item.href));
 
@@ -97,7 +95,7 @@ export default async function AppLayout({
             <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded capitalize">
               {tierId}
             </span>
-            {tierId !== "concierge" && (
+            {tierId !== "pro" && (
               <Link
                 href="/#pricing"
                 className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors"

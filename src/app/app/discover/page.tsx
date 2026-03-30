@@ -20,7 +20,7 @@ export default function DiscoverPage() {
   const [results, setResults] = useState<DiscoveredCompany[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [tierId, setTierId] = useState<"starter" | "pro" | "concierge">("starter");
+  const [tierId, setTierId] = useState<"free" | "pro">("free");
   const [intelByDomain, setIntelByDomain] = useState<Record<string, CompanyIntelligence>>({});
   const [intelLoadingDomain, setIntelLoadingDomain] = useState<string | null>(null);
   const [searchId, setSearchId] = useState<string | null>(null);
@@ -33,7 +33,7 @@ export default function DiscoverPage() {
   useEffect(() => {
     fetch("/api/user-stats")
       .then((res) => res.json())
-      .then((data) => setTierId((data.tier || "starter") as "starter" | "pro" | "concierge"))
+      .then((data) => setTierId((data.tier || "free") as "free" | "pro"))
       .catch(() => {});
     loadSavedSearches();
   }, []);
@@ -45,7 +45,7 @@ export default function DiscoverPage() {
       .catch(() => {});
   }
 
-  const isDiscoveryLocked = tierId === "starter";
+  const isDiscoveryLocked = tierId === "free";
 
   async function runDiscovery() {
     setLoading(true);
@@ -186,7 +186,7 @@ export default function DiscoverPage() {
         <DiscoveryForm criteria={criteria} setCriteria={setCriteria} onSubmit={runDiscovery} loading={loading || isDiscoveryLocked} />
         {isDiscoveryLocked && (
           <div className="absolute inset-0 bg-[#030014]/90 border border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-center">
-            <p className="text-slate-200 font-bold mb-2">Lead Discovery is available on Pro and Concierge.</p>
+            <p className="text-slate-200 font-bold mb-2">Lead Discovery is available on the Pro plan.</p>
             <p className="text-slate-500 text-sm mb-4">Upgrade to search prospects by industry, tech stack, and growth signals.</p>
             <a href="/#pricing" className="bg-purple-600 hover:bg-purple-500 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-purple-500/20">Upgrade to Pro</a>
           </div>
@@ -221,7 +221,7 @@ export default function DiscoverPage() {
               {intelByDomain[company.domain] && (
                 <CompanyIntelPanel
                   intel={intelByDomain[company.domain]}
-                  isBasic={tierId === "starter"}
+                  isBasic={tierId === "free"}
                 />
               )}
             </div>

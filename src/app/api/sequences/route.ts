@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Name and steps are required" }, { status: 400 });
   }
 
-  // Tier check: Starter gets 1 custom sequence max
+  // Tier check: Free gets 1 custom sequence max
   const existing = await db
     .select()
     .from(schema.sequences)
@@ -82,10 +82,10 @@ export async function POST(request: Request) {
 
   const presetNames = PRESET_TEMPLATES.map((p) => p.name);
   const customCount = existing.filter((s) => !presetNames.includes(s.name)).length;
-  const tierId = (session.user as any).tierId || "starter";
-  if (tierId === "starter" && customCount >= 1) {
+  const tierId = (session.user as any).tierId || "free";
+  if (tierId === "free" && customCount >= 1) {
     return NextResponse.json(
-      { error: "Starter plan allows 1 custom sequence. Upgrade for unlimited." },
+      { error: "Free plan allows 1 custom sequence. Upgrade to Pro for unlimited." },
       { status: 402 },
     );
   }

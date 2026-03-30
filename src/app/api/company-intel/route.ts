@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     const rl = await checkRateLimit(getClientIp(request), "auth:company-intel");
     if (rl) return rl;
 
-    const tierId = ((session.user as any).tierId || "starter") as "starter" | "pro" | "concierge";
+    const tierId = ((session.user as any).tierId || "free") as "free" | "pro";
     if (!checkFeature(tierId, "companyIntel")) {
       return featureError("Company Intelligence");
     }
@@ -31,7 +31,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }
 
-    const fullAccess = tierId === "pro" || tierId === "concierge";
+    const fullAccess = tierId === "pro";
     const intel = await getCompanyIntelligence(url, exaApiKey, claudeApiKey, fullAccess);
 
     return NextResponse.json(intel);

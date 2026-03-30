@@ -20,19 +20,15 @@ export const stripe = new Proxy({} as Stripe, {
 });
 
 export function getTierFromPriceId(priceId: string): TierId {
-  if (process.env.STRIPE_PRICE_STARTER && priceId === process.env.STRIPE_PRICE_STARTER) return "starter";
   if (process.env.STRIPE_PRICE_PRO && priceId === process.env.STRIPE_PRICE_PRO) return "pro";
-  if (process.env.STRIPE_PRICE_CONCIERGE && priceId === process.env.STRIPE_PRICE_CONCIERGE) return "concierge";
-  console.warn(`Unknown Stripe price ID: ${priceId} — defaulting to starter`);
-  return "starter";
+  console.warn(`Unknown Stripe price ID: ${priceId} — defaulting to free`);
+  return "free";
 }
 
 export function getPriceId(tierId: TierId): string {
   const map: Record<TierId, string> = {
     free: "",
-    starter: process.env.STRIPE_PRICE_STARTER || "",
     pro: process.env.STRIPE_PRICE_PRO || "",
-    concierge: process.env.STRIPE_PRICE_CONCIERGE || "",
   };
   return map[tierId];
 }
@@ -80,7 +76,7 @@ export async function syncSubscriptionToUser(subscription: Stripe.Subscription) 
   if (!userId) return;
 
   const priceId = subscription.items.data[0]?.price.id;
-  const tierId = priceId ? getTierFromPriceId(priceId) : "starter";
+  const tierId = priceId ? getTierFromPriceId(priceId) : "free";
 
   await db
     .update(schema.users)

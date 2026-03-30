@@ -23,7 +23,7 @@ export default async function DashboardPage() {
     .where(eq(schema.users.id, userId))
     .limit(1);
 
-  const tierId = (user?.tierId as TierId) || "starter";
+  const tierId = (user?.tierId as TierId) || "free";
   const limits = getLimits(tierId);
 
   const [leadCount] = await db

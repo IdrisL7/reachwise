@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       .where(eq(schema.users.id, session.user.id))
       .limit(1);
 
-    const tierId = (user?.tierId as TierId) || "starter";
+    const tierId = (user?.tierId as TierId) || "free";
     const limits = getLimits(tierId);
 
     // Check batch size against tier limit
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
             messagingStyle,
           });
           let itemVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> | undefined;
-          if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
+          if ((tierId === "pro") && result.hooks.length > 0) {
             try {
               const claudeKey = process.env.CLAUDE_API_KEY!;
               const withVars = await generateChannelVariants(result.hooks, claudeKey);
@@ -120,7 +120,7 @@ export async function POST(request: Request) {
             } catch {}
           }
           let intentData: { score: number; temperature: string; signalsCount: number } | null = null;
-          if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
+          if ((tierId === "pro") && result.hooks.length > 0) {
             try {
               const tavilyKey = process.env.EXA_API_KEY;
               const claudeKey = process.env.CLAUDE_API_KEY;

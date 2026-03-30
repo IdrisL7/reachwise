@@ -85,7 +85,7 @@ export function PricingSection() {
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
             <p className="mb-4 text-[0.9375rem] font-semibold text-zinc-500">
-              7-day free trial · no card required
+              Free forever · upgrade when you're ready
             </p>
             <h2 id="pricing-heading" className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
               No migration. No lock-in. Just better outbound.
@@ -120,7 +120,7 @@ export function PricingSection() {
           </div>
         )}
 
-        <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-3 lg:mt-20">
+        <div className="mx-auto mt-16 grid max-w-5xl gap-5 sm:grid-cols-2 lg:mt-20">
           {TIERS.map((tier, i) => (
             <Reveal key={tier.id} delay={i * 0.1}>
             <div
@@ -168,7 +168,7 @@ export function PricingSection() {
                       if (!session) {
                         window.location.href = `/register?tier=${tier.id}`;
                       } else {
-                        handleCheckout(tier.id, tier.id === "starter");
+                        handleCheckout(tier.id);
                       }
                     }}
                     className={`flex h-11 items-center justify-center rounded-lg text-[0.875rem] font-semibold transition-colors duration-150 cursor-pointer disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 ${
@@ -179,14 +179,6 @@ export function PricingSection() {
                   >
                     {checkoutLoading === tier.id ? "Redirecting..." : tier.cta}
                   </button>
-                  {tier.id === "concierge" && (
-                    <Link
-                      href="/contact"
-                      className="flex h-11 items-center justify-center rounded-lg text-[0.8125rem] font-medium border border-zinc-600/40 text-zinc-400 hover:text-white hover:border-violet-500/40 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0b]"
-                    >
-                      or Book a call
-                    </Link>
-                  )}
                 </div>
               )}
             </div>

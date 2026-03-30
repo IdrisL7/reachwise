@@ -135,7 +135,7 @@ export default function WatchlistPage() {
           </div>
           <div className="absolute inset-0 bg-[#030014]/90 border border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-center">
             <Eye size={36} className="text-slate-600 mb-4" />
-            <p className="text-slate-200 font-bold mb-2">Watchlist is available on Pro and Concierge.</p>
+            <p className="text-slate-200 font-bold mb-2">Watchlist is available on the Pro plan.</p>
             <p className="text-slate-500 text-sm mb-5">Monitor up to 100 companies for fresh signals and auto-generate hooks overnight.</p>
             <a
               href="/#pricing"

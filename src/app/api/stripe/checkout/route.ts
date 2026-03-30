@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { stripe, getOrCreateStripeCustomer, getPriceId } from "@/lib/stripe";
 import type { TierId } from "@/lib/tiers";
 
-const VALID_TIERS: TierId[] = ["starter", "pro", "concierge"];
+const VALID_TIERS: TierId[] = ["pro"];
 
 export async function POST(req: NextRequest) {
   const session = await auth();

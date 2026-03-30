@@ -11,7 +11,7 @@ export const users = sqliteTable("users", {
   emailVerified: text("email_verified"),
   image: text("image"),
   passwordHash: text("password_hash"), // for credentials auth
-  tierId: text("tier_id").$type<TierId>().notNull().default("starter"),
+  tierId: text("tier_id").$type<TierId>().notNull().default("free"),
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
   hooksUsedThisMonth: integer("hooks_used_this_month").notNull().default(0),

@@ -21,7 +21,7 @@ export async function GET() {
     .where(eq(schema.users.id, session.user.id))
     .limit(1);
 
-  const tierId = (user?.tierId ?? "starter") as TierId;
+  const tierId = (user?.tierId ?? "free") as TierId;
   const limits = getLimits(tierId);
 
   return NextResponse.json({

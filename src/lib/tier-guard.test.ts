@@ -111,12 +111,12 @@ describe("featureError", () => {
 describe("checkFeature", () => {
   it("returns true when the tier has the flag enabled", () => {
     expect(checkFeature("pro", "followUpEngine")).toBe(true);
-    expect(checkFeature("concierge", "doneForYouSetup")).toBe(true);
+    expect(checkFeature("pro", "doneForYouSetup")).toBe(true);
   });
 
   it("returns false when the tier does not have the flag", () => {
-    expect(checkFeature("starter", "followUpEngine")).toBe(false);
-    expect(checkFeature("starter", "intentScoring")).toBe(false);
+    expect(checkFeature("free", "followUpEngine")).toBe(false);
+    expect(checkFeature("free", "intentScoring")).toBe(false);
   });
 
   it("returns false for an unknown tier id", () => {
@@ -126,20 +126,16 @@ describe("checkFeature", () => {
 });
 
 describe("getLimits", () => {
-  it("returns correct limits for starter", () => {
-    expect(getLimits("starter")).toEqual({ hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 });
+  it("returns correct limits for free", () => {
+    expect(getLimits("free")).toEqual({ hooksPerMonth: 10, batchSize: 3, discoverySearchesPerMonth: 0 });
   });
 
   it("returns correct limits for pro", () => {
     expect(getLimits("pro")).toEqual({ hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 });
   });
 
-  it("returns correct limits for concierge", () => {
-    expect(getLimits("concierge")).toEqual({ hooksPerMonth: 10000, batchSize: 75, discoverySearchesPerMonth: 200 });
-  });
-
-  it("falls back to starter limits for unknown tier", () => {
-    expect(getLimits("unknown" as any)).toEqual({ hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 });
+  it("falls back to free limits for unknown tier", () => {
+    expect(getLimits("unknown" as any)).toEqual({ hooksPerMonth: 10, batchSize: 3, discoverySearchesPerMonth: 0 });
   });
 });
 
@@ -259,8 +255,8 @@ describe("checkHookQuota", () => {
     setupQuotaTest({
       trialUser: { trialEndsAt: null, stripeSubscriptionId: "sub_x" },
       quotaUser: {
-        tierId: "starter",
-        hooksUsedThisMonth: 199,
+        tierId: "free",
+        hooksUsedThisMonth: 9,
         hooksResetAt: lastMonth.toISOString(),
       },
     });
@@ -296,8 +292,8 @@ describe("checkHookQuota", () => {
     setupQuotaTest({
       trialUser: { trialEndsAt: null, stripeSubscriptionId: "sub_x" },
       quotaUser: {
-        tierId: "starter",
-        hooksUsedThisMonth: 200,
+        tierId: "free",
+        hooksUsedThisMonth: 10,
         hooksResetAt: now.toISOString(),
       },
       updateResult: { rowsAffected: 0 },
@@ -308,16 +304,16 @@ describe("checkHookQuota", () => {
     expect(res!.status).toBe(402);
     const body = await res!.json();
     expect(body.code).toBe("TIER_LIMIT");
-    expect(body.message).toContain("200");
+    expect(body.message).toContain("10");
   });
 
-  it("uses starter limits when tierId is missing", async () => {
+  it("uses free limits when tierId is missing", async () => {
     const now = new Date();
     setupQuotaTest({
       trialUser: { trialEndsAt: null, stripeSubscriptionId: "sub_x" },
       quotaUser: {
         tierId: null,
-        hooksUsedThisMonth: 200,
+        hooksUsedThisMonth: 10,
         hooksResetAt: now.toISOString(),
       },
       updateResult: { rowsAffected: 0 },
@@ -326,18 +322,18 @@ describe("checkHookQuota", () => {
     const res = await checkHookQuota("user-1");
     expect(res).not.toBeNull();
     const body = await res!.json();
-    // starter limit is 200, so at 200 usage with 0 rows affected => limit
+    // free limit is 10, so at 10 usage with 0 rows affected => limit
     expect(body.code).toBe("TIER_LIMIT");
-    expect(body.message).toContain("200");
+    expect(body.message).toContain("10");
   });
 
-  it("concierge tier allows many more hooks", async () => {
+  it("pro tier allows many more hooks", async () => {
     const now = new Date();
     setupQuotaTest({
       trialUser: { trialEndsAt: null, stripeSubscriptionId: "sub_x" },
       quotaUser: {
-        tierId: "concierge",
-        hooksUsedThisMonth: 5000,
+        tierId: "pro",
+        hooksUsedThisMonth: 500,
         hooksResetAt: now.toISOString(),
       },
       updateResult: { rowsAffected: 1 },
@@ -350,27 +346,26 @@ describe("checkHookQuota", () => {
 
 describe("checkBatchSize", () => {
   it("returns null when batch size is within limit", () => {
-    expect(checkBatchSize("starter", 10)).toBeNull();
-    expect(checkBatchSize("starter", 5)).toBeNull();
+    expect(checkBatchSize("free", 3)).toBeNull();
+    expect(checkBatchSize("free", 2)).toBeNull();
     expect(checkBatchSize("pro", 75)).toBeNull();
-    expect(checkBatchSize("concierge", 75)).toBeNull();
   });
 
   it("returns error when batch size exceeds limit", async () => {
-    const res = checkBatchSize("starter", 11);
+    const res = checkBatchSize("free", 4);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(402);
     const body = await res!.json();
     expect(body.code).toBe("TIER_LIMIT");
-    expect(body.message).toContain("11");
-    expect(body.message).toContain("10");
+    expect(body.message).toContain("4");
+    expect(body.message).toContain("3");
   });
 
-  it("enforces starter batch limit of 10", async () => {
-    const res = checkBatchSize("starter", 50);
+  it("enforces free batch limit of 3", async () => {
+    const res = checkBatchSize("free", 50);
     expect(res).not.toBeNull();
     const body = await res!.json();
-    expect(body.message).toContain("10");
+    expect(body.message).toContain("3");
   });
 
   it("allows pro tier up to 75", () => {

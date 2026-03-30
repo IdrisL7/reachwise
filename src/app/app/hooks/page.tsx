@@ -77,7 +77,7 @@ export default function HooksPage() {
   const [companyDomain, setCompanyDomain] = useState<string>("");
   const [discovering, setDiscovering] = useState(false);
   const [hooksUsed, setHooksUsed] = useState<number | null>(null);
-  const [userTier, setUserTier] = useState<string>("starter");
+  const [userTier, setUserTier] = useState<string>("free");
   const [findingContacts, setFindingContacts] = useState(false);
   const [contactsResult, setContactsResult] = useState<{ created: number; skipped: number } | null>(null);
   const [contactsError, setContactsError] = useState<string | null>(null);
@@ -148,7 +148,7 @@ export default function HooksPage() {
       if (profileData.profile) setHasProfile(true);
       const used = statsData.hooksUsed ?? 0;
       setHooksUsed(used);
-      setUserTier(statsData.tier ?? "starter");
+      setUserTier(statsData.tier ?? "free");
       if (used === 0 && !localStorage.getItem("gsh_onboarding_done")) {
         setOnboardingStep(0);
       }
@@ -388,7 +388,7 @@ export default function HooksPage() {
             : undefined,
           customPain: targetRole === "Custom" && customPain.trim() ? customPain.trim() : undefined,
           customPromise: targetRole === "Custom" && customPromise.trim() ? customPromise.trim() : undefined,
-          context: userTier !== "starter" && pitchContext.trim() ? pitchContext.trim() : undefined,
+          context: userTier !== "free" && pitchContext.trim() ? pitchContext.trim() : undefined,
           messagingStyle: messagingStyle !== "evidence" ? messagingStyle : undefined,
         }),
       });
@@ -870,9 +870,9 @@ export default function HooksPage() {
                 {/* Find contacts */}
                 {companyDomain && (
                   <div className="pt-3 border-t border-zinc-800/60">
-                    {userTier === "starter" ? (
+                    {userTier === "free" ? (
                       <p className="text-xs text-zinc-500">
-                        <span className="text-violet-400 font-medium">Pro/Concierge</span> — Find verified contacts at this company.{" "}
+                        <span className="text-violet-400 font-medium">Pro</span> — Find verified contacts at this company.{" "}
                         <a href="/#pricing" className="text-violet-400 hover:text-violet-300 underline underline-offset-2 transition-colors">Upgrade</a>
                       </p>
                     ) : contactsResult ? (

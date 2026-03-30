@@ -264,22 +264,16 @@ export default function DocsPage() {
               </thead>
               <tbody className="text-zinc-300">
                 <tr className="border-t border-zinc-800">
-                  <td className="py-3">Starter ($35)</td>
-                  <td className="py-3">~200</td>
-                  <td className="py-3">10 URLs</td>
+                  <td className="py-3">Free ($0)</td>
+                  <td className="py-3">10</td>
+                  <td className="py-3">3 URLs</td>
                   <td className="py-3 text-zinc-600">-</td>
                 </tr>
                 <tr className="border-t border-zinc-800">
-                  <td className="py-3">Pro ($179)</td>
-                  <td className="py-3">~750</td>
+                  <td className="py-3">Pro ($79)</td>
+                  <td className="py-3">750</td>
                   <td className="py-3">75 URLs</td>
                   <td className="py-3 text-emerald-400">Included</td>
-                </tr>
-                <tr className="border-t border-zinc-800">
-                  <td className="py-3">Concierge ($599)</td>
-                  <td className="py-3">Unlimited</td>
-                  <td className="py-3">75 URLs</td>
-                  <td className="py-3 text-emerald-400">Managed</td>
                 </tr>
               </tbody>
             </table>

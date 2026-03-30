@@ -73,9 +73,7 @@ vi.mock("@/lib/db", () => ({
 
 // Set env vars before importing module under test
 process.env.STRIPE_SECRET_KEY = "sk_test_fake";
-process.env.STRIPE_PRICE_STARTER = "price_starter_123";
 process.env.STRIPE_PRICE_PRO = "price_pro_456";
-process.env.STRIPE_PRICE_CONCIERGE = "price_concierge_789";
 
 import {
   getStripe,
@@ -118,21 +116,13 @@ describe("getStripe", () => {
 });
 
 describe("getTierFromPriceId", () => {
-  it("returns 'starter' for the starter price ID", () => {
-    expect(getTierFromPriceId("price_starter_123")).toBe("starter");
-  });
-
   it("returns 'pro' for the pro price ID", () => {
     expect(getTierFromPriceId("price_pro_456")).toBe("pro");
   });
 
-  it("returns 'concierge' for the concierge price ID", () => {
-    expect(getTierFromPriceId("price_concierge_789")).toBe("concierge");
-  });
-
-  it("defaults to 'starter' for an unknown price ID", () => {
+  it("defaults to 'free' for an unknown price ID", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
-    expect(getTierFromPriceId("price_unknown_999")).toBe("starter");
+    expect(getTierFromPriceId("price_unknown_999")).toBe("free");
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("Unknown Stripe price ID: price_unknown_999"),
     );
@@ -141,16 +131,12 @@ describe("getTierFromPriceId", () => {
 });
 
 describe("getPriceId", () => {
-  it("returns the starter price ID", () => {
-    expect(getPriceId("starter")).toBe("price_starter_123");
+  it("returns empty string for free tier", () => {
+    expect(getPriceId("free")).toBe("");
   });
 
   it("returns the pro price ID", () => {
     expect(getPriceId("pro")).toBe("price_pro_456");
-  });
-
-  it("returns the concierge price ID", () => {
-    expect(getPriceId("concierge")).toBe("price_concierge_789");
   });
 });
 
@@ -260,7 +246,7 @@ describe("syncSubscriptionToUser", () => {
     });
   });
 
-  it("defaults to starter when no price ID is present", async () => {
+  it("defaults to free when no price ID is present", async () => {
     const subscription = {
       id: "sub_456",
       metadata: { userId: "user_2" },
@@ -271,7 +257,7 @@ describe("syncSubscriptionToUser", () => {
     await syncSubscriptionToUser(subscription);
 
     expect(mockSet).toHaveBeenCalledWith({
-      tierId: "starter",
+      tierId: "free",
       stripeSubscriptionId: "sub_456",
       trialEndsAt: null,
     });

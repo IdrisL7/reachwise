@@ -1172,27 +1172,27 @@ async function fetchNewsSignals(
 ): Promise<ClassifiedSource[]> {
   const query = `"${companyName}" OR "${domain}"`;
 
-  // Fire all freshness windows in parallel, pick narrowest with enough results
-  const [r30, r90, r365] = await Promise.all(
-    [30, 90, 365].map((days) =>
-      exaSearch(query, apiKey, { num_results: 15, days, exclude_domains: [domain] })
-        .then((results) =>
-          results
-            .filter((r) => {
-              const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
-              return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
-            })
-            .map((r) => exaResultToSource(r, domain))
-            .filter((s): s is Source => s !== null)
-            .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
-        )
-        .catch(() => [] as ClassifiedSource[]),
-    ),
-  );
+  // Single 90-day search; fallback to 365d only if too few results
+  const processResults = (results: any[]) =>
+    results
+      .filter((r) => {
+        const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
+        return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
+      })
+      .map((r) => exaResultToSource(r, domain))
+      .filter((s): s is Source => s !== null)
+      .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) }));
 
-  if (r30.length >= 3) return r30;
-  if (r90.length >= 3) return r90;
-  return r365;
+  const r90 = await exaSearch(query, apiKey, { num_results: 15, days: 90, exclude_domains: [domain] })
+    .then(processResults)
+    .catch(() => [] as ClassifiedSource[]);
+
+  if (r90.length >= 1) return r90;
+
+  // Fallback: expand to 365 days when no results in 90 days
+  return exaSearch(query, apiKey, { num_results: 15, days: 365, exclude_domains: [domain] })
+    .then(processResults)
+    .catch(() => [] as ClassifiedSource[]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1213,25 +1213,19 @@ async function fetchWebSignals(
 
   const query = `("${companyName}" OR "${domain}") (${eventVerbs})`;
 
-  // Fire both freshness windows in parallel
-  const [r30, r90] = await Promise.all(
-    [30, 90].map((days) =>
-      exaSearch(query, apiKey, { num_results: 10, days, exclude_domains: [domain] })
-        .then((results) =>
-          results
-            .filter((r) => {
-              const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
-              return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
-            })
-            .map((r) => exaResultToSource(r, domain))
-            .filter((s): s is Source => s !== null)
-            .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
-        )
-        .catch(() => [] as ClassifiedSource[]),
-    ),
-  );
-
-  return r30.length >= 3 ? r30 : r90;
+  // Single 90-day search — covers most relevant signals
+  return exaSearch(query, apiKey, { num_results: 10, days: 90, exclude_domains: [domain] })
+    .then((results) =>
+      results
+        .filter((r) => {
+          const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
+          return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
+        })
+        .map((r) => exaResultToSource(r, domain))
+        .filter((s): s is Source => s !== null)
+        .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
+    )
+    .catch(() => [] as ClassifiedSource[]);
 }
 
 // ---------------------------------------------------------------------------
@@ -1923,7 +1917,7 @@ export async function fetchSourcesWithGating(
     }
   } catch { /* invalid URL — skip */ }
 
-  // Run all prongs in parallel (Apify prongs are optional, Pro/Concierge only)
+  // Run all prongs in parallel (Apify prongs are optional, Pro only)
   const [newsResults, webResults, companyResults, directPageResults, crunchbaseResults, linkedInResults, inputPageResults] = await Promise.all([
     fetchNewsSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
     fetchWebSignals(companyName, domain, apiKey).catch(() => [] as ClassifiedSource[]),
