@@ -26,6 +26,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: "Please enter a valid email address." },
+        { status: 400 },
+      );
+    }
+
     if (password.length < 8) {
       return NextResponse.json(
         { error: "Password must be at least 8 characters." },
@@ -83,16 +91,20 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || "http://localhost:3000";
     const verifyUrl = `${appUrl}/api/auth/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
 
-    await sendEmail({
-      to: email,
-      subject: "Verify your GetSignalHooks account",
-      body: `Welcome to GetSignalHooks!\n\nPlease verify your email address:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— The GetSignalHooks Team`,
-      html: verificationEmailHtml(verifyUrl),
-    }).catch((err) => {
+    let emailWarning: string | undefined;
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Verify your GetSignalHooks account",
+        body: `Welcome to GetSignalHooks!\n\nPlease verify your email address:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— The GetSignalHooks Team`,
+        html: verificationEmailHtml(verifyUrl),
+      });
+    } catch (err) {
       console.error("Failed to send verification email:", err);
-    });
+      emailWarning = "Account created but verification email could not be sent. You can resend it from the app.";
+    }
 
-    return NextResponse.json({ user }, { status: 201 });
+    return NextResponse.json({ user, ...(emailWarning ? { emailWarning } : {}) }, { status: 201 });
   } catch (error) {
     Sentry.captureException(error);
     console.error("Registration error:", error);

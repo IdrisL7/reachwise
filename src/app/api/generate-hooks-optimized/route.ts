@@ -48,7 +48,7 @@ import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib
 import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
-import { checkHookQuota } from "@/lib/tier-guard";
+import { checkHookQuota, incrementHookUsage } from "@/lib/tier-guard";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
 
@@ -464,6 +464,15 @@ export async function POST(request: Request) {
       cached,
       lowSignal: finalLowSignal,
     });
+
+    // Increment hook quota AFTER successful generation (not before)
+    if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
+      try {
+        await incrementHookUsage(session.user.id);
+      } catch (quotaErr) {
+        console.error(`[${traceId}] Failed to increment hook usage:`, quotaErr);
+      }
+    }
 
     // Build response
     const resolvedCompany = resolution && resolution.candidates[0]

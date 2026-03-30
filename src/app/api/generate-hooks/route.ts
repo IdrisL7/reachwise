@@ -6,6 +6,7 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
   callClaude,
+  callClaudeWithRetry,
   publishGate,
   publishGateFinal,
   roleTokenGate,
@@ -33,7 +34,7 @@ import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib
 import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
-import { checkHookQuota } from "@/lib/tier-guard";
+import { checkHookQuota, incrementHookUsage } from "@/lib/tier-guard";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
 
@@ -350,7 +351,7 @@ export async function POST(request: Request) {
               const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
               const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona, messagingStyle);
               const userPrompt = buildUserPrompt(url, [userSrc], context);
-              const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+              const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
 
               // Bypass publishGate (which calls validateHook with strict rules designed for
               // auto-discovered noise). User-provided sources are trusted — convert directly.
@@ -497,7 +498,7 @@ export async function POST(request: Request) {
           });
 
           const userPrompt = buildUserPrompt(url, sources, context, promptSignals.length > 0 ? promptSignals : undefined);
-          const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+          const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
 
           console.log("[generate-hooks] raw hooks from claude", {
             traceId,
@@ -766,6 +767,13 @@ export async function POST(request: Request) {
 
     let batchId: string | undefined;
     if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
+      // Increment hook quota AFTER successful generation (not before)
+      try {
+        await incrementHookUsage(session.user.id);
+      } catch (quotaErr) {
+        console.error("Failed to increment hook usage:", quotaErr);
+      }
+
       try {
         batchId = crypto.randomUUID();
         const allHooks = [...finalTop, ...finalOverflow];

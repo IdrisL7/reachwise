@@ -213,6 +213,11 @@ export function watchlistDigestHtml(
         <tr><td style="padding-top:32px;border-top:1px solid #27272a;">
           <p style="margin:0;font-size:12px;color:#71717a;">GetSignalHooks — Evidence-first hooks for outbound sales</p>
           <p style="margin:4px 0 0;font-size:12px;color:#52525b;"><a href="https://www.getsignalhooks.com" style="color:#52525b;text-decoration:underline;">getsignalhooks.com</a></p>
+          <p style="text-align:center;margin-top:32px;font-size:11px;color:#666;">
+            <a href="https://www.getsignalhooks.com/app/settings" style="color:#888;text-decoration:underline;">Manage notifications</a>
+            &nbsp;&middot;&nbsp;
+            <a href="https://www.getsignalhooks.com/unsubscribed" style="color:#888;text-decoration:underline;">Unsubscribe</a>
+          </p>
         </td></tr>
       </table>
     </td></tr>

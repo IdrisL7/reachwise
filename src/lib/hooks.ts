@@ -2619,6 +2619,43 @@ export async function callClaude(
 }
 
 // ---------------------------------------------------------------------------
+// Call Claude with retry (exponential backoff for transient errors)
+// ---------------------------------------------------------------------------
+
+export async function callClaudeWithRetry(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  model = "claude-sonnet-4-20250514",
+): Promise<ClaudeHookPayload[]> {
+  const RETRYABLE = [429, 500, 502, 503];
+  const MAX_ATTEMPTS = 3;
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return await callClaude(systemPrompt, userPrompt, apiKey, model);
+    } catch (err) {
+      lastError = err;
+      // Extract HTTP status from error message (format: "Anthropic API error <status>: ...")
+      const statusMatch = (err as Error)?.message?.match(/Anthropic API error (\d+)/);
+      const status = statusMatch ? parseInt(statusMatch[1], 10) : undefined;
+
+      if (attempt < MAX_ATTEMPTS - 1 && status && RETRYABLE.includes(status)) {
+        const delay = Math.pow(3, attempt) * 1000; // 1s, 3s, 9s
+        console.warn(`[callClaudeWithRetry] Attempt ${attempt + 1} failed with status ${status}, retrying in ${delay}ms...`);
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  // Should not reach here, but satisfy TypeScript
+  throw lastError;
+}
+
+// ---------------------------------------------------------------------------
 // Call Claude for freeform text (emails, etc.)
 // ---------------------------------------------------------------------------
 
@@ -3756,7 +3793,7 @@ export async function generateHooksForUrl(opts: {
 
     const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
     const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
-    const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+    const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
 
     // Publish Gate — enforce all rules
     const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
@@ -3774,7 +3811,7 @@ export async function generateHooksForUrl(opts: {
 
   const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
   const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
-  const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+  const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
 
   // Publish Gate — enforce all rules (validate → rewrite → drop, Tier B cap, anchor filter)
   const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });

@@ -401,7 +401,7 @@ export default function HooksPage() {
           setLoading(false); return;
         }
         if (code === "TIER_LIMIT") {
-          setUpgradePrompt({ title: "Monthly hook limit reached", message: data.message || "Upgrade your plan for more hooks.", cta: "Upgrade", href: "/#pricing" });
+          setUpgradePrompt({ title: "Monthly hook limit reached", message: data.message || "Upgrade your plan for more hooks.", cta: "Upgrade", href: data.upgradeUrl || "/#pricing" });
           setLoading(false); return;
         }
         if (code === "RATE_LIMITED") {
@@ -660,9 +660,13 @@ export default function HooksPage() {
           <div className={`border rounded-xl mb-6 text-sm ${lowSignal ? "bg-amber-900/30 border-amber-800" : "bg-blue-900/30 border-blue-800"}`}>
             <div className="px-4 pt-4 pb-2">
               <p className={`font-semibold mb-1 ${lowSignal ? "text-amber-200" : "text-blue-200"}`}>
-                We need a better source to write your hooks
+                {lowSignal ? "Low signal for this company" : "We need a better source to write your hooks"}
               </p>
-              <p className="text-zinc-400 text-xs leading-relaxed">{suggestion}</p>
+              <p className="text-zinc-400 text-xs leading-relaxed">
+                {lowSignal
+                  ? "We couldn't find recent public signals for this company. Try pasting a direct URL to their blog, press page, or LinkedIn — or try a larger, more public company."
+                  : suggestion}
+              </p>
             </div>
 
             {linkedinSlug && (
@@ -962,24 +966,37 @@ export default function HooksPage() {
 // Onboarding tour
 // ---------------------------------------------------------------------------
 
-const ONBOARDING_STEPS = [
+const ONBOARDING_STEPS: Array<{
+  target: string;
+  title: string;
+  body: string;
+  position: "top" | "bottom";
+  cta?: { label: string; href: string };
+}> = [
   {
     target: "input[placeholder*='Notion']",
     title: "Start here",
-    body: "Type a company name and click 'Find sources' — we'll surface the best URLs to scan for signals.",
-    position: "bottom" as const,
+    body: "Type a company name and click 'Find sources' \u2014 we'll surface the best URLs to scan for signals.",
+    position: "bottom",
   },
   {
     target: "select",
     title: "Pick who you're emailing",
     body: "Choose the buyer's role to get hooks with questions tailored to their priorities. 'VP Sales' gets different hooks than 'Marketing'.",
-    position: "bottom" as const,
+    position: "bottom",
   },
   {
     target: "button[type='submit']",
     title: "Generate hooks",
     body: "Hit this to research the company and generate 3-5 evidence-backed hooks. Each one includes a real quote, source, and date.",
-    position: "top" as const,
+    position: "top",
+  },
+  {
+    target: "a[href='/app/settings']",
+    title: "Personalize your hooks",
+    body: "Go to Settings \u2192 AI Context to set your company description, voice tone, and primary KPI. This makes every hook sound like you wrote it.",
+    position: "bottom",
+    cta: { label: "Set up AI Context \u2192", href: "/app/settings" },
   },
 ];
 
@@ -1040,19 +1057,39 @@ function OnboardingTooltip({
         <p className="text-sm font-medium text-zinc-100 mb-1">{current.title}</p>
         <p className="text-xs text-zinc-400 leading-relaxed mb-3">{current.body}</p>
         <div className="flex items-center gap-2">
-          <button
-            onClick={onNext}
-            className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-          >
-            {isLast ? "Got it" : "Next"}
-          </button>
-          {!isLast && (
-            <button
-              onClick={onDismiss}
-              className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-            >
-              Skip tour
-            </button>
+          {current.cta ? (
+            <>
+              <Link
+                href={current.cta.href}
+                onClick={onNext}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {current.cta.label}
+              </Link>
+              <button
+                onClick={onDismiss}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Skip for now
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={onNext}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+              >
+                {isLast ? "Got it" : "Next"}
+              </button>
+              {!isLast && (
+                <button
+                  onClick={onDismiss}
+                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                >
+                  Skip tour
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
