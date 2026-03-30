@@ -79,6 +79,12 @@ export default function SettingsPage() {
               >
                 {VOICE_TONES.map((t) => <option key={t}>{t}</option>)}
               </select>
+              <p className="mt-2 text-[11px] text-slate-600 italic leading-relaxed">
+                {voiceTone === "Direct & Professional" && "\"Your NPS dropped 12 points — is that a churn risk or a product issue?\""}
+                {voiceTone === "Friendly & Casual" && "\"Hey, saw your team just hit 50 people — exciting! Quick question though...\""}
+                {voiceTone === "Formal & Corporate" && "\"Following your recent Series C announcement, I wanted to raise a consideration...\""}
+                {voiceTone === "Conversational" && "\"So I noticed you're hiring 8 SDRs — does your onboarding actually keep up with that?\""}
+              </p>
             </div>
             <div>
               <label className="text-[10px] text-slate-600 font-black uppercase mb-2 block">Primary KPI</label>

@@ -2291,6 +2291,61 @@ const STYLE_BLOCKS: Record<Exclude<MessagingStyle, "evidence">, string> = {
   ].join(" "),
 };
 
+const TONE_BLOCKS: Record<string, string> = {
+  "Direct & Professional": [
+    "TONE DIRECTIVES (Direct & Professional):",
+    "- Terse, no-nonsense, data-driven. Peer-level confidence.",
+    "- No pleasantries, no warm-ups, no 'hope this finds you well'. Get to the point in sentence one.",
+    "- Short sentences. Numbers over adjectives. Let the signal speak.",
+    "- DO: 'Your NPS dropped 12 points last quarter — is that a churn risk or a product-market fit issue?'",
+    "- DO: 'You posted 14 SDR roles in 30 days. What happens if ramp time doubles before messaging is dialed in?'",
+    "- DO NOT: 'Hey! I was really impressed by your growth...'",
+    "- DO NOT: soften with qualifiers like 'just curious' or 'I was wondering if maybe'.",
+    "- Contractions OK. Emoji never. One question max.",
+  ].join("\n"),
+  "Friendly & Casual": [
+    "TONE DIRECTIVES (Friendly & Casual):",
+    "- Warm, conversational, human. Like a smart colleague dropping a note — not a cold pitch.",
+    "- Contractions always. Light humor OK if it lands naturally. Read like a real person wrote it.",
+    "- Can open with a brief human acknowledgment (congrats, nice move) — but keep it to one clause, not flattery.",
+    "- DO: 'Hey — saw your team just crossed 50 people, congrats! Quick question though: is your onboarding keeping up, or are new hires kind of figuring it out?'",
+    "- DO: 'So you just shipped that enterprise tier — nice. Are outbound sequences already targeting the new ICP, or is the team still running last quarter\\'s playbook?'",
+    "- DO NOT: sound robotic or overly formal ('I am writing to inquire...').",
+    "- DO NOT: use corporate buzzwords (synergy, leverage, optimize). Talk like a person.",
+  ].join("\n"),
+  "Formal & Corporate": [
+    "TONE DIRECTIVES (Formal & Corporate):",
+    "- Polished, structured, boardroom-ready. Measured confidence, not aggressive.",
+    "- No contractions. No slang. Full sentences. Professional register throughout.",
+    "- The reader should feel they're being addressed by a credible industry peer, not a sales rep.",
+    "- DO: 'Following your recent Series C announcement, a consideration worth raising: how quickly is your outbound infrastructure scaling to match headcount growth?'",
+    "- DO: 'Your processing volume increased 40% last quarter. The question is whether fraud detection is scaling at the same rate, or whether that gap is becoming a liability.'",
+    "- DO NOT: use casual openers ('Hey', 'So...', 'Quick question').",
+    "- DO NOT: use exclamation marks or emoji. Measured tone throughout.",
+  ].join("\n"),
+  "Conversational": [
+    "TONE DIRECTIVES (Conversational):",
+    "- Natural, flowing, question-heavy. Reads like a DM, not an email template.",
+    "- Think: how would you bring this up at a conference coffee line? That's the energy.",
+    "- Contractions always. Sentence fragments OK. Can start sentences with 'So' or 'But'.",
+    "- DO: 'So I noticed you\\'re hiring 8 SDRs — does your onboarding actually keep up with that pace, or do the first few months end up being expensive trial and error?'",
+    "- DO: 'Saw the Salesforce partnership — that\\'s a big move. Honest question: is outbound already targeting the new buyer segment, or still running the old sequences?'",
+    "- DO NOT: sound like a template. If it could be sent to 1000 people unchanged, rewrite it.",
+    "- DO NOT: use formal structure (no 'Dear', no 'Regards', no full-paragraph intros).",
+  ].join("\n"),
+};
+
+const DEFAULT_TONE_BLOCK = [
+  "TONE DIRECTIVES:",
+  "- Write like a smart colleague who noticed something interesting — not an SDR performing a pitch.",
+  "- State the signal plainly. Draw the connection simply. Ask the question directly. That's it.",
+  "- No dramatic em-dash bridges. No 'that kind of X means Y' constructions. Let the reader connect the dots.",
+  "- Contractions are fine. Short sentences are better than long ones. Trust the reader.",
+  "- Use their exact numbers and names. Specificity does the work — you don't need to explain why it matters.",
+  "- A brief human acknowledgment (award, milestone) is OK if it feels natural. Not flattery — just human.",
+  "- The goal is: recipient reads it and thinks 'hm, how did they know that's actually a problem for me', not 'wow that was a slick opener'.",
+].join("\n");
+
 export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }, messagingStyle: MessagingStyle = "evidence"): string {
   const activeRole = targetRole && targetRole !== "General" ? targetRole : null;
   const personaSection = activeRole
@@ -2346,17 +2401,16 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "- Never sound like a brochure. Peer-level confidence, not a sales pitch.",
     "- If NO sender context: use a generic pain-focused soft close only. Example: 'Happy to show you what that looks like at that scale.' Do NOT invent a product claim.",
     "- The promise sentence must appear inside the `hook` text. The `promise` JSON field is a separate extracted copy of that sentence — do not use it as a replacement.",
+    ...(senderContext?.primaryOutcome ? [
+      "",
+      `- MANDATORY OUTCOME: The promise MUST drive toward this specific action: "${senderContext.primaryOutcome}".`,
+      `- The soft CTA must lead the reader toward: "${senderContext.primaryOutcome}" — not a generic "let me know" or "happy to chat".`,
+      "- Do NOT use a generic CTA when a specific outcome is configured. Every hook must align with this outcome.",
+    ] : []),
     "",
     "---",
     "",
-    "TONE DIRECTIVES:",
-    "- Write like a smart colleague who noticed something interesting — not an SDR performing a pitch.",
-    "- State the signal plainly. Draw the connection simply. Ask the question directly. That's it.",
-    "- No dramatic em-dash bridges. No 'that kind of X means Y' constructions. Let the reader connect the dots.",
-    "- Contractions are fine. Short sentences are better than long ones. Trust the reader.",
-    "- Use their exact numbers and names. Specificity does the work — you don't need to explain why it matters.",
-    "- A brief human acknowledgment (award, milestone) is OK if it feels natural. Not flattery — just human.",
-    "- The goal is: recipient reads it and thinks 'hm, how did they know that's actually a problem for me', not 'wow that was a slick opener'.",
+    (senderContext?.voiceTone && TONE_BLOCKS[senderContext.voiceTone]) || DEFAULT_TONE_BLOCK,
     "",
     "---",
     "",
@@ -2394,12 +2448,13 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
       "- Promise: " + customPersona.promise,
     ] : []),
     ...(senderContext ? [
-      "Sender context (weave naturally — do not copy verbatim):",
-      "- Outcome: " + senderContext.primaryOutcome,
+      "",
+      "SENDER CONTEXT — MANDATORY (these are hard constraints, not suggestions):",
+      "- Your outcome/CTA: " + senderContext.primaryOutcome + " ← every promise MUST drive toward this",
       "- Buyer roles: " + senderContext.buyerRoles.join(', '),
-      ...(senderContext.voiceTone ? ["- Voice tone: " + senderContext.voiceTone] : []),
-      ...(senderContext.whatYouSell ? ["- What you sell: " + senderContext.whatYouSell] : []),
-      ...(senderContext.proof?.length ? ["- Proof points (pick one if relevant): " + senderContext.proof.join(" | ")] : []),
+      ...(senderContext.voiceTone ? ["- Voice tone: " + senderContext.voiceTone + " ← follow the TONE DIRECTIVES above exactly"] : []),
+      ...(senderContext.whatYouSell ? ["- What you sell: " + senderContext.whatYouSell + " ← reference naturally but never sound like a brochure"] : []),
+      ...(senderContext.proof?.length ? ["- Proof points (use ONE specific proof point in the promise): " + senderContext.proof.join(" | ")] : []),
     ] : []),
   ].join("\n");
 }
