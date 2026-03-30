@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Intent Signal Research — Brave Search + Claude extraction
+// Intent Signal Research — Exa Search + Claude extraction
 // ---------------------------------------------------------------------------
 
 export type IntentSignalType = "hiring" | "funding" | "tech_change" | "growth" | "news";

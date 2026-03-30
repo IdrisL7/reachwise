@@ -15,7 +15,7 @@ const CACHE_DURATIONS = {
   SOURCES: 6 * 60 * 60 * 1000,       // 6 hours (new)
   COMPANY_INTEL: 24 * 60 * 60 * 1000, // 24 hours (new)
   INTENT_SIGNALS: 12 * 60 * 60 * 1000, // 12 hours (new)
-  TAVILY_RESULTS: 4 * 60 * 60 * 1000,  // 4 hours (new)
+  EXA_RESULTS: 4 * 60 * 60 * 1000,  // 4 hours (new)
 } as const;
 
 interface CacheEntry<T> {
@@ -256,16 +256,16 @@ export class EnhancedCache {
   }
 
   /**
-   * Cache Tavily API results (NEW)
+   * Cache Exa API results (NEW)
    */
-  static async getTavilyResult(query: string): Promise<any | null> {
-    const memKey = `tavily:${await hashKey(query)}`;
+  static async getExaResult(query: string): Promise<any | null> {
+    const memKey = `exa:${await hashKey(query)}`;
     return memCache.get(memKey);
   }
 
-  static async setTavilyResult(query: string, result: any): Promise<void> {
-    const memKey = `tavily:${await hashKey(query)}`;
-    memCache.set(memKey, result, CACHE_DURATIONS.TAVILY_RESULTS);
+  static async setExaResult(query: string, result: any): Promise<void> {
+    const memKey = `exa:${await hashKey(query)}`;
+    memCache.set(memKey, result, CACHE_DURATIONS.EXA_RESULTS);
   }
 
   /**

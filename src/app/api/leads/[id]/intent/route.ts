@@ -29,17 +29,17 @@ export async function POST(
     return NextResponse.json({ error: "Lead needs a company website or name to score" }, { status: 400 });
   }
 
-  const tavilyApiKey = process.env.EXA_API_KEY;
+  const exaApiKey = process.env.EXA_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
-  if (!tavilyApiKey || !claudeApiKey) {
+  if (!exaApiKey || !claudeApiKey) {
     return NextResponse.json({ error: "Missing API keys" }, { status: 500 });
   }
 
   const companyUrl = lead.companyWebsite || "";
   const companyName = lead.companyName || companyUrl;
 
-  const signals = await researchIntentSignals(companyUrl, companyName, tavilyApiKey, claudeApiKey);
+  const signals = await researchIntentSignals(companyUrl, companyName, exaApiKey, claudeApiKey);
 
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();

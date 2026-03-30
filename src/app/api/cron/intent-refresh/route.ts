@@ -21,10 +21,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tavilyApiKey = process.env.EXA_API_KEY;
+  const exaApiKey = process.env.EXA_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
-  if (!tavilyApiKey || !claudeApiKey) {
+  if (!exaApiKey || !claudeApiKey) {
     return NextResponse.json({ error: "Missing API keys" }, { status: 500 });
   }
 
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
       const companyUrl = lead.companyWebsite || "";
       const companyName = lead.companyName || companyUrl;
 
-      const signals = await researchIntentSignals(companyUrl, companyName, tavilyApiKey, claudeApiKey);
+      const signals = await researchIntentSignals(companyUrl, companyName, exaApiKey, claudeApiKey);
 
       await db.delete(schema.intentSignals).where(eq(schema.intentSignals.leadId, lead.id));
 

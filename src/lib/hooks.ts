@@ -1574,7 +1574,7 @@ export async function fetchUserProvidedSource(
 
 /**
  * Prong D: Directly fetch the company's homepage and signal-rich subpages.
- * This captures actual claims, numbers, and product details that Brave Search misses.
+ * This captures actual claims, numbers, and product details that Exa Search misses.
  */
 async function fetchDirectCompanyPages(
   domain: string,

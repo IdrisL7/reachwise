@@ -107,7 +107,7 @@ class CircuitBreaker {
 
 // Global circuit breakers for external services
 export const circuitBreakers = {
-  tavily: new CircuitBreaker(3, 30000),   // 3 failures, 30s reset
+  exa: new CircuitBreaker(3, 30000),      // 3 failures, 30s reset
   claude: new CircuitBreaker(5, 60000),   // 5 failures, 1m reset  
   apify: new CircuitBreaker(3, 45000),    // 3 failures, 45s reset
 };

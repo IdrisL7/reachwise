@@ -68,7 +68,7 @@ export default function PrivacyPage() {
               <li><strong className="text-zinc-200">Stripe</strong> — payment processing</li>
               <li><strong className="text-zinc-200">SendGrid (Twilio)</strong> — email delivery</li>
               <li><strong className="text-zinc-200">Anthropic</strong> — AI hook and email generation</li>
-              <li><strong className="text-zinc-200">Brave Search</strong> — company research</li>
+              <li><strong className="text-zinc-200">Exa</strong> — company research</li>
               <li><strong className="text-zinc-200">Turso</strong> — database hosting</li>
               <li><strong className="text-zinc-200">Vercel</strong> — application hosting</li>
             </ul>
