@@ -48,24 +48,23 @@ const EMPTY_INTEL: CompanyIntelligence = {
   confidenceScore: 0,
 };
 
-async function searchTavily(query: string, apiKey: string, count = 6): Promise<SearchResult[]> {
-  const res = await fetch("https://api.tavily.com/search", {
+async function searchExa(query: string, apiKey: string, count = 6): Promise<SearchResult[]> {
+  const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify({
       query,
-      api_key: apiKey,
-      max_results: count,
-      search_depth: "basic",
-      include_raw_content: false,
+      type: "auto",
+      numResults: count,
+      contents: { text: true },
     }),
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; text?: string }>).map((r) => ({
     title: r.title,
     url: r.url,
-    description: r.content,
+    description: r.text,
   }));
 }
 
@@ -83,7 +82,7 @@ async function fetchPage(url: string): Promise<string> {
 }
 
 async function extractJsonArray(prompt: string, claudeApiKey: string) {
-  const payload = await callClaude("Return ONLY a JSON array.", prompt, claudeApiKey);
+  const payload = await callClaude("Return ONLY a JSON array.", prompt, claudeApiKey, "claude-haiku-4-5-20251001");
   return Array.isArray(payload) ? payload : [];
 }
 
@@ -114,7 +113,7 @@ async function extractBasicCompanyInfo(url: string, searchApiKey: string, claude
   const fetchUrl = isThirdPartyUrl(url) ? null : url; // don't try to fetch LinkedIn/media pages
   const [homepage, results] = await Promise.all([
     fetchUrl ? fetchPage(fetchUrl).catch(() => "") : Promise.resolve(""),
-    searchTavily(`"${searchTerm}" company overview employees headquarters`, searchApiKey, 5),
+    searchExa(`"${searchTerm}" company overview employees headquarters`, searchApiKey, 5),
   ]);
 
   const context = results
@@ -141,8 +140,8 @@ async function extractBasicCompanyInfo(url: string, searchApiKey: string, claude
 
 async function detectTechStack(companyName: string, domain: string, searchApiKey: string, claudeApiKey: string) {
   const [jobs, thirdParty] = await Promise.all([
-    searchTavily(`"${companyName}" hiring engineer developer React Python AWS`, searchApiKey, 6),
-    searchTavily(`"${domain}" site:stackshare.io OR site:builtwith.com`, searchApiKey, 6),
+    searchExa(`"${companyName}" hiring engineer developer React Python AWS`, searchApiKey, 6),
+    searchExa(`"${domain}" site:stackshare.io OR site:builtwith.com`, searchApiKey, 6),
   ]);
   const combined = [...jobs, ...thirdParty]
     .map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`)
@@ -163,7 +162,7 @@ async function detectTechStack(companyName: string, domain: string, searchApiKey
 }
 
 async function extractDecisionMakers(companyName: string, domain: string, searchApiKey: string, claudeApiKey: string) {
-  const results = await searchTavily(`"${companyName}" VP Director "Head of" Chief Sales Marketing Engineering`, searchApiKey, 8);
+  const results = await searchExa(`"${companyName}" VP Director "Head of" Chief Sales Marketing Engineering`, searchApiKey, 8);
   const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`).join("\n\n");
 
   const rows = await extractJsonArray(
@@ -179,7 +178,7 @@ async function extractDecisionMakers(companyName: string, domain: string, search
 }
 
 async function findCompetitors(companyName: string, industry: string, searchApiKey: string, claudeApiKey: string) {
-  const results = await searchTavily(`"${companyName}" competitor alternative vs compared ${industry || ""}`, searchApiKey, 8);
+  const results = await searchExa(`"${companyName}" competitor alternative vs compared ${industry || ""}`, searchApiKey, 8);
   const context = results.map((r, i) => `[${i + 1}] ${r.title}\n${r.url}\n${r.description || ""}`).join("\n\n");
 
   const rows = await extractJsonArray(

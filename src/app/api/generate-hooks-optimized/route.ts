@@ -130,23 +130,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // Early detection of unsupported URL types
-        const inputDomain = parsed.hostname.replace(/^www\./, "");
-        const MEDIA_PUBLISHERS = new Set([
-          "techcrunch.com", "reuters.com", "bloomberg.com", "forbes.com", "wsj.com",
-          "ft.com", "businessinsider.com", "wired.com", "venturebeat.com", "theverge.com",
-          "inc.com", "fastcompany.com", "fortune.com", "cnbc.com", "axios.com",
-          "prnewswire.com", "businesswire.com", "globenewswire.com", "marketwatch.com",
-          "crunchbase.com", "pitchbook.com",
-        ]);
-        
-        if (MEDIA_PUBLISHERS.has(inputDomain) && parsed.pathname.length > 1) {
-          return NextResponse.json({
-            hooks: [], structured_hooks: [], overflow_hooks: [],
-            status: "ok" as CompanyResolutionStatus, lowSignal: true,
-            suggestion: `That looks like a news article on ${inputDomain}. Paste the company's own website URL instead (e.g. acme.com) — the article will be found automatically as a signal source.`,
-          });
-        }
       } catch {
         return NextResponse.json(
           { error: "Invalid URL format. Provide a valid company URL (e.g., https://acme.com)." },
@@ -156,7 +139,7 @@ export async function POST(request: Request) {
     }
 
     // Check required env vars
-    const tavilyApiKey = process.env.TAVILY_API_KEY;
+    const exaApiKey = process.env.EXA_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
     if (!rawUrl && !companyName) {
       return NextResponse.json(
@@ -164,7 +147,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!tavilyApiKey || !claudeApiKey) {
+    if (!exaApiKey || !claudeApiKey) {
       return NextResponse.json(
         { error: "Server misconfiguration: missing API keys." },
         { status: 500 },
@@ -196,7 +179,7 @@ export async function POST(request: Request) {
     if (!url && companyName) {
       PerformanceMonitor.start(`company-resolution-${traceId}`);
       resolution = await callExternalAPI(
-        () => resolveCompanyByName(companyName, tavilyApiKey),
+        () => resolveCompanyByName(companyName, exaApiKey),
         { name: 'company-resolution', timeout: 5000, retries: 1 }
       );
       PerformanceMonitor.end(`company-resolution-${traceId}`);
@@ -284,7 +267,7 @@ export async function POST(request: Request) {
         callExternalAPI(
           () => fetchSourcesWithGating(
             url, 
-            tavilyApiKey,
+            exaApiKey,
             [], // Intent signals added later
             process.env.APIFY_API_TOKEN,
             companyDomain ? companyDomain.split(".")[0] : undefined
@@ -296,7 +279,7 @@ export async function POST(request: Request) {
         (tierId === "pro" || tierId === "concierge") 
           ? EnhancedCache.getIntentSignals(url, companyName || companyDomain || "") ||
             callExternalAPI(
-              () => researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
+              () => researchIntentSignals(url, companyName || companyDomain || "", exaApiKey, claudeApiKey),
               { name: 'intent-signals', timeout: 8000, retries: 1 }
             ).then(signals => {
               EnhancedCache.setIntentSignals(url, companyName || companyDomain || "", signals);
@@ -307,7 +290,7 @@ export async function POST(request: Request) {
         // Company intelligence (run in parallel)  
         EnhancedCache.getCompanyIntel(url) ||
         callExternalAPI(
-          () => getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, tierId === "pro" || tierId === "concierge"),
+          () => getCompanyIntelligence(url, exaApiKey, claudeApiKey, tierId === "pro" || tierId === "concierge"),
           { name: 'company-intel', timeout: 8000, retries: 1 }
         ).then(intel => {
           EnhancedCache.setCompanyIntel(url, intel);
@@ -450,12 +433,12 @@ export async function POST(request: Request) {
     const finalTop = top.map((hook: Hook) => {
       const quality = scoreHookQuality(hook, companyDomain);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    });
+    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
 
     const finalOverflow = overflow.map((hook: Hook) => {
       const quality = scoreHookQuality(hook, companyDomain);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    });
+    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
 
     // Determine suggestions
     let suggestion: string | undefined;

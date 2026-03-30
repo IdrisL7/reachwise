@@ -1018,7 +1018,7 @@ export function classifySource(source: Source, isCompanySite = false, targetDoma
 /**
  * Apply stale downgrade: A→B, B→C for sources older than 365 days.
  * Exception: reputable publishers (Reuters, TechCrunch, etc.) are never downgraded —
- * a funding round article is valid evidence regardless of age within the Tavily window.
+ * a funding round article is valid evidence regardless of age within the Exa window.
  * Sources with no date get capped at Tier B.
  */
 function applyRecencyDowngrade(source: ClassifiedSource): ClassifiedSource {
@@ -1081,57 +1081,53 @@ export function countHighConfidenceIntentSignals(intentSignals: IntentSignalInpu
 }
 
 // ---------------------------------------------------------------------------
-// Tavily Search API helpers
+// Exa Search API helpers
 // ---------------------------------------------------------------------------
 
-type TavilyResult = {
+type ExaResult = {
   title?: string;
   url?: string;
-  content?: string;
-  raw_content?: string;
+  text?: string;
   score?: number;
-  published_date?: string;
+  publishedDate?: string;
 };
 
-async function tavilySearch(
+async function exaSearch(
   query: string,
   apiKey: string,
   options: {
-    topic?: "general" | "news";
-    max_results?: number;
+    num_results?: number;
     days?: number;
     include_domains?: string[];
     exclude_domains?: string[];
-    search_depth?: "basic" | "advanced";
   } = {},
-): Promise<TavilyResult[]> {
+): Promise<ExaResult[]> {
   const body: Record<string, unknown> = {
     query,
-    api_key: apiKey,
-    topic: options.topic ?? "general",
-    max_results: options.max_results ?? 10,
-    search_depth: options.search_depth ?? "basic",
-    include_raw_content: false,
+    type: "auto",
+    numResults: options.num_results ?? 10,
+    contents: { text: true },
   };
-  if (options.days) body.days = options.days;
-  if (options.include_domains?.length) body.include_domains = options.include_domains;
-  if (options.exclude_domains?.length) body.exclude_domains = options.exclude_domains;
+  if (options.days) {
+    body.startPublishedDate = new Date(Date.now() - options.days * 24 * 60 * 60 * 1000).toISOString();
+  }
+  if (options.include_domains?.length) body.includeDomains = options.include_domains;
+  if (options.exclude_domains?.length) body.excludeDomains = options.exclude_domains;
 
-  const res = await fetch("https://api.tavily.com/search", {
+  const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) return [];
   const data = await res.json();
-  return (data?.results ?? []) as TavilyResult[];
+  return (data?.results ?? []) as ExaResult[];
 }
 
-function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | null {
+function exaResultToSource(r: ExaResult, fallbackUrl: string): Source | null {
   const facts: string[] = [];
-  // Prefer raw_content (full page text when include_raw_content: true) over the short snippet
-  const text = (r.raw_content?.trim() || r.content?.trim() || "").slice(0, 8000);
+  const text = (r.text?.trim() || "").slice(0, 8000);
   if (text) {
     const sentences = text.split(/(?<=[.!?])\s+/).filter((s) => s.length > 20);
     if (sentences.length > 1) {
@@ -1142,7 +1138,7 @@ function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | nu
   }
   // Fallback: if content is empty but title is meaningful, use title as the fact.
   // This prevents discarding sources like "Gong raises $250M Series E" just because
-  // Tavily returned an empty snippet — the title alone is enough for tier classification.
+  // Exa returned an empty snippet — the title alone is enough for tier classification.
   if (facts.length === 0 && r.title?.trim() && r.title.trim().length > 20) {
     facts.push(r.title.trim());
   }
@@ -1159,14 +1155,14 @@ function tavilyResultToSource(r: TavilyResult, fallbackUrl: string): Source | nu
   return {
     title: (r.title || "Untitled").trim(),
     publisher,
-    date: r.published_date || "",
+    date: r.publishedDate || "",
     url: r.url || "",
     facts,
   };
 }
 
 // ---------------------------------------------------------------------------
-// Prong A: Tavily News Search
+// Prong A: Exa News Search
 // ---------------------------------------------------------------------------
 
 async function fetchNewsSignals(
@@ -1179,14 +1175,14 @@ async function fetchNewsSignals(
   // Fire all freshness windows in parallel, pick narrowest with enough results
   const [r30, r90, r365] = await Promise.all(
     [30, 90, 365].map((days) =>
-      tavilySearch(query, apiKey, { topic: "news", max_results: 15, days, exclude_domains: [domain] })
+      exaSearch(query, apiKey, { num_results: 15, days, exclude_domains: [domain] })
         .then((results) =>
           results
             .filter((r) => {
-              const text = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+              const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
               return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
             })
-            .map((r) => tavilyResultToSource(r, domain))
+            .map((r) => exaResultToSource(r, domain))
             .filter((s): s is Source => s !== null)
             .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
         )
@@ -1200,7 +1196,7 @@ async function fetchNewsSignals(
 }
 
 // ---------------------------------------------------------------------------
-// Prong B: Tavily Web Search (event-focused, excludes company site)
+// Prong B: Exa Web Search (event-focused, excludes company site)
 // ---------------------------------------------------------------------------
 
 async function fetchWebSignals(
@@ -1220,14 +1216,14 @@ async function fetchWebSignals(
   // Fire both freshness windows in parallel
   const [r30, r90] = await Promise.all(
     [30, 90].map((days) =>
-      tavilySearch(query, apiKey, { topic: "general", search_depth: "basic", max_results: 10, days, exclude_domains: [domain] })
+      exaSearch(query, apiKey, { num_results: 10, days, exclude_domains: [domain] })
         .then((results) =>
           results
             .filter((r) => {
-              const text = `${r.title || ""} ${r.content || ""}`.toLowerCase();
+              const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
               return text.includes(companyName.toLowerCase()) || text.includes(domain.toLowerCase());
             })
-            .map((r) => tavilyResultToSource(r, domain))
+            .map((r) => exaResultToSource(r, domain))
             .filter((s): s is Source => s !== null)
             .map((s) => applyRecencyDowngrade({ ...s, tier: classifySource(s, false, domain) })),
         )
@@ -1255,15 +1251,14 @@ async function fetchCompanyOwnSignals(
 
   try {
     // Use 365-day window — we're searching the company's own content, freshness matters less than coverage
-    const results = await tavilySearch(query, apiKey, {
-      topic: "general",
-      max_results: 10,
+    const results = await exaSearch(query, apiKey, {
+      num_results: 10,
       days: 365,
       include_domains: [domain],
     });
 
     return results
-      .map((r) => tavilyResultToSource(r, domain))
+      .map((r) => exaResultToSource(r, domain))
       .filter((s): s is Source => s !== null)
       .map((s) => applyRecencyDowngrade({
         ...s,
@@ -1501,7 +1496,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 export async function fetchUserProvidedSource(
   url: string,
   domain: string,
-  tavilyApiKey?: string,
+  exaApiKey?: string,
 ): Promise<ClassifiedSource | null> {
   // 1. Try direct fetch first
   let src: Source | null = await fetchPageAsSource(url, domain).catch(() => null);
@@ -1536,25 +1531,24 @@ export async function fetchUserProvidedSource(
     } catch { /* Jina blocked or timed out */ }
   }
 
-  // 3. Tavily fallback — for bot-blocking sites (e.g. gong.io) where direct + Jina both fail.
-  // Search for the specific URL using Tavily's own scraper which bypasses many bot protections.
-  if (!src && tavilyApiKey) {
+  // 3. Exa fallback — for bot-blocking sites (e.g. gong.io) where direct + Jina both fail.
+  if (!src && exaApiKey) {
     try {
       const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
-      const results = await tavilySearch(
+      const results = await exaSearch(
         `site:${domain}`,
-        tavilyApiKey,
-        { max_results: 5, search_depth: "basic", include_domains: [domain] },
+        exaApiKey,
+        { num_results: 5, include_domains: [domain] },
       );
       for (const r of results) {
-        const s = tavilyResultToSource(r, normalizedUrl);
+        const s = exaResultToSource(r, normalizedUrl);
         if (s && s.facts.length >= 1) {
           src = { ...s, url: r.url || normalizedUrl };
-          console.log("[fetchUserProvidedSource] Tavily fallback succeeded", { url, resultUrl: r.url });
+          console.log("[fetchUserProvidedSource] Exa fallback succeeded", { url, resultUrl: r.url });
           break;
         }
       }
-    } catch { /* Tavily fallback failed */ }
+    } catch { /* Exa fallback failed */ }
   }
 
   if (!src) return null;
@@ -1670,7 +1664,7 @@ async function fetchDirectCompanyPages(
 }
 
 // ---------------------------------------------------------------------------
-// First-party recovery: Tavily-powered fallback when direct fetches fail (RC-2)
+// First-party recovery: Exa-powered fallback when direct fetches fail (RC-2)
 // ---------------------------------------------------------------------------
 
 async function runFirstPartyRecovery(
@@ -1684,14 +1678,13 @@ async function runFirstPartyRecovery(
     `${companyName} changelog OR product update OR new feature OR integration`,
   ];
 
-  const allResults: TavilyResult[] = [];
+  const allResults: ExaResult[] = [];
   for (const query of queries) {
-    const results = await tavilySearch(query, apiKey, {
+    const results = await exaSearch(query, apiKey, {
       include_domains: [domain],
-      search_depth: "basic",
-      max_results: 5,
+      num_results: 5,
       days: 365,
-    }).catch(() => [] as TavilyResult[]);
+    }).catch(() => [] as ExaResult[]);
     allResults.push(...results);
   }
 
@@ -1702,7 +1695,7 @@ async function runFirstPartyRecovery(
   for (const r of allResults) {
     if (!r.url || alreadyAttemptedUrls.has(r.url) || seen.has(r.url)) continue;
     seen.add(r.url);
-    const rawSource = tavilyResultToSource(r, domain);
+    const rawSource = exaResultToSource(r, domain);
     if (!rawSource) continue;
     const tier = classifySource(rawSource, true, domain);
     const freshnessUnknown = tier === "A" && !rawSource.date;
@@ -1716,7 +1709,7 @@ async function runFirstPartyRecovery(
       url: r.url,
       tier: classified.tier,
       snippetCount: rawSource.facts.length,
-      via: "tavily-recovery",
+      via: "exa-recovery",
     });
   }
 
@@ -1835,7 +1828,7 @@ type RecoveryDiagnostic = {
   url: string;
   tier: EvidenceTier;
   snippetCount: number;
-  via: "tavily-recovery";
+  via: "exa-recovery";
 };
 
 export type FetchSourcesResult = {
@@ -2025,9 +2018,9 @@ export async function fetchSourcesWithGating(
   let hasAnchoredSources = ranked.some((s) => s.tier === "A");
   let tierACount = ranked.filter((s) => s.tier === "A").length;
 
-  // RECOVERY PASS: when all prongs found zero Tier A sources, run targeted Tavily queries
+  // RECOVERY PASS: when all prongs found zero Tier A sources, run targeted Exa queries
   // against the company domain using press/newsroom/changelog keywords.
-  // Tavily handles JS-heavy pages (gong.io/press, etc.) that direct fetching can't access.
+  // Exa handles JS-heavy pages (gong.io/press, etc.) that direct fetching can't access.
   let recoveryDiagnostics: RecoveryDiagnostic[] = [];
   let finalRanked: ClassifiedSource[] = ranked;
 
@@ -2045,7 +2038,7 @@ export async function fetchSourcesWithGating(
     recoveryDiagnostics = recovery.diagnostics;
   }
 
-  // INTENT SIGNAL FALLBACK: if Tavily + recovery both returned no Tier A sources,
+  // INTENT SIGNAL FALLBACK: if Exa + recovery both returned no Tier A sources,
   // synthesize high-confidence intent signals as Tier A sources so Claude has
   // anchored evidence to write from. Intent signals have explicit sourceUrls
   // pointing to job postings, funding pages, etc. — they ARE company-specific.
@@ -2237,14 +2230,13 @@ export async function resolveCompanyByName(
 
   const query = `${normalizedName} company official website`;
 
-  const tavilyResults = await tavilySearch(query, apiKey, {
-    topic: "general",
-    max_results: 8,
+  const exaResults = await exaSearch(query, apiKey, {
+    num_results: 8,
   });
 
-  // Map Tavily results to the shape computeCompanyResolution expects
+  // Map Exa results to the shape computeCompanyResolution expects
   const webResults: { title?: string; url?: string; description?: string; snippet?: string; meta_url?: { hostname?: string } }[] =
-    tavilyResults.map((r) => {
+    exaResults.map((r) => {
       let hostname = "";
       try {
         hostname = r.url ? new URL(r.url).hostname : "";
@@ -2252,7 +2244,7 @@ export async function resolveCompanyByName(
       return {
         title: r.title,
         url: r.url,
-        description: r.content,
+        description: r.text,
         meta_url: { hostname },
       };
     });
@@ -2497,6 +2489,7 @@ export async function callClaude(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
+  model = "claude-sonnet-4-20250514",
 ): Promise<ClaudeHookPayload[]> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -2507,7 +2500,7 @@ export async function callClaude(
       "anthropic-beta": "prompt-caching-2024-07-31",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model,
       max_tokens: 4096,
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
@@ -3673,14 +3666,14 @@ export async function generateHooksForUrl(opts: {
   targetRole?: TargetRole | null;
   messagingStyle?: MessagingStyle;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
-  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  const exaApiKey = process.env.EXA_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
-  if (!tavilyApiKey || !claudeApiKey) {
-    throw new Error("Missing TAVILY_API_KEY or CLAUDE_API_KEY");
+  if (!exaApiKey || !claudeApiKey) {
+    throw new Error("Missing EXA_API_KEY or CLAUDE_API_KEY");
   }
 
-  const { sources: rawSources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, tavilyApiKey);
+  const { sources: rawSources, signalCount, lowSignal, hasAnchoredSources } = await fetchSourcesWithGating(opts.url, exaApiKey);
   const domain = getDomain(opts.url);
   const includeMarketContext = opts.includeMarketContext ?? false;
 

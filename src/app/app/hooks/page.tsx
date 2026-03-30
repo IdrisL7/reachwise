@@ -443,7 +443,13 @@ export default function HooksPage() {
       setIntentData(data.intent || null);
       setCompanyIntel(data.companyIntel || null);
       setIsBasicIntel(!!data.isBasicIntel);
-      if (data.suggestion) setSuggestion(data.suggestion);
+      if (data.suggestion) {
+        setSuggestion(data.suggestion);
+        // Surface suggestion as a visible error when no hooks were returned
+        if ((!structured || structured.length === 0) && (!Array.isArray(data.hooks) || data.hooks.length === 0)) {
+          setError(data.suggestion);
+        }
+      }
       if (data.lowSignal) {
         setLowSignal(true);
         if (!lowSignalTracked.current) { lowSignalTracked.current = true; trackEvent("low_signal_shown"); }
@@ -701,18 +707,6 @@ export default function HooksPage() {
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
-
-            {lowSignal && !linkedinSlug && (
-              <div className="px-4 pb-3">
-                <p className="text-xs font-medium text-zinc-400 mb-1.5">Try pasting one of these URLs into the field above:</p>
-                <div className="text-xs text-zinc-500 space-y-0.5">
-                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/press</p>
-                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/newsroom</p>
-                  <p>{companyDomain ? companyDomain : "theirdomain.com"}/blog</p>
-                </div>
-                <p className="text-xs text-zinc-600 mt-2">Or copy the URL of any recent news article about them.</p>
               </div>
             )}
 

@@ -4,7 +4,7 @@ import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
-import { sendEmail } from "@/lib/email/sendgrid";
+import { sendEmail, verificationEmailHtml } from "@/lib/email/sendgrid";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { getOrCreateDefaultWorkspace } from "@/lib/workspace-helpers";
 
@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
         passwordHash,
         tierId: "starter",
         trialEndsAt,
+        hooksUsedThisMonth: 0,
+        hooksResetAt: new Date().toISOString(),
       })
       .returning({
         id: schema.users.id,
@@ -85,8 +87,9 @@ export async function POST(request: NextRequest) {
 
     await sendEmail({
       to: email,
-      subject: "Verify your GetSignalHooks email",
-      body: `Welcome to GetSignalHooks!\n\nPlease verify your email address by clicking the link below:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— GetSignalHooks`,
+      subject: "Verify your GetSignalHooks account",
+      body: `Welcome to GetSignalHooks!\n\nPlease verify your email address:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— The GetSignalHooks Team`,
+      html: verificationEmailHtml(verifyUrl),
     }).catch((err) => {
       console.error("Failed to send verification email:", err);
     });

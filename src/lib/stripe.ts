@@ -29,6 +29,7 @@ export function getTierFromPriceId(priceId: string): TierId {
 
 export function getPriceId(tierId: TierId): string {
   const map: Record<TierId, string> = {
+    free: "",
     starter: process.env.STRIPE_PRICE_STARTER || "",
     pro: process.env.STRIPE_PRICE_PRO || "",
     concierge: process.env.STRIPE_PRICE_CONCIERGE || "",

@@ -10,6 +10,7 @@ interface TierLimits {
 }
 
 const TIER_LIMITS: Record<TierId, TierLimits> = {
+  free: { hooksPerMonth: 10, batchSize: 3, discoverySearchesPerMonth: 0 },
   starter: { hooksPerMonth: 200, batchSize: 10, discoverySearchesPerMonth: 0 },
   pro: { hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 },
   concierge: { hooksPerMonth: 10000, batchSize: 75, discoverySearchesPerMonth: 200 },
@@ -105,7 +106,7 @@ export async function checkHookQuota(userId: string): Promise<NextResponse | nul
   const limits = getLimits(tierId);
 
   const now = new Date();
-  const resetDate = new Date(user.hooksResetAt);
+  const resetDate = user.hooksResetAt ? new Date(user.hooksResetAt) : new Date(0);
   const isNewMonth =
     resetDate.getMonth() !== now.getMonth() ||
     resetDate.getFullYear() !== now.getFullYear();

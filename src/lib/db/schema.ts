@@ -447,6 +447,22 @@ export const sharedHooks = sqliteTable("shared_hooks", {
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 });
 
+// ── User templates ──
+
+export const userTemplates = sqliteTable("user_templates", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  signal: text("signal").notNull(),
+  trigger: text("trigger").notNull(),
+  hook: text("hook").notNull(),
+  promise: text("promise"),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("user_templates_user_id_idx").on(table.userId),
+]);
+
 // ── Notifications ──
 
 export const notifications = sqliteTable("notifications", {

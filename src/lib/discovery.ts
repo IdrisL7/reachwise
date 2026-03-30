@@ -36,24 +36,23 @@ export interface DiscoveryResult {
   criteria: DiscoveryCriteria;
 }
 
-async function searchTavily(query: string, apiKey: string, count = 8): Promise<SearchResult[]> {
-  const res = await fetch("https://api.tavily.com/search", {
+async function searchExa(query: string, apiKey: string, count = 8): Promise<SearchResult[]> {
+  const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify({
       query,
-      api_key: apiKey,
-      max_results: count,
-      search_depth: "basic",
-      include_raw_content: false,
+      type: "auto",
+      numResults: count,
+      contents: { text: true },
     }),
   });
   if (!res.ok) return [];
   const data = await res.json();
-  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; text?: string }>).map((r) => ({
     title: r.title,
     url: r.url,
-    description: r.content,
+    description: r.text,
   }));
 }
 
@@ -162,7 +161,7 @@ export async function discoverCompanies(
   limit = 20,
 ): Promise<DiscoveryResult> {
   const queries = buildDiscoveryQueries(criteria);
-  const resultLists = await Promise.all(queries.map((q) => searchTavily(q, searchApiKey, 8).catch(() => [])));
+  const resultLists = await Promise.all(queries.map((q) => searchExa(q, searchApiKey, 8).catch(() => [])));
 
   const merged = resultLists.flat().slice(0, 30);
   const extracted = await extractCompaniesFromResults(merged, criteria, claudeApiKey);

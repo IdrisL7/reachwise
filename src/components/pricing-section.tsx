@@ -140,9 +140,9 @@ export function PricingSection() {
               </h3>
               <div className="mt-3 flex items-baseline gap-1">
                 <span className={`text-[2.75rem] font-bold tracking-tight ${tier.highlighted ? "text-zinc-900" : "text-white"}`}>
-                  {SYMBOLS[currency]}{tier.price[currency]}
+                  {tier.price ? `${SYMBOLS[currency]}${tier.price[currency]}` : "Free"}
                 </span>
-                <span className={`text-[0.875rem] ${tier.highlighted ? "text-zinc-600" : "text-zinc-500"}`}>/month</span>
+                {tier.price && <span className={`text-[0.875rem] ${tier.highlighted ? "text-zinc-600" : "text-zinc-500"}`}>/month</span>}
               </div>
               <p className={`mt-3 text-[0.9375rem] leading-[1.6] ${tier.highlighted ? "text-zinc-700" : "text-zinc-400"}`}>
                 {tier.description}

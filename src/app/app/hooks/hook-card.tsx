@@ -69,6 +69,12 @@ function getSourceType(sourceUrl: string, companyDomain: string): "First-party" 
   return "Web";
 }
 
+function qualityVariant(label?: string) {
+  if (label === "Excellent") return "fresh" as const;
+  if (label === "Strong") return "recent" as const;
+  if (label === "Decent") return "older" as const;
+  return "stale" as const;
+}
 const tierVariant = (t: string) => t === "A" ? "tier-a" as const : t === "B" ? "tier-b" as const : "tier-c" as const;
 const angleVariant = (a: string) => a === "trigger" ? "trigger" as const : a === "risk" ? "risk" as const : "tradeoff" as const;
 const angleBorderColor: Record<string, string> = {
@@ -81,6 +87,8 @@ interface HookCardProps {
   hook: Hook;
   index: number;
   companyDomain: string;
+  companyUrl?: string;
+  companyName?: string;
   targetRole: string;
   customRoleInput: string;
   hookVariants: Array<{ hook_index: number; variants: ChannelVariant[] }>;
@@ -106,6 +114,8 @@ export function HookCard({
   hook,
   index,
   companyDomain,
+  companyUrl,
+  companyName,
   targetRole,
   customRoleInput,
   hookVariants,
@@ -131,6 +141,7 @@ export function HookCard({
   const [shareLabel, setShareLabel] = useState("Share");
   const [wonReply, setWonReply] = useState(false);
   const [showSharePrompt, setShowSharePrompt] = useState(false);
+  const [savedTemplate, setSavedTemplate] = useState<"idle" | "saving" | "saved">("idle");
 
   async function handleShare() {
     if (!hook.generated_hook_id) return;
@@ -163,6 +174,26 @@ export function HookCard({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ hookId: hook.generated_hook_id }),
     }).catch(() => {});
+  }
+
+  async function saveAsTemplate() {
+    setSavedTemplate("saving");
+    try {
+      await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hookText: hook.text,
+          angle: hook.angle,
+          promise: hook.promise,
+          companyUrl: companyUrl || (companyDomain ? `https://${companyDomain}` : undefined),
+          companyName: companyName || companyDomain,
+        }),
+      });
+      setSavedTemplate("saved");
+    } catch {
+      setSavedTemplate("idle");
+    }
   }
 
   const variantEntry = hookVariants.find((v) => v.hook_index === index);
@@ -207,18 +238,13 @@ export function HookCard({
       className={`bg-[#14161a] border border-[#252830] rounded-xl p-5 border-l-[3px] ${angleBorderColor[hook.angle] || "border-l-zinc-700"} transition-all duration-200 hover:border-[#353840] animate-slide-in-bottom`}
       style={{ animationDelay: `${index * 80}ms` }}
     >
-      {/* Badges row — always visible: Tier, Source type, Angle + confidence dot */}
+      {/* Badges row — always visible: Quality label, Angle, Freshness, Role */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-        <Badge variant={tierVariant(hook.evidence_tier)}>Tier {hook.evidence_tier}</Badge>
-        {srcType && <Badge variant={srcVariant} className="text-[10px]">{srcType}</Badge>}
+        {hook.quality_label && (
+          <Badge variant={qualityVariant(hook.quality_label)}>{hook.quality_label}</Badge>
+        )}
         <Badge variant={angleVariant(hook.angle)}>{hook.angle}</Badge>
-        <span className="flex items-center gap-1 text-xs text-zinc-500">
-          <span className={`w-2 h-2 rounded-full shrink-0 ${confColor}`} />
-          <span className="sr-only">
-            {hook.confidence === "high" ? "High" : hook.confidence === "med" ? "Medium" : "Low"} confidence
-          </span>
-          <span aria-hidden="true">{hook.confidence}</span>
-        </span>
+        {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
         {targetRole && targetRole !== "Not sure / Any role" && targetRole !== "General" && (
           <Badge variant="role" className="text-[10px]">
             {targetRole === "Custom" ? customRoleInput || "Custom" : targetRole}
@@ -251,18 +277,30 @@ export function HookCard({
           className="mb-3"
         >
           <div className="flex items-center gap-1.5 flex-wrap pt-1">
-            {freshness && <Badge variant={freshness.variant} className="text-[10px]">{freshness.label}</Badge>}
+            <Badge
+              variant={tierVariant(hook.evidence_tier)}
+              title={
+                hook.evidence_tier === "A"
+                  ? "Tier A — first-party or reputable source with a recent date"
+                  : hook.evidence_tier === "B"
+                  ? "Tier B — moderate confidence, secondary or undated source"
+                  : "Tier C — low confidence, weak or unverifiable source"
+              }
+              className="cursor-help text-[10px]"
+            >
+              Tier {hook.evidence_tier}
+            </Badge>
+            {srcType && <Badge variant={srcVariant} className="text-[10px]">{srcType}</Badge>}
+            <span className="flex items-center gap-1 text-xs text-zinc-500">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${confColor}`} />
+              <span className="sr-only">
+                {hook.confidence === "high" ? "High" : hook.confidence === "med" ? "Medium" : "Low"} confidence
+              </span>
+              <span aria-hidden="true">{hook.confidence}</span>
+            </span>
             {typeof hook.quality_score === "number" && (
-              <Badge
-                variant={
-                  hook.quality_score >= 90 ? "fresh"
-                    : hook.quality_score >= 70 ? "trigger"
-                    : hook.quality_score >= 50 ? "older"
-                    : "risk"
-                }
-                className="text-[10px]"
-              >
-                {hook.quality_label || "Score"} {hook.quality_score}
+              <Badge variant={qualityVariant(hook.quality_label)} className="text-[10px]">
+                {hook.quality_score}/100
               </Badge>
             )}
             {hook.psych_mode && (
@@ -390,14 +428,26 @@ export function HookCard({
         {hook.generated_hook_id && !wonReply && (
           <button
             onClick={handleWin}
-            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700/60 bg-transparent text-zinc-600 hover:text-emerald-400 hover:border-emerald-700/50 transition-colors ml-auto"
+            className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700/60 bg-transparent text-zinc-600 hover:text-emerald-400 hover:border-emerald-700/50 transition-colors"
           >
             Got a reply?
           </button>
         )}
         {wonReply && (
-          <span className="text-xs text-emerald-400 ml-auto">Nice work!</span>
+          <span className="text-xs text-emerald-400">Nice work!</span>
         )}
+        <button
+          onClick={saveAsTemplate}
+          disabled={savedTemplate !== "idle"}
+          title="Save to My Templates"
+          className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:cursor-default ml-auto ${
+            savedTemplate === "saved"
+              ? "border-violet-700 bg-violet-900/20 text-violet-400"
+              : "border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300 disabled:opacity-60"
+          }`}
+        >
+          {savedTemplate === "saved" ? "Saved" : savedTemplate === "saving" ? "Saving..." : "Save"}
+        </button>
       </div>
 
       {/* Reply win share prompt */}

@@ -139,30 +139,39 @@ export async function sendEmail(params: SendEmailParams): Promise<SendResult> {
   }
 }
 
-/** High-trust verification email template with "Let's get those signals" branding */
+/** Branded HTML template for email verification */
 export function verificationEmailHtml(verifyUrl: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Verify Your Account</title>
 </head>
-<body style="background-color: #030014; padding: 40px; font-family: sans-serif;">
-  <div style="max-width: 600px; margin: auto; background: #0B0F1A; border: 1px solid #1e293b; border-top: 4px solid #9333ea; padding: 40px; border-radius: 12px; color: #cbd5e1;">
-    <h2 style="color: #ffffff; margin-top: 0;">Let's get those signals.</h2>
-    <p>Welcome to GetSignalHooks. You're one click away from evidence-backed outreach that never hallucinates.</p>
-    
-    <a href="${verifyUrl}" style="background: #9333ea; color: #ffffff; padding: 14px 30px; border-radius: 8px; text-decoration: none; display: inline-block; font-weight: bold; margin: 25px 0;">
-      Verify My Account
-    </a>
-    
-    <hr style="border: 0; border-top: 1px solid #1e293b; margin: 30px 0;">
-    
-    <p style="font-size: 12px; color: #64748b;">
-      The GetSignalHooks Team — Evidence-first hooks for outbound sales.
-    </p>
-  </div>
+<body style="margin:0;padding:0;background-color:#030014;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#030014;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background-color:#030014;border-top:4px solid #9333ea;">
+        <!-- Logo -->
+        <tr><td style="padding:32px 40px 0;">
+          <span style="font-size:20px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">GSH</span>
+          <span style="font-size:14px;color:#94a3b8;margin-left:8px;">GetSignalHooks</span>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:24px 40px 0;color:#cbd5e1;font-size:15px;line-height:1.6;">
+          <h1 style="color:#ffffff;font-size:24px;margin:0 0 16px;font-weight:700;">Let's get those signals.</h1>
+          <p style="margin:0 0 16px;">Welcome to the era of evidence-backed outbound. To start surfacing hooks from product launches, news, and filings, please verify your email address:</p>
+          <a href="${verifyUrl}" style="display:inline-block;background-color:#9333ea;color:#ffffff;padding:14px 28px;text-decoration:none;border-radius:8px;font-weight:700;font-size:15px;margin:8px 0 24px;">Verify My Email Address</a>
+          <p style="font-size:13px;color:#64748b;margin:0 0 8px;">This link will expire in 24 hours for your security.</p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:24px 40px 32px;border-top:1px solid #1e293b;margin-top:8px;">
+          <p style="font-size:12px;color:#475569;margin:0 0 8px;"><strong style="color:#64748b;">Why did I get this?</strong> You signed up for GetSignalHooks — the tool that stops AI hallucinations in sales outreach. If you didn't do this, you can safely ignore this email.</p>
+          <p style="font-size:12px;color:#475569;margin:0;">— The GetSignalHooks Team<br>
+          <a href="https://www.getsignalhooks.com" style="color:#9333ea;text-decoration:none;">getsignalhooks.com</a></p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
 </body>
 </html>`;
 }

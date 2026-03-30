@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const tavilyApiKey = process.env.TAVILY_API_KEY;
+  const tavilyApiKey = process.env.EXA_API_KEY;
   const claudeApiKey = process.env.CLAUDE_API_KEY;
 
   if (!tavilyApiKey || !claudeApiKey) {

@@ -84,7 +84,7 @@ export function getTemperature(score: number): "hot" | "warm" | "cold" {
 }
 
 // ---------------------------------------------------------------------------
-// Tavily Search → Claude extraction pipeline
+// Exa Search → Claude extraction pipeline
 // ---------------------------------------------------------------------------
 
 type SearchResult = {
@@ -93,7 +93,7 @@ type SearchResult = {
   description?: string;
 };
 
-async function searchTavily(
+async function searchExa(
   query: string,
   apiKey: string,
   count = 5,
@@ -101,26 +101,25 @@ async function searchTavily(
 ): Promise<SearchResult[]> {
   const body: Record<string, unknown> = {
     query,
-    api_key: apiKey,
-    max_results: count,
-    days: 30,
-    search_depth: "basic",
-    include_raw_content: false,
+    type: "auto",
+    numResults: count,
+    startPublishedDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+    contents: { text: true },
   };
-  if (exclude_domains?.length) body.exclude_domains = exclude_domains;
+  if (exclude_domains?.length) body.excludeDomains = exclude_domains;
 
-  const res = await fetch("https://api.tavily.com/search", {
+  const res = await fetch("https://api.exa.ai/search", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
     body: JSON.stringify(body),
   });
 
   if (!res.ok) return [];
   const data = await res.json();
-  return ((data?.results ?? []) as Array<{ title?: string; url?: string; content?: string }>).map((r) => ({
+  return ((data?.results ?? []) as Array<{ title?: string; url?: string; text?: string }>).map((r) => ({
     title: r.title,
     url: r.url,
-    description: r.content,
+    description: r.text,
   }));
 }
 
@@ -163,7 +162,7 @@ async function extractSignals(
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
       system: EXTRACTION_PROMPT,
       messages: [
@@ -214,9 +213,9 @@ export async function researchIntentSignals(
   }
 
   const [hiringResults, fundingResults, techResults] = await Promise.all([
-    searchTavily(buildHiringQuery(companyName), searchApiKey, 5, [domain]),
-    searchTavily(buildFundingQuery(companyName), searchApiKey, 5, [domain]),
-    searchTavily(buildTechChangeQuery(companyName), searchApiKey, 5, [domain]),
+    searchExa(buildHiringQuery(companyName), searchApiKey, 5, [domain]),
+    searchExa(buildFundingQuery(companyName), searchApiKey, 5, [domain]),
+    searchExa(buildTechChangeQuery(companyName), searchApiKey, 5, [domain]),
   ]);
 
   const [hiringSignals, fundingSignals, techSignals] = await Promise.all([

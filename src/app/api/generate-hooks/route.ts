@@ -172,26 +172,6 @@ export async function POST(request: Request) {
           );
         }
 
-        // News/media publisher detection — user pasted an article URL, not a company URL
-        const inputDomain = parsed.hostname.replace(/^www\./, "");
-        const MEDIA_PUBLISHERS = new Set([
-          "techcrunch.com", "reuters.com", "bloomberg.com", "forbes.com", "wsj.com",
-          "ft.com", "businessinsider.com", "wired.com", "venturebeat.com", "theverge.com",
-          "inc.com", "fastcompany.com", "fortune.com", "cnbc.com", "axios.com",
-          "prnewswire.com", "businesswire.com", "globenewswire.com", "marketwatch.com",
-          "crunchbase.com", "pitchbook.com",
-        ]);
-        if (MEDIA_PUBLISHERS.has(inputDomain) && parsed.pathname.length > 1) {
-          return NextResponse.json({
-            hooks: [],
-            structured_hooks: [],
-            overflow_hooks: [],
-            status: "ok" as CompanyResolutionStatus,
-            lowSignal: true,
-            suggestion: `That looks like a news article on ${inputDomain}. Paste the company's own website URL instead (e.g. acme.com) — the article will be found automatically as a signal source.`,
-          });
-        }
-
         // LinkedIn posts feed detection — these are inaccessible to automated fetchers
         if (
           parsed.hostname.includes("linkedin.com") &&
@@ -216,7 +196,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const tavilyApiKey = process.env.TAVILY_API_KEY;
+    const exaApiKey = process.env.EXA_API_KEY;
     const claudeApiKey = process.env.CLAUDE_API_KEY;
 
     if (!rawUrl && !companyName) {
@@ -226,7 +206,7 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!tavilyApiKey || !claudeApiKey) {
+    if (!exaApiKey || !claudeApiKey) {
       return NextResponse.json(
         { error: "Server misconfiguration: missing API keys. Please contact support." },
         { status: 500 },
@@ -276,7 +256,7 @@ export async function POST(request: Request) {
     let resolution: CompanyResolutionResult | null = null;
 
     if (!url && companyName) {
-      resolution = await resolveCompanyByName(companyName, tavilyApiKey);
+      resolution = await resolveCompanyByName(companyName, exaApiKey);
 
       if (resolution.status === "no_match") {
         return NextResponse.json({
@@ -363,7 +343,7 @@ export async function POST(request: Request) {
           const hasSubpath = parsedInput.pathname.length > 1 && parsedInput.pathname !== "/";
 
           if (hasSubpath) {
-            const userSrc = await fetchUserProvidedSource(url, companyDomain, tavilyApiKey).catch(() => null);
+            const userSrc = await fetchUserProvidedSource(url, companyDomain, exaApiKey).catch(() => null);
 
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
@@ -424,7 +404,7 @@ export async function POST(request: Request) {
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
         if (tierId === "pro" || tierId === "concierge") {
           try {
-            rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey!, claudeApiKey);
+            rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", exaApiKey!, claudeApiKey);
             prefetchedSignals = rawSignals;
           } catch {
             rawSignals = [];
@@ -449,9 +429,9 @@ export async function POST(request: Request) {
 
           const apifyToken = process.env.APIFY_API_TOKEN;
           const linkedinSlug = companyDomain ? companyDomain.split(".")[0] : undefined;
-          result = await fetchSourcesWithGating(url, tavilyApiKey!, gatingIntentSignals, apifyToken, linkedinSlug);
+          result = await fetchSourcesWithGating(url, exaApiKey!, gatingIntentSignals, apifyToken, linkedinSlug);
         } else {
-          result = await fetchSourcesWithGating(url, tavilyApiKey!);
+          result = await fetchSourcesWithGating(url, exaApiKey!);
         }
         const sources = result.sources;
         signalCount = result.signalCount;
@@ -691,12 +671,12 @@ export async function POST(request: Request) {
     finalTop = finalTop.map((hook) => {
       const quality = scoreHookQuality(hook, companyDomain || undefined);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    });
+    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
 
     finalOverflow = finalOverflow.map((hook) => {
       const quality = scoreHookQuality(hook, companyDomain || undefined);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    });
+    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
 
     const resolvedCompany = resolution && resolution.candidates[0]
       ? {
@@ -758,8 +738,8 @@ export async function POST(request: Request) {
       const [intentResult, intelResult] = await Promise.allSettled([
         prefetchedSignals !== null
           ? Promise.resolve(prefetchedSignals)
-          : researchIntentSignals(url, companyName || companyDomain || "", tavilyApiKey, claudeApiKey),
-        getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, true, companyName || undefined),
+          : researchIntentSignals(url, companyName || companyDomain || "", exaApiKey, claudeApiKey),
+        getCompanyIntelligence(url, exaApiKey, claudeApiKey, true, companyName || undefined),
       ]);
 
       if (intentResult.status === "fulfilled") {
@@ -783,7 +763,7 @@ export async function POST(request: Request) {
       }
     } else {
       try {
-        companyIntel = await getCompanyIntelligence(url, tavilyApiKey, claudeApiKey, false, companyName || undefined);
+        companyIntel = await getCompanyIntelligence(url, exaApiKey, claudeApiKey, false, companyName || undefined);
       } catch {
         // Non-blocking
       }

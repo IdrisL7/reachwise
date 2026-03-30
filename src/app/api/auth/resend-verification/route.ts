@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
-import { sendEmail } from "@/lib/email/sendgrid";
+import { sendEmail, verificationEmailHtml } from "@/lib/email/sendgrid";
 
 export async function POST() {
   const session = await auth();
@@ -44,8 +44,9 @@ export async function POST() {
 
   await sendEmail({
     to: email,
-    subject: "Verify your GetSignalHooks email",
-    body: `Please verify your email address by clicking the link below:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— GetSignalHooks`,
+    subject: "Verify your GetSignalHooks account",
+    body: `Please verify your email address:\n\n${verifyUrl}\n\nThis link expires in 24 hours.\n\n— The GetSignalHooks Team`,
+    html: verificationEmailHtml(verifyUrl),
   });
 
   return NextResponse.json({ message: "Verification email sent." });

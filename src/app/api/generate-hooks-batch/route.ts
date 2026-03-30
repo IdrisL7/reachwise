@@ -122,7 +122,7 @@ export async function POST(request: Request) {
           let intentData: { score: number; temperature: string; signalsCount: number } | null = null;
           if ((tierId === "pro" || tierId === "concierge") && result.hooks.length > 0) {
             try {
-              const tavilyKey = process.env.TAVILY_API_KEY;
+              const tavilyKey = process.env.EXA_API_KEY;
               const claudeKey = process.env.CLAUDE_API_KEY;
               if (tavilyKey && claudeKey) {
                 // Derive company name from URL hostname
