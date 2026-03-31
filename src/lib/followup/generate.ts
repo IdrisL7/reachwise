@@ -1,16 +1,25 @@
 import {
   callClaudeText,
   containsBannedPhrase,
+  fetchUserProvidedSource,
   generateHooksForUrl,
+  getDomain,
+  publishGateValidateHook,
   type Hook,
+  type TargetRole,
 } from "@/lib/hooks";
 import { mapStepToSequenceType, type SequenceConfig } from "./sequences";
+import { getClaudeApiKey } from "@/lib/env";
+import { getCachedHooks } from "@/lib/hook-cache";
+import { db, schema } from "@/lib/db";
+import { and, desc, eq, like, or } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export type LeadInfo = {
+  userId?: string | null;
   name?: string | null;
   title?: string | null;
   companyName?: string | null;
@@ -30,11 +39,270 @@ export type FollowUpResult = {
   subject?: string;
   body: string;
   channel: string;
+  hookSource?: "provided" | "hook_cache_exact" | "hook_cache_root" | "generated_hooks" | "subpage_live" | "subpage_fallback" | "live_generation";
   hookUsed?: {
     angle: string;
     evidence: string;
   };
 };
+
+function inferTargetRoleFromLead(lead: LeadInfo): TargetRole | null {
+  const title = (lead.title || "").toLowerCase();
+  if (!title) return null;
+
+  if (
+    title.includes("revops") ||
+    title.includes("revenue operations") ||
+    title.includes("sales operations")
+  ) {
+    return "RevOps";
+  }
+
+  if (
+    title.includes("sdr manager") ||
+    title.includes("sales development manager") ||
+    title.includes("bdr manager")
+  ) {
+    return "SDR Manager";
+  }
+
+  if (
+    title.includes("marketing") ||
+    title.includes("demand gen") ||
+    title.includes("growth marketing")
+  ) {
+    return "Marketing";
+  }
+
+  if (
+    title.includes("founder") ||
+    title.includes("co-founder") ||
+    title.includes("chief executive") ||
+    title.includes("ceo")
+  ) {
+    return "Founder/CEO";
+  }
+
+  if (
+    title.includes("vp sales") ||
+    title.includes("head of sales") ||
+    title.includes("sales director") ||
+    title.includes("chief revenue officer") ||
+    title.includes("cro")
+  ) {
+    return "VP Sales";
+  }
+
+  return null;
+}
+
+function mapStoredHookToHook(row: {
+  id: string;
+  hookText: string;
+  angle: string;
+  confidence: string;
+  evidenceTier: string;
+  sourceSnippet: string | null;
+  sourceUrl: string | null;
+  sourceTitle: string | null;
+  sourceDate: string | null;
+  triggerType: string | null;
+  promise: string | null;
+  bridgeQuality: string | null;
+  qualityScore: number;
+}): Hook | null {
+  if (
+    !row.hookText ||
+    !row.angle ||
+    !row.confidence ||
+    !row.evidenceTier
+  ) {
+    return null;
+  }
+
+  // `generated_hooks` rows are persisted only after publish-gating in
+  // `/api/generate-hooks`, so re-running the full validator here can
+  // incorrectly reject valid historical hooks as validation rules evolve.
+  return {
+    news_item: 1,
+    angle: row.angle as Hook["angle"],
+    hook: row.hookText,
+    evidence_snippet: row.sourceSnippet || "",
+    source_title: row.sourceTitle || "",
+    source_date: row.sourceDate || "",
+    source_url: row.sourceUrl || "",
+    evidence_tier: row.evidenceTier as Hook["evidence_tier"],
+    confidence: row.confidence as Hook["confidence"],
+    quality_score: row.qualityScore,
+    generated_hook_id: row.id,
+    trigger_type: (row.triggerType || undefined) as Hook["trigger_type"],
+    promise: row.promise || undefined,
+    bridge_quality: (row.bridgeQuality || undefined) as Hook["bridge_quality"],
+  };
+}
+
+function normalizeCachedHooks(raw: unknown, limit: number): Hook[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((hook) => publishGateValidateHook(hook as Hook))
+    .filter((hook): hook is Hook => hook !== null)
+    .slice(0, limit);
+}
+
+async function getReusableHooks(
+  lead: LeadInfo,
+  targetRole: TargetRole | null,
+  limit: number,
+): Promise<{
+  hooks: Hook[];
+  source?: "hook_cache_exact" | "hook_cache_root" | "generated_hooks";
+}> {
+  const companyUrl = lead.companyWebsite?.trim();
+  if (!companyUrl) return { hooks: [] };
+
+  const role = targetRole ?? undefined;
+
+  const exactCached = await getCachedHooks(
+    companyUrl,
+    undefined,
+    role,
+    "evidence",
+  ).catch(() => null);
+  const exactCachedHooks = normalizeCachedHooks(exactCached?.hooks, limit);
+  if (exactCachedHooks.length > 0) {
+    console.info(
+      `[generate-followup] reusable hooks hit source=hook_cache_exact company_url="${companyUrl}" role="${role || "none"}" count=${exactCachedHooks.length}`,
+    );
+    return { hooks: exactCachedHooks, source: "hook_cache_exact" };
+  }
+
+  const domain = getDomain(companyUrl);
+  const rootUrl = `https://${domain}`;
+  if (rootUrl !== companyUrl) {
+    const rootCached = await getCachedHooks(
+      rootUrl,
+      undefined,
+      role,
+      "evidence",
+    ).catch(() => null);
+    const rootCachedHooks = normalizeCachedHooks(rootCached?.hooks, limit);
+    if (rootCachedHooks.length > 0) {
+      console.info(
+        `[generate-followup] reusable hooks hit source=hook_cache_root company_url="${companyUrl}" root_url="${rootUrl}" role="${role || "none"}" count=${rootCachedHooks.length}`,
+      );
+      return { hooks: rootCachedHooks, source: "hook_cache_root" };
+    }
+  }
+
+  if (!lead.userId) {
+    console.info(
+      `[generate-followup] reusable hooks skipped source=generated_hooks reason=missing_user_id company_url="${companyUrl}"`,
+    );
+    return { hooks: [] };
+  }
+
+  const stored = await db
+    .select({
+      id: schema.generatedHooks.id,
+      hookText: schema.generatedHooks.hookText,
+      angle: schema.generatedHooks.angle,
+      confidence: schema.generatedHooks.confidence,
+      evidenceTier: schema.generatedHooks.evidenceTier,
+      sourceSnippet: schema.generatedHooks.sourceSnippet,
+      sourceUrl: schema.generatedHooks.sourceUrl,
+      sourceTitle: schema.generatedHooks.sourceTitle,
+      sourceDate: schema.generatedHooks.sourceDate,
+      triggerType: schema.generatedHooks.triggerType,
+      promise: schema.generatedHooks.promise,
+      bridgeQuality: schema.generatedHooks.bridgeQuality,
+      qualityScore: schema.generatedHooks.qualityScore,
+    })
+    .from(schema.generatedHooks)
+    .where(
+      and(
+        eq(schema.generatedHooks.userId, lead.userId),
+        or(
+          eq(schema.generatedHooks.companyUrl, companyUrl),
+          eq(schema.generatedHooks.companyUrl, rootUrl),
+          like(schema.generatedHooks.companyUrl, `${rootUrl}/%`),
+        ),
+      ),
+    )
+    .orderBy(desc(schema.generatedHooks.createdAt))
+    .limit(limit * 4);
+
+  const hooks = stored
+    .map(mapStoredHookToHook)
+    .filter((hook): hook is Hook => hook !== null)
+    .slice(0, limit);
+
+  if (hooks.length > 0) {
+    console.info(
+      `[generate-followup] reusable hooks hit source=generated_hooks company_url="${companyUrl}" root_url="${rootUrl}" user_id="${lead.userId}" stored_rows=${stored.length} valid_hooks=${hooks.length}`,
+    );
+    return { hooks, source: "generated_hooks" };
+  }
+
+  console.info(
+    `[generate-followup] reusable hooks miss company_url="${companyUrl}" root_url="${rootUrl}" user_id="${lead.userId}" stored_rows=${stored.length} valid_hooks=0`,
+  );
+
+  return { hooks: [] };
+}
+
+async function generateHooksFastForSubpage(
+  companyUrl: string,
+  targetRole: TargetRole | null,
+  limit: number,
+): Promise<{
+  hooks: Hook[];
+  source?: "subpage_live" | "subpage_fallback";
+}> {
+  const parsedUrl = new URL(
+    companyUrl.startsWith("http") ? companyUrl : `https://${companyUrl}`,
+  );
+  const hasSubpath = parsedUrl.pathname.length > 1 && parsedUrl.pathname !== "/";
+  if (!hasSubpath) return { hooks: [] };
+
+  const exaApiKey = process.env.EXA_API_KEY;
+  const claudeApiKey = getClaudeApiKey();
+  if (!exaApiKey || !claudeApiKey) return { hooks: [] };
+
+  const userSrc = await fetchUserProvidedSource(
+    companyUrl,
+    getDomain(companyUrl),
+    exaApiKey,
+  ).catch(() => null);
+
+  if (!userSrc) return { hooks: [] };
+
+  const fastResult = await generateHooksForUrl({
+    url: companyUrl,
+    count: limit,
+    targetRole,
+  });
+
+  if (fastResult.hooks.length > 0) {
+    return { hooks: fastResult.hooks, source: "subpage_live" };
+  }
+
+  return {
+    hooks: [
+      {
+        news_item: 1,
+        angle: "trigger",
+        hook: `${userSrc.title}. Is that creating pressure on pipeline visibility or forecast confidence right now?`,
+        evidence_snippet: userSrc.facts[0] || userSrc.title,
+        source_title: userSrc.title,
+        source_date: userSrc.date || "",
+        source_url: userSrc.url,
+        evidence_tier: "A",
+        confidence: "med",
+      },
+    ],
+    source: "subpage_fallback",
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Email-specific banned phrases (same as generate-email route)
@@ -290,20 +558,41 @@ export async function generateFollowUp(opts: {
   avoidAngle?: string;
   channel?: string;
 }): Promise<FollowUpResult> {
-  const claudeApiKey = process.env.CLAUDE_API_KEY;
+  const startedAt = Date.now();
+  const claudeApiKey = getClaudeApiKey();
   if (!claudeApiKey) {
     throw new Error("Server misconfiguration: missing CLAUDE_API_KEY");
   }
 
   // Get hooks — use provided or auto-generate
   let hooks = opts.hooks;
+  let hookSource: FollowUpResult["hookSource"] = hooks?.length ? "provided" : undefined;
   if (!hooks || hooks.length === 0) {
     const companyUrl = opts.lead.companyWebsite || opts.lead.companyName;
     if (!companyUrl) {
       throw new Error("Lead must have company_website or company_name to generate hooks");
     }
-    const result = await generateHooksForUrl({ url: companyUrl, count: 6 });
-    hooks = result.hooks;
+    const targetRole = inferTargetRoleFromLead(opts.lead);
+
+    const reusable = await getReusableHooks(opts.lead, targetRole, 6);
+    hooks = reusable.hooks;
+    hookSource = reusable.source;
+
+    if (hooks.length === 0) {
+      const subpageHooks = await generateHooksFastForSubpage(companyUrl, targetRole, 6);
+      hooks = subpageHooks.hooks;
+      hookSource = subpageHooks.source;
+    }
+
+    if (hooks.length === 0) {
+      const result = await generateHooksForUrl({
+        url: companyUrl,
+        count: 6,
+        targetRole,
+      });
+      hooks = result.hooks;
+      hookSource = "live_generation";
+    }
   }
 
   if (hooks.length === 0) {
@@ -333,9 +622,14 @@ export async function generateFollowUp(opts: {
       throw new Error("LLM returned empty content for channel message");
     }
 
+    console.info(
+      `[generate-followup] channel=${channel} company="${opts.lead.companyName || opts.lead.companyWebsite || opts.lead.email}" hook_source=${hookSource || "unknown"} hook_angle=${hook.angle} duration_ms=${Date.now() - startedAt}`,
+    );
+
     return {
       body,
       channel,
+      hookSource,
       hookUsed: {
         angle: hook.angle,
         evidence: hook.evidence_snippet,
@@ -378,10 +672,15 @@ export async function generateFollowUp(opts: {
 
   parsed.body = stripTrailingSignature(parsed.body);
 
+  console.info(
+    `[generate-followup] channel=${channel} company="${opts.lead.companyName || opts.lead.companyWebsite || opts.lead.email}" hook_source=${hookSource || "unknown"} hook_angle=${hook.angle} duration_ms=${Date.now() - startedAt}`,
+  );
+
   return {
     subject: parsed.subject,
     body: parsed.body,
     channel,
+    hookSource,
     hookUsed: {
       angle: hook.angle,
       evidence: hook.evidence_snippet,

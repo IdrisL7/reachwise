@@ -223,6 +223,7 @@ export async function GET(req: NextRequest) {
 
           const result = await generateFollowUp({
             lead: {
+              userId: lead.userId,
               name: lead.name,
               title: lead.title,
               companyName: lead.companyName,
@@ -256,6 +257,7 @@ export async function GET(req: NextRequest) {
             status: "draft",
             metadata: JSON.stringify({
               hookUsed: result.hookUsed,
+              hookSource: result.hookSource,
               runId,
               generatedAt: nowISO,
             }),
@@ -278,7 +280,7 @@ export async function GET(req: NextRequest) {
 
           draftsCreated++;
 
-          console.log(`[sequence-runner] draft created for ${lead.email} — step ${currentStep} (${step.channel})`);
+          console.log(`[sequence-runner] draft created for ${lead.email} — step ${currentStep} (${step.channel}) source=${result.hookSource || "unknown"}`);
         } finally {
           // ── 3f. Release lock ─────────────────────────────────────────────
           await db.delete(schema.claimLocks).where(eq(schema.claimLocks.id, lockId));

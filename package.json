@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest",
-    "db:migrate": "node scripts/migrate.mjs"
+    "db:migrate": "node scripts/migrate.mjs",
+    "smoke:followup-reuse": "node scripts/followup-reuse-smoke.mjs",
+    "seed:followup-reuse": "node scripts/seed-followup-reuse-lead.mjs"
   },
   "dependencies": {
     "@auth/drizzle-adapter": "^1.11.1",

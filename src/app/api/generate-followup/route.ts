@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
 
     const result = await generateFollowUp({
       lead: {
+        userId: lead.userId,
         email: lead.email,
         name: lead.name,
         title: lead.title,
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
       meta: {
         step: currentStep,
         angle: result.hookUsed?.angle,
+        hook_source: result.hookSource,
         sequence_id: sequenceId,
         channel: result.channel,
         mode,

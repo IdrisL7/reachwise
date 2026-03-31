@@ -131,6 +131,7 @@ export async function POST(request: NextRequest) {
 
     const result = await generateFollowUp({
       lead: {
+        userId: lead.userId,
         email: lead.email,
         name: lead.name,
         title: lead.title,
@@ -193,6 +194,7 @@ export async function POST(request: NextRequest) {
       followup: {
         subject: result.subject,
         body: result.body,
+        hook_source: result.hookSource,
       },
     });
   } catch (error: any) {
