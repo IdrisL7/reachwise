@@ -5,6 +5,7 @@
 import type { EvidenceTier } from "./types";
 import type { SenderContext } from "./workspace";
 import { fetchCrunchbaseSignals, fetchLinkedInPostSignals } from "./apify-signals";
+import { getClaudeApiKey } from "@/lib/env";
 
 export type Angle = "trigger" | "risk" | "tradeoff";
 export type Confidence = "high" | "med" | "low";
@@ -81,6 +82,50 @@ export const ROLE_RESPONSIBILITIES: Record<TargetRole, { kpis: string[]; tag: st
   "General": {
     kpis: ["process", "priority", "decision tradeoff"],
     tag: "general",
+  },
+};
+
+export const ROLE_PRESSURE_MAP: Record<TargetRole, {
+  priorities: string[];
+  pains: string[];
+  metrics: string[];
+  language: string[];
+}> = {
+  "VP Sales": {
+    priorities: ["forecast confidence", "pipeline quality", "rep productivity", "deal progression"],
+    pains: ["late-stage surprise", "pipeline drag", "weak conversion visibility", "ramp inefficiency"],
+    metrics: ["coverage", "win rate", "stage conversion", "forecast variance"],
+    language: ["pipeline risk", "forecast confidence", "deal velocity", "rep focus"],
+  },
+  "RevOps": {
+    priorities: ["process integrity", "clean reporting", "routing reliability", "system trust"],
+    pains: ["handoff lag", "attribution gaps", "dirty CRM data", "workflow drift"],
+    metrics: ["SLA compliance", "routing speed", "data completeness", "reporting accuracy"],
+    language: ["process breakdown", "system trust", "routing lag", "attribution leakage"],
+  },
+  "SDR Manager": {
+    priorities: ["coaching leverage", "rep consistency", "speed-to-lead", "team execution"],
+    pains: ["slow ramp", "coaching by hindsight", "uneven execution", "manager bottlenecks"],
+    metrics: ["time-to-ramp", "activity quality", "reply rate", "speed-to-lead"],
+    language: ["rep consistency", "coaching leverage", "ramp drag", "execution drift"],
+  },
+  "Marketing": {
+    priorities: ["lead quality", "campaign efficiency", "handoff quality", "funnel conversion"],
+    pains: ["lead waste", "post-handoff blind spots", "slow SDR follow-up", "attribution leakage"],
+    metrics: ["MQL-to-meeting", "CAC efficiency", "speed-to-follow-up", "pipeline contribution"],
+    language: ["lead leakage", "handoff quality", "campaign efficiency", "conversion drag"],
+  },
+  "Founder/CEO": {
+    priorities: ["growth leverage", "operating visibility", "team coordination", "efficiency"],
+    pains: ["complexity creep", "execution drag", "low visibility", "scaling overhead"],
+    metrics: ["revenue per rep", "payback", "operating cadence", "execution speed"],
+    language: ["operating visibility", "growth complexity", "execution drag", "scaling overhead"],
+  },
+  "General": {
+    priorities: ["execution visibility", "team responsiveness", "operational clarity", "decision speed"],
+    pains: ["blind spots", "lagging signals", "slow follow-up", "coordination gaps"],
+    metrics: ["response time", "visibility", "conversion", "operating cadence"],
+    language: ["execution visibility", "coordination gaps", "lagging signals", "decision drag"],
   },
 };
 
@@ -216,7 +261,54 @@ const STRUCTURAL_VARIANTS = {
     structure: "Quote or reference their own words/numbers → contrast with likely internal reality → question",
     when: "Best for awards, press quotes, or first-party content",
   },
+  "hidden-cost": {
+    description: "Lead with the operational cost that tends to hide behind the signal",
+    structure: "Signal → hidden operational cost → pointed question",
+    when: "Best for growth, expansion, new product, or partnership signals",
+  },
+  "scale-friction": {
+    description: "Frame what gets harder as the company scales or adds complexity",
+    structure: "Scaling signal → execution friction → forced-choice question",
+    when: "Best for hiring, expansion, partnerships, and multi-team coordination",
+  },
+  "proof-to-problem": {
+    description: "Use a strong proof point, then pivot quickly to the pressure it creates internally",
+    structure: "Proof point → internal pressure/tension → concrete question",
+    when: "Best for case studies, awards, rankings, and public wins",
+  },
 };
+
+const GENERIC_AI_PATTERNS = [
+  /\b(i\s+)?saw\b/i,
+  /\bnoticed\b/i,
+  /\bcame across\b/i,
+  /\brecent article\b/i,
+  /\brecent announcement\b/i,
+  /\brecent post\b/i,
+  /\bbased on your\b/i,
+  /\bafter reading\b/i,
+  /\bcongrats on\b/i,
+  /\bcurious if\b/i,
+  /\bjust wanted to\b/i,
+];
+
+const GENERIC_BRIDGE_PATTERNS = [
+  /\bthat level of\b/i,
+  /\bat that level\b/i,
+  /\bat this stage\b/i,
+  /\bgets dissected weekly\b/i,
+  /\bscrambling to explain\b/i,
+  /\bteams at (pre-ipo|this stage|that scale|similar scale)\b/i,
+  /\bboard scrutiny\b/i,
+  /\breal-time pipeline visibility\b/i,
+];
+
+const GENERIC_PROMISE_PATTERNS = [
+  /\bteams at (pre-ipo|this stage|that scale|similar scale) typically\b/i,
+  /\bhappy to show you what that looks like\b/i,
+  /\bwith real-time pipeline visibility\b/i,
+  /\bcut .* board prep time\b/i,
+];
 
 const FEW_SHOT_EXAMPLES = `
 EXAMPLE HOOKS — match this tone and quality:
@@ -272,6 +364,12 @@ export type Hook = {
   promise?: string;
   bridge_quality?: "strong" | "moderate" | "weak";
   structural_variant?: string;
+  buyer_tension?: string;
+  why_now?: string;
+  affected_metric?: string;
+  genericness_penalty?: number;
+  novelty_score?: number;
+  buyer_tension_score?: number;
 };
 
 export type IntentSignalInput = {
@@ -343,6 +441,9 @@ export type ClaudeHookPayload = {
   promise?: string;
   bridge_quality?: "strong" | "moderate" | "weak";
   structural_variant?: string;
+  buyer_tension?: string;
+  why_now?: string;
+  affected_metric?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -2252,8 +2353,15 @@ export async function resolveCompanyByName(
 
 function getPersonaSection(role: TargetRole): string {
   const data = PERSONA_DATA[role] || PERSONA_DATA["General"];
+  const pressure = ROLE_PRESSURE_MAP[role] || ROLE_PRESSURE_MAP["General"];
   return [
     `${role}:`,
+    "Role world (speak in this language, not generic business language):",
+    `  - Priorities: ${pressure.priorities.join(", ")}`,
+    `  - Operational pains: ${pressure.pains.join(", ")}`,
+    `  - Metrics under pressure: ${pressure.metrics.join(", ")}`,
+    `  - Natural language: ${pressure.language.join(", ")}`,
+    "",
     "Pain points (use these to inform the BRIDGE — connect the signal to one of these):",
     ...data.pain_points.map(p => `  - ${p}`),
     "",
@@ -2347,9 +2455,9 @@ const DEFAULT_TONE_BLOCK = [
 ].join("\n");
 
 export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }, messagingStyle: MessagingStyle = "evidence"): string {
-  const activeRole = targetRole && targetRole !== "General" ? targetRole : null;
+  const activeRole = customPersona ? null : (targetRole ?? null);
   const personaSection = activeRole
-    ? `PERSONA: ${activeRole}\n${getPersonaSection(activeRole)}`
+    ? [`TARGET ROLE: ${activeRole}`, `PERSONA: ${activeRole}\n${getPersonaSection(activeRole)}`].join("\n\n")
     : `PERSONA: Custom\n- Bridge: Connect their external achievement to an internal sales team pain.\n- Promise: State a specific outcome you deliver for this role.`;
 
   const variantsSection = Object.entries(STRUCTURAL_VARIANTS)
@@ -2358,11 +2466,26 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
 
   return [
     "You are generating a sales hook for an outbound SDR email.",
+    "Your job is not to summarize an article. Your job is to turn a real company signal into buyer tension that sounds like a sharp SDR or operator noticed it.",
     "",
     personaSection,
     "",
     "CRITICAL RULE — READ BEFORE GENERATING:",
     "This email is written TO a person whose job title is the PERSONA above. Their challenges are defined in the PERSONA section above. Do NOT write about the prospect's product, their customers, or their industry operations. The trigger is CONTEXT ONLY. Write about their INTERNAL sales team challenges only.",
+    "Never sound like an AI summarizing a source. Do not open with 'Saw', 'Noticed', 'Came across', 'Based on your recent article', or similar article-summary phrasing.",
+    ...(activeRole === "VP Sales" ? [
+      "For VP Sales specifically, avoid abstract executive filler like 'board scrutiny', 'that level of pressure', or 'pipeline gets dissected weekly' unless you immediately tie it to a concrete operating consequence such as forecast variance, commit risk, deal slippage, inspection cadence, or pipeline quality.",
+      "Strong VP Sales hooks sound like lived forecast pressure, not investor-summary language.",
+    ] : []),
+    "",
+    "---",
+    "",
+    "INTERNAL WORKFLOW (do this before writing):",
+    "- Step 1: identify what changed.",
+    "- Step 2: identify who inside the company feels pressure first.",
+    "- Step 3: identify what gets harder now for the target role.",
+    "- Step 4: identify the metric, workflow, or decision likely under pressure.",
+    "- Step 5: write the hook from that tension, not from the article itself.",
     "",
     "---",
     "",
@@ -2370,7 +2493,7 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "",
     "- TRIGGER: Reference something specific and real about the prospect's company (award, stat, case study, funding, expansion, hiring). Do NOT start with \"Saw\" or \"Noticed\" — vary your opener. Use their specific numbers, names, and facts.",
     "",
-    "- BRIDGE: Connect the trigger to a pain the persona experiences. Follow the bridge reasoning chains in the PERSONA section — pick the chain that fits the signal. The bridge must feel like a natural consequence, not a leap. The bridge must share a domain with the trigger (operational → operational, growth → growth).",
+    "- BRIDGE: Connect the trigger to a pain the persona experiences. Follow the bridge reasoning chains in the PERSONA section — pick the chain that fits the signal. The bridge must feel like a natural consequence, not a leap. The bridge must share a domain with the trigger (operational → operational, growth → growth). Name the tension in the role's own world: forecast confidence, attribution leakage, coaching drag, handoff lag, growth complexity, etc.",
     "",
     "- QUESTION: One question that surfaces a real gap. Prefer forced-choice (A or B?) or mechanism questions over open-ended ones. Specific enough that a generic answer wouldn't work.",
     "",
@@ -2388,6 +2511,7 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "- If trigger is a product metric (e.g. ELD count, unit deployments), flag bridge_quality: weak and regenerate using a company-level signal instead",
     "- Never bridge a fleet/logistics metric directly to SDR team management without an explicit intermediate step",
     "- Hooks with bridge_quality: weak must be capped at score 79 and must not appear in position 1 or 2 of results",
+    "- Prefer operational tension over article paraphrase. The reader should feel understood, not summarized.",
     "",
     "---",
     "",
@@ -2418,6 +2542,14 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "",
     "---",
     "",
+    "DYNAMIC OUTPUT RULES:",
+    "- Produce a mix of structures across the set. Do not make every hook sound like the same template.",
+    "- At least some hooks should lead with the hidden cost, scaling friction, or contradiction created by the signal.",
+    "- Compress aggressively. Strong hooks sound like a sharp observation, not a polished content paragraph.",
+    "- Avoid generic openers, empty praise, and article-summary framing.",
+    "",
+    "---",
+    "",
     "TRIGGER PRIORITY + SCORING GUIDANCE:",
     "- ipo: score 95+ (best personas: Founder/CEO, VP Sales, RevOps)",
     "- funding: score 90-94 (best personas: all)",
@@ -2433,9 +2565,12 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "  \"hook\": \"[full 2-3 sentence hook]\",",
     "  \"trigger\": \"[the specific thing referenced]\",",
     "  \"bridge_quality\": \"strong | moderate | weak\",",
+    "  \"buyer_tension\": \"[the internal pressure this creates for the target role]\",",
+    "  \"why_now\": \"[why this matters right now, in one short clause]\",",
+    "  \"affected_metric\": \"[optional metric/workflow under pressure]\",",
     "  \"promise\": \"[evidence-backed outcome + soft CTA, 1 sentence, tied to the signal]\",",
     "  \"trigger_type\": \"award | stat | case_study | hiring | funding | ipo | expansion\",",
-    "  \"structural_variant\": \"direct-challenger | curiosity-gap | pain-forward | signal-mirror\"",
+    "  \"structural_variant\": \"direct-challenger | curiosity-gap | pain-forward | signal-mirror | hidden-cost | scale-friction | proof-to-problem\"",
     "}",
     "",
     ...(messagingStyle !== "evidence" ? [
@@ -2526,7 +2661,9 @@ export function buildUserPrompt(
     signalsBlock,
     contextBlock,
     "",
-    "Generate hooks now following the tier rules. Return a JSON array and nothing else.",
+    "Generate hooks now following the tier rules.",
+    "Interpret each source into buyer tension first, then write the hook.",
+    "Return a JSON array and nothing else.",
   ].join("\n");
 }
 
@@ -2655,6 +2792,35 @@ export async function callClaudeWithRetry(
   throw lastError;
 }
 
+export function getProviderFacingErrorMessage(error: unknown): {
+  message: string;
+  code?: string;
+  status?: number;
+} {
+  const rawMessage = error instanceof Error ? error.message : String(error);
+  const statusMatch = rawMessage.match(/Anthropic API error (\d+)/);
+  const status = statusMatch ? Number(statusMatch[1]) : undefined;
+
+  if (status === 429 || /too many requests/i.test(rawMessage)) {
+    const retryMatch = rawMessage.match(/try again in (\d+) seconds/i);
+    const retryAfterSeconds = retryMatch ? Number(retryMatch[1]) : undefined;
+    const retryAfterHours = retryAfterSeconds ? Math.max(1, Math.round(retryAfterSeconds / 3600)) : undefined;
+    return {
+      status: 429,
+      code: "PROVIDER_RATE_LIMITED",
+      message: retryAfterHours
+        ? `Hook generation is temporarily paused because the AI provider hit its rate limit. Please try again in about ${retryAfterHours} hour${retryAfterHours === 1 ? "" : "s"}.`
+        : "Hook generation is temporarily paused because the AI provider hit its rate limit. Please try again a bit later.",
+    };
+  }
+
+  return {
+    status,
+    code: status ? "PROVIDER_ERROR" : undefined,
+    message: "We hit a temporary AI generation issue. Please try again.",
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Call Claude for freeform text (emails, etc.)
 // ---------------------------------------------------------------------------
@@ -2694,6 +2860,51 @@ export async function callClaudeText(
     .filter((c) => c.type === "text")
     .map((c) => c.text)
     .join("");
+}
+
+function computeGenericnessPenalty(text: string): number {
+  let penalty = 0;
+  for (const pattern of GENERIC_AI_PATTERNS) {
+    if (pattern.test(text)) penalty += 6;
+  }
+  for (const pattern of GENERIC_BRIDGE_PATTERNS) {
+    if (pattern.test(text)) penalty += 8;
+  }
+  if (/\b(article|post|announcement|press release)\b/i.test(text)) penalty += 4;
+  return Math.min(penalty, 24);
+}
+
+function computePromisePenalty(hook: Hook): number {
+  const promise = hook.promise || "";
+  if (!promise) return 0;
+
+  let penalty = 0;
+  for (const pattern of GENERIC_PROMISE_PATTERNS) {
+    if (pattern.test(promise)) penalty += 8;
+  }
+
+  if (/\btypically\b/i.test(promise) && !/\d/.test(hook.evidence_snippet || "")) penalty += 6;
+  if (/\b(pre-ipo|that scale|similar scale|this stage)\b/i.test(promise) && !/\b(board|forecast|commit|pipeline|deal)\b/i.test(hook.hook)) penalty += 4;
+
+  return Math.min(penalty, 20);
+}
+
+function scoreNovelty(text: string): number {
+  let score = 0;
+  if (/\b(before|instead of|versus|or just|or are you|or is it)\b/i.test(text)) score += 3;
+  if (/\bpressure|drag|leakage|friction|blind spot|overhead|drift|constraint\b/i.test(text)) score += 4;
+  if (/\bforecast|routing|handoff|ramp|attribution|coverage|velocity|payback\b/i.test(text)) score += 4;
+  if (!GENERIC_AI_PATTERNS.some((pattern) => pattern.test(text))) score += 2;
+  return Math.min(score, 10);
+}
+
+function scoreBuyerTension(text: string, hook: Partial<Hook>): number {
+  let score = 0;
+  if (hook.buyer_tension && hook.buyer_tension.length >= 18) score += 4;
+  if (hook.affected_metric && hook.affected_metric.length >= 5) score += 2;
+  if (hook.why_now && hook.why_now.length >= 8) score += 2;
+  if (/\bpressure|risk|gap|drag|friction|leakage|constraint|bottleneck\b/i.test(text)) score += 4;
+  return Math.min(score, 10);
 }
 
 // ---------------------------------------------------------------------------
@@ -3159,6 +3370,9 @@ export function validateHook(
 
   // Normalize structural_variant (optional)
   const structuralVariant: string | undefined = ((raw as any).structural_variant || "").trim() || undefined;
+  const buyerTension = ((raw as any).buyer_tension || "").trim() || undefined;
+  const whyNow = ((raw as any).why_now || "").trim() || undefined;
+  const affectedMetric = ((raw as any).affected_metric || "").trim() || undefined;
 
   // Assess bridge quality (prefer model-provided value when valid)
   const rawBridgeQuality = ((raw as any).bridge_quality || "").toLowerCase();
@@ -3182,6 +3396,14 @@ export function validateHook(
     }
   }
 
+  const genericnessPenalty = computeGenericnessPenalty(hook);
+  const noveltyScore = scoreNovelty(hook);
+  const buyerTensionScore = scoreBuyerTension(hook, {
+    buyer_tension: buyerTension,
+    why_now: whyNow,
+    affected_metric: affectedMetric,
+  });
+
   return {
     news_item: typeof raw.news_item === "number" ? raw.news_item : 1,
     angle,
@@ -3198,6 +3420,12 @@ export function validateHook(
     promise: promise || undefined,
     bridge_quality: bridgeQuality,
     structural_variant: structuralVariant,
+    buyer_tension: buyerTension,
+    why_now: whyNow,
+    affected_metric: affectedMetric,
+    genericness_penalty: genericnessPenalty,
+    novelty_score: noveltyScore,
+    buyer_tension_score: buyerTensionScore,
   };
 }
 
@@ -3312,6 +3540,13 @@ export function publishGateValidateHook(hook: Hook, messagingStyle?: MessagingSt
     confidence: hook.confidence,
     psych_mode: hook.psych_mode,
     why_this_works: hook.why_this_works,
+    promise: hook.promise,
+    trigger_type: hook.trigger_type,
+    bridge_quality: hook.bridge_quality,
+    structural_variant: hook.structural_variant,
+    buyer_tension: hook.buyer_tension,
+    why_now: hook.why_now,
+    affected_metric: hook.affected_metric,
   };
   return validateHook(payload, undefined, messagingStyle);
 }
@@ -3378,6 +3613,13 @@ export function publishGateFinal(
       confidence: hook.confidence,
       psych_mode: hook.psych_mode,
       why_this_works: hook.why_this_works,
+      promise: hook.promise,
+      trigger_type: hook.trigger_type,
+      bridge_quality: hook.bridge_quality,
+      structural_variant: hook.structural_variant,
+      buyer_tension: hook.buyer_tension,
+      why_now: hook.why_now,
+      affected_metric: hook.affected_metric,
     };
     const validated = validateHook(payload, undefined, messagingStyle);
     if (!validated) {
@@ -3614,7 +3856,12 @@ export function scoreHookQuality(hook: Hook, companyDomain?: string): number {
   if ((hook.hook.match(/\b[A-Z][a-z]{2,}\b/g) || []).length >= 2) specificity += 3;
   if (companyDomain && (`${hook.hook} ${hook.evidence_snippet}`).toLowerCase().includes(companyDomain.toLowerCase())) specificity += 1;
 
-  const raw = evidence + relevance + recency + Math.min(specificity, 15);
+  const novelty = hook.novelty_score ?? scoreNovelty(hook.hook);
+  const buyerTension = hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook);
+  const genericPenalty = hook.genericness_penalty ?? computeGenericnessPenalty(hook.hook);
+  const promisePenalty = computePromisePenalty(hook);
+
+  const raw = evidence + relevance + recency + Math.min(specificity, 15) + novelty + buyerTension - genericPenalty - promisePenalty;
   const score = Math.max(1, Math.min(100, Math.round(raw)));
   // Hard cap: weak-bridge hooks never score above 79
   if (hook.bridge_quality === "weak" && score > 79) return 79;
@@ -3662,6 +3909,11 @@ export function scoreHook(hook: Hook): number {
 
   // Confidence bonus
   if (hook.confidence === "high") score += 0.5;
+
+  score += (hook.novelty_score ?? scoreNovelty(hook.hook)) / 4;
+  score += (hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook)) / 4;
+  score -= (hook.genericness_penalty ?? computeGenericnessPenalty(hook.hook)) / 5;
+  score -= computePromisePenalty(hook) / 5;
 
   return score;
 }
@@ -3753,7 +4005,7 @@ export async function generateHooksForUrl(opts: {
   messagingStyle?: MessagingStyle;
 }): Promise<{ hooks: Hook[]; suggestion?: string; lowSignal?: boolean }> {
   const exaApiKey = process.env.EXA_API_KEY;
-  const claudeApiKey = process.env.CLAUDE_API_KEY;
+  const claudeApiKey = getClaudeApiKey();
 
   if (!exaApiKey || !claudeApiKey) {
     throw new Error("Missing EXA_API_KEY or CLAUDE_API_KEY");

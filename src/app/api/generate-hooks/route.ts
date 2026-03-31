@@ -7,6 +7,7 @@ import {
   buildUserPrompt,
   callClaude,
   callClaudeWithRetry,
+  getProviderFacingErrorMessage,
   publishGate,
   publishGateFinal,
   roleTokenGate,
@@ -34,9 +35,10 @@ import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib
 import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
-import { checkHookQuota, incrementHookUsage } from "@/lib/tier-guard";
+import { checkHookQuota, incrementHookUsage, tierError } from "@/lib/tier-guard";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
+import { getClaudeApiKey } from "@/lib/env";
 
 // ---------------------------------------------------------------------------
 // Enforce current tier rules on citations (works on both cached and fresh)
@@ -198,7 +200,7 @@ export async function POST(request: Request) {
     }
 
     const exaApiKey = process.env.EXA_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
 
     if (!rawUrl && !companyName) {
       return NextResponse.json(
@@ -233,7 +235,7 @@ export async function POST(request: Request) {
       const rateLimited = await checkRateLimit(getClientIp(request), "auth:hooks");
       if (rateLimited) return rateLimited;
 
-      // Quota check (trial + monthly limit + increment)
+      // Quota check (trial + monthly limit)
       const quotaError = await checkHookQuota(session!.user!.id);
       if (quotaError) return quotaError;
     }
@@ -519,12 +521,14 @@ export async function POST(request: Request) {
         } // end if (!usedFastPath)
       } catch (error) {
         console.error("generate-hooks: Error during external calls", error);
+        const providerError = getProviderFacingErrorMessage(error);
         return NextResponse.json({
           hooks: [],
           structured_hooks: [],
           status: "ok" as CompanyResolutionStatus,
           lowSignal: true,
-          suggestion: "Something went wrong during research. Please try again.",
+          suggestion: providerError.message,
+          code: providerError.code,
         });
       }
     }
@@ -766,12 +770,16 @@ export async function POST(request: Request) {
     });
 
     let batchId: string | undefined;
-    if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
+    if (!isDemo && !cached && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
       // Increment hook quota AFTER successful generation (not before)
       try {
-        await incrementHookUsage(session.user.id);
+        const incremented = await incrementHookUsage(session.user.id);
+        if (!incremented) {
+          return tierError("Monthly hook limit reached. Upgrade to Pro for more hooks.");
+        }
       } catch (quotaErr) {
         console.error("Failed to increment hook usage:", quotaErr);
+        return tierError("Unable to record hook usage right now. Please try again.", "USAGE_WRITE_FAILED");
       }
 
       try {
@@ -845,9 +853,10 @@ export async function POST(request: Request) {
   } catch (error) {
     Sentry.captureException(error);
     console.error("Unexpected error in /api/generate-hooks", error);
+    const providerError = getProviderFacingErrorMessage(error);
     return NextResponse.json(
-      { error: "Unexpected server error while generating hooks." },
-      { status: 500 },
+      { error: providerError.message, code: providerError.code },
+      { status: providerError.status === 429 ? 429 : 500 },
     );
   }
 }

@@ -24,6 +24,7 @@ import {
   isFirstPartySource,
   isReputablePublisher,
   generateChannelVariants,
+  getProviderFacingErrorMessage,
   scoreHookQuality,
   getQualityLabel,
   type CompanyResolutionResult,
@@ -48,9 +49,10 @@ import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib
 import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
-import { checkHookQuota, incrementHookUsage } from "@/lib/tier-guard";
+import { checkHookQuota, incrementHookUsage, tierError } from "@/lib/tier-guard";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
+import { getClaudeApiKey } from "@/lib/env";
 
 // ---------------------------------------------------------------------------
 // Helper Functions (optimized versions)
@@ -140,7 +142,7 @@ export async function POST(request: Request) {
 
     // Check required env vars
     const exaApiKey = process.env.EXA_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (!rawUrl && !companyName) {
       return NextResponse.json(
         { error: "Provide either 'url' or 'companyName' in request body." },
@@ -466,11 +468,15 @@ export async function POST(request: Request) {
     });
 
     // Increment hook quota AFTER successful generation (not before)
-    if (!isDemo && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
+    if (!isDemo && !cached && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
       try {
-        await incrementHookUsage(session.user.id);
+        const incremented = await incrementHookUsage(session.user.id);
+        if (!incremented) {
+          return tierError("Monthly hook limit reached. Upgrade to Pro for more hooks.");
+        }
       } catch (quotaErr) {
         console.error(`[${traceId}] Failed to increment hook usage:`, quotaErr);
+        return tierError("Unable to record hook usage right now. Please try again.", "USAGE_WRITE_FAILED");
       }
     }
 
@@ -512,10 +518,11 @@ export async function POST(request: Request) {
     
     Sentry.captureException(error);
     console.error(`[${traceId}] Error after ${totalTime}ms:`, error);
+    const providerError = getProviderFacingErrorMessage(error);
     
     return NextResponse.json(
-      { error: "Unexpected server error while generating hooks." },
-      { status: 500 },
+      { error: providerError.message, code: providerError.code },
+      { status: providerError.status === 429 ? 429 : 500 },
     );
   }
 }
