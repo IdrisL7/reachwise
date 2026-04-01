@@ -1,10 +1,36 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@libsql/client";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and, gte, lt, count, avg, sql } from "drizzle-orm";
 import { getDomain } from "@/lib/hooks";
 import { classifyRetrievalSourceType } from "@/lib/retrieval-plan";
 import { getRetrievalMemorySummary } from "@/lib/retrieval-memory";
+
+async function getAvailableTables(names: string[]) {
+  const url = process.env.TURSO_DATABASE_URL;
+  if (!url || names.length === 0) {
+    return new Set<string>();
+  }
+
+  const client = createClient({
+    url,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+
+  const placeholders = names.map(() => "?").join(", ");
+  const result = await client.execute({
+    sql: `
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name IN (${placeholders})
+    `,
+    args: names,
+  });
+
+  return new Set(result.rows.map((row) => String(row.name)));
+}
 
 export async function GET() {
   const session = await auth();
@@ -24,6 +50,18 @@ export async function GET() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const availableTables = await getAvailableTables([
+    "hook_outcomes",
+    "user_retrieval_memory",
+    "user_retrieval_pins",
+    "user_sequence_memory",
+  ]);
+  const hasHookOutcomes = availableTables.has("hook_outcomes");
+  const hasRetrievalMemory =
+    availableTables.has("user_retrieval_memory") &&
+    availableTables.has("user_retrieval_pins");
+  const hasSequenceMemory = availableTables.has("user_sequence_memory");
 
   const [
     totalResult,
@@ -127,30 +165,37 @@ export async function GET() {
         ),
       ),
 
-    db
-      .select({
-        generatedHookId: schema.generatedHooks.id,
-        sourceUrl: schema.generatedHooks.sourceUrl,
-        companyUrl: schema.generatedHooks.companyUrl,
-        event: schema.hookOutcomes.event,
-      })
-      .from(schema.generatedHooks)
-      .leftJoin(
-        schema.hookOutcomes,
-        and(
-          eq(schema.hookOutcomes.generatedHookId, schema.generatedHooks.id),
-          eq(schema.hookOutcomes.userId, userId),
-          gte(schema.hookOutcomes.createdAt, thirtyDaysAgo.toISOString()),
-        ),
-      )
-      .where(
-        and(
-          eq(schema.generatedHooks.userId, userId),
-          gte(schema.generatedHooks.createdAt, thirtyDaysAgo.toISOString()),
-        ),
-      ),
+    hasHookOutcomes
+      ? db
+          .select({
+            generatedHookId: schema.generatedHooks.id,
+            sourceUrl: schema.generatedHooks.sourceUrl,
+            companyUrl: schema.generatedHooks.companyUrl,
+            event: schema.hookOutcomes.event,
+          })
+          .from(schema.generatedHooks)
+          .leftJoin(
+            schema.hookOutcomes,
+            and(
+              eq(schema.hookOutcomes.generatedHookId, schema.generatedHooks.id),
+              eq(schema.hookOutcomes.userId, userId),
+              gte(schema.hookOutcomes.createdAt, thirtyDaysAgo.toISOString()),
+            ),
+          )
+          .where(
+            and(
+              eq(schema.generatedHooks.userId, userId),
+              gte(schema.generatedHooks.createdAt, thirtyDaysAgo.toISOString()),
+            ),
+          )
+      : Promise.resolve([]),
 
-    getRetrievalMemorySummary({ userId }),
+    hasRetrievalMemory
+      ? getRetrievalMemorySummary({ userId })
+      : Promise.resolve({
+          topSourcePreferences: [],
+          topTriggerPreferences: [],
+        }),
 
     db
       .select({ value: count() })
@@ -219,16 +264,18 @@ export async function GET() {
       .orderBy(sql`COALESCE(${schema.leads.lastContactedAt}, ${schema.leadSequences.startedAt}) ASC`)
       .limit(5),
 
-    db
-      .select({
-        channel: schema.userSequenceMemory.channel,
-        attemptCount: schema.userSequenceMemory.attemptCount,
-        positiveReplyCount: schema.userSequenceMemory.positiveReplyCount,
-        replyWinCount: schema.userSequenceMemory.replyWinCount,
-        noReplyCount: schema.userSequenceMemory.noReplyCount,
-      })
-      .from(schema.userSequenceMemory)
-      .where(eq(schema.userSequenceMemory.userId, userId)),
+    hasSequenceMemory
+      ? db
+          .select({
+            channel: schema.userSequenceMemory.channel,
+            attemptCount: schema.userSequenceMemory.attemptCount,
+            positiveReplyCount: schema.userSequenceMemory.positiveReplyCount,
+            replyWinCount: schema.userSequenceMemory.replyWinCount,
+            noReplyCount: schema.userSequenceMemory.noReplyCount,
+          })
+          .from(schema.userSequenceMemory)
+          .where(eq(schema.userSequenceMemory.userId, userId))
+      : Promise.resolve([]),
   ]);
 
   const hooksTotal = totalResult[0]?.value ?? 0;
