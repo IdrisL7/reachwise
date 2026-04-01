@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and, isNull } from "drizzle-orm";
+import { extractPreviousSequenceMetadata } from "@/lib/followup/generate";
 
 // GET /api/drafts — list pending drafts (lead-based + watchlist-based) for the current user
 export async function GET() {
@@ -19,6 +20,7 @@ export async function GET() {
       body: schema.outboundMessages.body,
       sequenceStep: schema.outboundMessages.sequenceStep,
       channel: schema.outboundMessages.channel,
+      metadata: schema.outboundMessages.metadata,
       createdAt: schema.outboundMessages.createdAt,
       leadName: schema.leads.name,
       leadEmail: schema.leads.email,
@@ -86,6 +88,12 @@ export async function GET() {
 
   const leadDrafts = leadRows.map((r) => {
     const seqInfo = sequenceMap.get(r.leadId);
+    const sequenceMetadata = extractPreviousSequenceMetadata(r.metadata);
+    const orchestration =
+      r.metadata && typeof r.metadata === "object"
+        ? ((r.metadata as { orchestration?: unknown }).orchestration as Record<string, unknown> | null) ?? null
+        : null;
+
     return {
       id: r.id,
       leadId: r.leadId,
@@ -100,6 +108,19 @@ export async function GET() {
       sequenceName: seqInfo?.sequenceName ?? null,
       sequenceTotalSteps: seqInfo?.totalSteps ?? null,
       channel: r.channel,
+      orchestration: orchestration
+        ? {
+            sequenceType: typeof orchestration.sequenceType === "string" ? orchestration.sequenceType : sequenceMetadata.sequenceType ?? null,
+            previousChannel: typeof orchestration.previousChannel === "string" ? orchestration.previousChannel : sequenceMetadata.previousChannel ?? null,
+            tone: typeof orchestration.tone === "string" ? orchestration.tone : sequenceMetadata.tone ?? null,
+            ctaStyle: typeof orchestration.ctaStyle === "string" ? orchestration.ctaStyle : null,
+            wordCountHint: typeof orchestration.wordCountHint === "number" ? orchestration.wordCountHint : null,
+            sendWindow: typeof orchestration.sendWindow === "string" ? orchestration.sendWindow : null,
+            reasoning: Array.isArray(orchestration.reasoning)
+              ? orchestration.reasoning.filter((item): item is string => typeof item === "string")
+              : [],
+          }
+        : null,
       source: "manual" as const,
       createdAt: r.createdAt,
     };

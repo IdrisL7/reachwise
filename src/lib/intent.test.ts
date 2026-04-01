@@ -10,24 +10,24 @@ import {
 
 describe("intent query builders", () => {
   it("builds hiring query with company name", () => {
-    const q = buildHiringQuery("Gong", "gong.io");
+    const q = buildHiringQuery("Gong");
     expect(q).toContain("Gong");
     expect(q).toContain("hiring");
-    expect(q).toContain("-site:gong.io");
+    expect(q).not.toContain("-site:gong.io");
   });
 
   it("builds funding query with company name", () => {
-    const q = buildFundingQuery("Gong", "gong.io");
+    const q = buildFundingQuery("Gong");
     expect(q).toContain("Gong");
     expect(q).toContain("funding");
-    expect(q).toContain("-site:gong.io");
+    expect(q).not.toContain("-site:gong.io");
   });
 
   it("builds tech change query with company name", () => {
-    const q = buildTechChangeQuery("Gong", "gong.io");
+    const q = buildTechChangeQuery("Gong");
     expect(q).toContain("Gong");
     expect(q).toContain("migrated");
-    expect(q).toContain("-site:gong.io");
+    expect(q).not.toContain("-site:gong.io");
   });
 });
 

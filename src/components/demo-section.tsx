@@ -159,12 +159,12 @@ const SHARED_EVIDENCE = {
 const SAMPLE_HOOKS_BY_ROLE: Record<string, { hooks: string[]; structured: StructuredHook[] }> = {
   "Any role": {
     hooks: [
-      "Saw Shopify's move into ChatGPT commerce — purchases now happening inside AI assistants. Platform shifts like this tend to surface new outreach opportunities before most teams notice. How are you identifying which accounts are most likely to act on this shift? We help outbound teams write personalised opening lines backed by real company signals.",
-      "Noticed Shopify partnering with OpenAI to enable in-chat purchases. Platform shifts like this tend to surface new outreach opportunities before most teams notice. Which of your target accounts are likely building AI commerce capabilities right now? We help outbound teams write personalised opening lines backed by real company signals.",
+      "Saw Shopify's move into ChatGPT commerce — purchases now happening inside AI assistants. Platform shifts like this tend to surface new outreach opportunities before most teams notice. How are you identifying which accounts are most likely to act on this shift? We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.",
+      "Noticed Shopify partnering with OpenAI to enable in-chat purchases. Platform shifts like this tend to surface new outreach opportunities before most teams notice. Which of your target accounts are likely building AI commerce capabilities right now? We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.",
     ],
     structured: [
-      { hook: "Saw Shopify's move into ChatGPT commerce — purchases now happening inside AI assistants. Platform shifts like this tend to surface new outreach opportunities before most teams notice. How are you identifying which accounts are most likely to act on this shift? We help outbound teams write personalised opening lines backed by real company signals.", angle: "trigger", psych_mode: "relevance", promise: "We help outbound teams write personalised opening lines backed by real company signals.", why_this_works: "Platform shift creates urgency for outbound teams", news_item: 1, ...SHARED_EVIDENCE },
-      { hook: "Noticed Shopify partnering with OpenAI to enable in-chat purchases. Platform shifts like this tend to surface new outreach opportunities before most teams notice. Which of your target accounts are likely building AI commerce capabilities right now? We help outbound teams write personalised opening lines backed by real company signals.", angle: "trigger", psych_mode: "curiosity_gap", promise: "We help outbound teams write personalised opening lines backed by real company signals.", why_this_works: "Curiosity gap on which accounts to prioritise", news_item: 2, ...SHARED_EVIDENCE },
+      { hook: "Saw Shopify's move into ChatGPT commerce — purchases now happening inside AI assistants. Platform shifts like this tend to surface new outreach opportunities before most teams notice. How are you identifying which accounts are most likely to act on this shift? We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.", angle: "trigger", psych_mode: "relevance", promise: "We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.", why_this_works: "Platform shift creates urgency for outbound teams", news_item: 1, ...SHARED_EVIDENCE },
+      { hook: "Noticed Shopify partnering with OpenAI to enable in-chat purchases. Platform shifts like this tend to surface new outreach opportunities before most teams notice. Which of your target accounts are likely building AI commerce capabilities right now? We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.", angle: "trigger", psych_mode: "curiosity_gap", promise: "We help outbound teams turn real company signals into better hooks, drafts, and follow-up workflow.", why_this_works: "Curiosity gap on which accounts to prioritise", news_item: 2, ...SHARED_EVIDENCE },
     ],
   },
   "VP Sales": {
@@ -248,7 +248,7 @@ const SAMPLE_HOOKS_BY_STYLE: Partial<Record<string, Partial<Record<string, { hoo
 };
 
 const ROLE_PITCH_DEFAULTS: Record<string, string> = {
-  "Any role":    "We help B2B sales teams write personalised opening lines backed by real company signals.",
+  "Any role":    "We help B2B sales teams turn real company signals into better hooks, drafts, and follow-up workflow.",
   "VP Sales":    "We help VP Sales leaders surface pipeline risk before it shows up in the forecast.",
   "RevOps":      "We help RevOps eliminate the spreadsheet layer between CRM and pipeline reality.",
   "SDR Manager": "We help SDR managers coach in real-time instead of reviewing last week.",
@@ -294,6 +294,12 @@ const ROLE_QUICK_ANGLES: Record<string, { label: string; value: string }[]> = {
     { label: "Revenue per SDR",      value: "We help founders increase revenue per SDR before the next hire." },
   ],
 };
+
+const DEMO_TRUST_POINTS = [
+  "Every hook is tied to a real source, not a made-up company summary.",
+  "Evidence tiers tell you whether to state a point directly or frame it as a verification question.",
+  "You can copy the hook alone or copy it with receipts for internal review.",
+];
 
 
 function DemoEmailGate({ onDismiss }: { onDismiss: () => void }) {
@@ -408,8 +414,6 @@ export function DemoSection() {
   >();
   const [companyStatus, setCompanyStatus] = useState<HookResponse["status"]>();
 
-  const [showUrlInput, setShowUrlInput] = useState(false);
-
   const [batchInput, setBatchInput] = useState("");
   const [batchResults, setBatchResults] = useState<BatchItemResult[] | null>(
     null,
@@ -478,7 +482,12 @@ export function DemoSection() {
         | null;
 
       if (!response.ok || !data) {
-        const message = data?.error || (data as any)?.message || "Failed to generate hooks.";
+        const message =
+          data?.error ||
+          (data && "message" in data && typeof data.message === "string"
+            ? data.message
+            : null) ||
+          "Failed to generate hooks.";
         throw new Error(message);
       }
 
@@ -721,6 +730,20 @@ export function DemoSection() {
           <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
             Paste a company URL or a news article about them, pick a role, and get hooks with receipts you can copy into outbound.
           </p>
+        </div>
+
+        <div className="mb-8 grid gap-3 md:grid-cols-3">
+          {DEMO_TRUST_POINTS.map((point, index) => (
+            <div
+              key={point}
+              className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4 text-sm leading-6 text-zinc-300"
+            >
+              <span className="mb-2 block text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-violet-300/80">
+                Proof {index + 1}
+              </span>
+              {point}
+            </div>
+          ))}
         </div>
 
         {/* Main demo card with gradient background */}

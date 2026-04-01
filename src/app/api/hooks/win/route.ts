@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { recordHookOutcome } from "@/lib/hook-feedback";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -33,6 +34,12 @@ export async function POST(request: Request) {
     event: "hook_generated", // closest available enum; tracks the win moment
     metadata: { hookId: body.hookId, type: "reply_win" },
   });
+
+  await recordHookOutcome({
+    hookId: body.hookId,
+    userId: session.user.id,
+    event: "reply_win",
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

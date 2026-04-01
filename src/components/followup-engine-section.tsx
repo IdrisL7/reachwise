@@ -1,26 +1,26 @@
 import { Reveal } from "./ui/reveal";
 
 const featured = {
-  title: "Drop into Apollo, Clay, Outreach, or any CRM via CSV",
+  title: "Turn one signal into a usable pipeline workflow",
   description:
-    "Export personalised openers + evidence anywhere. Single-company or batch mode (up to 20 URLs), full CSV with opener text, evidence snippet, source, date, and tier.",
+    "Generate the hook, turn it into a message, move the account into leads and sequences, then review drafts in Inbox with the evidence still attached. GetSignalHooks fits into Apollo, Clay, Outreach, Salesloft, or your CRM without replacing your stack.",
 };
 
 const others = [
   {
-    title: "Role-aware opening lines",
+    title: "Role-aware hooks and follow-ups",
     description:
-      "VP Sales vs RevOps vs Founder — pick the role and opening lines are framed for that buyer's priorities.",
+      "VP Sales vs RevOps vs Founder — the hook, message, and follow-up copy stay framed for that buyer's priorities.",
   },
   {
-    title: "Sources cited on every message",
+    title: "Sources cited through the workflow",
     description:
-      "Quote + source + date on every message. SDRs can defend what they send.",
+      "Quote + source + date stay attached from the first hook through the email draft, so reps can defend what they send.",
   },
   {
-    title: "Confidence scoring on every hook",
+    title: "Queue next actions, not just ideas",
     description:
-      "Tier A = first-party, fresh, anchored to the company. Tier B = secondary. Weak signals are labeled or skipped — never dressed up as strong ones.",
+      "Move from signal discovery to leads, drafts, approvals, and next steps without bouncing between tools or losing the account context.",
   },
 ];
 
@@ -37,7 +37,7 @@ export function FollowUpEngineSection() {
               id="features-heading"
               className="font-[family-name:var(--font-display)] text-[clamp(2rem,3vw,3rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white"
             >
-              What you get — without replacing your stack.
+              What you get after the hook is written.
             </h2>
           </div>
         </Reveal>

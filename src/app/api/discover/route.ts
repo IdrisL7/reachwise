@@ -5,6 +5,7 @@ import { checkDiscoveryQuota, checkFeature, featureError } from "@/lib/tier-guar
 import { discoverCompanies, type DiscoveryCriteria } from "@/lib/discovery";
 import { db, schema } from "@/lib/db";
 import { and, eq, desc } from "drizzle-orm";
+import { getClaudeApiKey } from "@/lib/env";
 
 export async function GET(request: Request) {
   try {
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
     }
 
     const exaApiKey = process.env.EXA_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (!exaApiKey || !claudeApiKey) {
       return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }

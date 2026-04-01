@@ -17,6 +17,9 @@ export type StructuredHook = {
   psych_mode?: PsychMode;
   why_this_works?: string;
   promise?: string;
+  buyer_tension_id?: string;
+  selector_score?: number;
+  ranking_score?: number;
 };
 
 export type CompanyResolutionStatus = "ok" | "needs_disambiguation" | "no_match";

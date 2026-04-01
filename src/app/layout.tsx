@@ -23,14 +23,14 @@ const syne = Syne({
 });
 
 export const metadata: Metadata = {
-  title: "GetSignalHooks — Signal-backed opening lines from any company URL",
+  title: "GetSignalHooks — Signal-backed outbound from real company signals",
   description:
-    "Generate personalised opening lines anchored on real company signals. Signal-backed outbound, follow-up automation, and CRM integrations for modern sales teams.",
+    "Find real company signals, generate buyer-aware messages, review drafts, and run signal-backed outbound workflow with evidence attached.",
   metadataBase: new URL("https://www.getsignalhooks.com"),
   openGraph: {
-    title: "GetSignalHooks — Signal-backed opening lines from any company URL",
+    title: "GetSignalHooks — Signal-backed outbound from real company signals",
     description:
-      "Generate personalised opening lines anchored on real company signals. Stop guessing, start sending messages worth reading.",
+      "Find real company signals, generate better messages, review drafts, and run outbound workflow with evidence attached.",
     url: "https://www.getsignalhooks.com",
     siteName: "GetSignalHooks",
     type: "website",
@@ -38,9 +38,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "GetSignalHooks — Signal-backed opening lines from any company URL",
+    title: "GetSignalHooks — Signal-backed outbound from real company signals",
     description:
-      "Signal-backed opening lines anchored on real company signals. 7-day free trial.",
+      "Signal-backed outbound workflow for modern sales teams. Free plan available with optional Pro upgrade.",
   },
   alternates: {
     canonical: "https://www.getsignalhooks.com",

@@ -62,13 +62,13 @@ export function HeroSection() {
           <div>
             <Reveal delay={0}>
               <h1 id="hero-heading" className="font-[family-name:var(--font-display)] text-[clamp(2.75rem,5vw,5rem)] font-bold leading-[1.02] tracking-[-0.02em] text-white">
-                Cold outreach that cites its sources.
+                Signal-backed outbound that shows its work.
               </h1>
             </Reveal>
 
             <Reveal delay={0.08}>
               <p className="mt-6 max-w-xl text-[clamp(1.0625rem,1.5vw,1.25rem)] leading-[1.55] text-zinc-400">
-                Type a company name. We find a real signal &mdash; a funding round, a new hire, an expansion &mdash; and write a personalised opening line with the source cited.
+                Start with a company. We find a real signal, generate buyer-aware hooks and messages, and carry the evidence through review and follow-up so your team can act with confidence.
               </p>
             </Reveal>
 

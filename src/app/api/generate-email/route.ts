@@ -8,6 +8,7 @@ import {
 } from "@/lib/hooks";
 import { auth } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getClaudeApiKey } from "@/lib/env";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -275,7 +276,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (!claudeApiKey) {
       return NextResponse.json(
         { error: "Server misconfiguration: missing CLAUDE_API_KEY." },

@@ -85,14 +85,14 @@ export function PricingSection() {
         <Reveal>
           <div className="mx-auto max-w-2xl text-center">
             <p className="mb-4 text-[0.9375rem] font-semibold text-zinc-500">
-              Free forever · upgrade when you're ready
+              Free plan available · upgrade when you're ready
             </p>
             <h2 id="pricing-heading" className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
               No migration. No lock-in. Just better outbound.
             </h2>
             <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
               Keep your existing lists and tools. Use GetSignalHooks as the
-              signal-backed layer that makes your messages worth sending.
+              signal-backed workflow layer that helps your team decide what to send, what to review, and what to work next.
             </p>
           </div>
         </Reveal>

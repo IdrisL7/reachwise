@@ -12,7 +12,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse } from "next/server";
 import {
   fetchSourcesWithGating,
-  fetchUserProvidedSource,
+  generateHookPayloadsFromSources,
   publishGate,
   publishGateFinal,
   roleTokenGate,
@@ -36,13 +36,8 @@ import {
 } from "@/lib/hooks";
 
 // Import optimized modules
-import { PerformanceMonitor, callExternalAPI, circuitBreakers } from "@/lib/performance-utils";
+import { PerformanceMonitor, callExternalAPI } from "@/lib/performance-utils";
 import { EnhancedCache } from "@/lib/enhanced-cache";
-import { 
-  callOptimizedClaude, 
-  buildOptimizedSystemPrompt, 
-  buildOptimizedUserPrompt 
-} from "@/lib/optimized-claude";
 
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
@@ -53,10 +48,51 @@ import { checkHookQuota, incrementHookUsage, tierError } from "@/lib/tier-guard"
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
 import { getClaudeApiKey } from "@/lib/env";
+import { getHookSelectorPriors } from "@/lib/hook-feedback";
+import { hasFeature } from "@/lib/tiers";
+import {
+  ensureAccountV2,
+  inferSourceTypeForV2,
+  persistHookMessagesV2,
+  persistSignalsV2,
+} from "@/lib/v2-dual-write";
+import {
+  buildRetrievalDiagnostics,
+  buildRetrievalPlan,
+  prioritizeRetrievalSources,
+} from "@/lib/retrieval-plan";
 
 // ---------------------------------------------------------------------------
 // Helper Functions (optimized versions)
 // ---------------------------------------------------------------------------
+
+function summarizeSelectorRetrievalPreferences(selectorPriors?: Awaited<ReturnType<typeof getHookSelectorPriors>>) {
+  const topSourcePreferences = Object.entries(selectorPriors?.sourceTypeBoosts ?? {})
+    .map(([sourceType, adjustment]) => ({
+      sourceType: sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web",
+      adjustment: adjustment ?? 0,
+      pinned: selectorPriors?.pinnedSourceTypes?.[sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web"] ?? false,
+    }))
+    .sort((a, b) => b.adjustment - a.adjustment)
+    .slice(0, 4);
+
+  const topTriggerPreferences = Object.entries(selectorPriors?.triggerSourceTypeBoosts ?? {})
+    .flatMap(([triggerType, boosts]) =>
+      Object.entries(boosts ?? {}).map(([sourceType, adjustment]) => ({
+        triggerType,
+        sourceType: sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web",
+        adjustment: adjustment ?? 0,
+        pinned: selectorPriors?.pinnedTriggerSourceTypes?.[triggerType]?.[sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web"] ?? false,
+      })),
+    )
+    .sort((a, b) => b.adjustment - a.adjustment)
+    .slice(0, 6);
+
+  return {
+    topSourcePreferences,
+    topTriggerPreferences,
+  };
+}
 
 function enforceCitationTiers(citations: any[], companyDomain: string): any[] {
   return citations.map((c) => {
@@ -245,6 +281,19 @@ export async function POST(request: Request) {
     let hasAnchored = true;
     let hookVariants: any[] = [];
     let cached = false;
+    let retrievalDiagnostics = buildRetrievalDiagnostics([], {
+      targetDomain: companyDomain || null,
+      lowSignal: false,
+      hasAnchoredSources: false,
+    });
+    const selectorPriors = !isDemo && session?.user?.id
+      ? await getHookSelectorPriors({
+          userId: session.user.id,
+          companyUrl: url,
+          targetRole: targetRole ?? null,
+        }).catch(() => undefined)
+      : undefined;
+    const retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
 
     if (cachedHooks) {
       console.log(`[${traceId}] Cache HIT - returning cached hooks`);
@@ -263,6 +312,11 @@ export async function POST(request: Request) {
 
       // **PARALLEL OPERATIONS** - run independent operations in parallel
       PerformanceMonitor.start(`parallel-operations-${traceId}`);
+      const retrievalPlan = buildRetrievalPlan({
+        targetDomain: companyDomain || null,
+        hasIntentSignals: hasFeature(tierId, "intentScoring"),
+        userProvidedUrl: Boolean(rawUrl),
+      });
       
       const parallelOps = [
         // Core source fetching
@@ -278,7 +332,7 @@ export async function POST(request: Request) {
         ),
         
         // Intent signals for Pro (run in parallel)
-        (tierId === "pro") 
+        hasFeature(tierId, "intentScoring")
           ? EnhancedCache.getIntentSignals(url, companyName || companyDomain || "") ||
             callExternalAPI(
               () => researchIntentSignals(url, companyName || companyDomain || "", exaApiKey, claudeApiKey),
@@ -292,7 +346,7 @@ export async function POST(request: Request) {
         // Company intelligence (run in parallel)  
         EnhancedCache.getCompanyIntel(url) ||
         callExternalAPI(
-          () => getCompanyIntelligence(url, exaApiKey, claudeApiKey, tierId === "pro"),
+          () => getCompanyIntelligence(url, exaApiKey, claudeApiKey, hasFeature(tierId, "companyIntel")),
           { name: 'company-intel', timeout: 8000, retries: 1 }
         ).then(intel => {
           EnhancedCache.setCompanyIntel(url, intel);
@@ -303,17 +357,29 @@ export async function POST(request: Request) {
       const [sourceResult, intentSignals, companyIntel] = await Promise.all(parallelOps);
       PerformanceMonitor.end(`parallel-operations-${traceId}`);
 
-      const sources = sourceResult.sources;
+      const sources = prioritizeRetrievalSources(
+        sourceResult.sources as ClassifiedSource[],
+        companyDomain || null,
+      );
       signalCount = sourceResult.signalCount;
       hasAnchored = sourceResult.hasAnchoredSources;
       isLowSignal = sourceResult.lowSignal;
 
       console.log(`[${traceId}] Parallel operations complete:`, {
+        retrievalPlan,
         sources: sources.length,
         intentSignals: intentSignals.length,
         hasCompanyIntel: !!companyIntel,
         hasAnchored,
         isLowSignal,
+      });
+
+      retrievalDiagnostics = buildRetrievalDiagnostics(sources, {
+        targetDomain: companyDomain || null,
+        lowSignal: sourceResult.lowSignal,
+        hasAnchoredSources: sourceResult.hasAnchoredSources,
+        recoveryAttempted: sourceResult._diagnostics.recoveryAttempted,
+        newsExpansionAttempted: sourceResult._diagnostics.newsExpansionAttempted,
       });
 
       // Check if we have usable sources
@@ -335,9 +401,6 @@ export async function POST(request: Request) {
 
       const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
       
-      // Use optimized prompts
-      const systemPrompt = buildOptimizedSystemPrompt(senderContext, targetRole, customPersona);
-      
       const intentSignalInputs: IntentSignalInput[] = intentSignals
         .filter((s: any) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
         .map((s: any) => ({
@@ -348,24 +411,21 @@ export async function POST(request: Request) {
           tier: s.confidence >= 0.8 ? ("A" as const) : ("B" as const),
         }));
 
-      const userPrompt = buildOptimizedUserPrompt(
-        url, 
-        sources, 
-        context,
-        intentSignalInputs.length > 0 ? intentSignalInputs : undefined
-      );
-
-      console.log(`[${traceId}] Calling Claude with optimized prompts:`, {
-        systemPromptLength: systemPrompt.length,
-        userPromptLength: userPrompt.length,
+      console.log(`[${traceId}] Calling Claude with interpreter/composer pipeline:`, {
         sources: sources.length,
         intentSignals: intentSignalInputs.length,
       });
 
-      const rawHooks = await callOptimizedClaude(systemPrompt, userPrompt, claudeApiKey, {
-        timeout: 15000,
-        retries: 1,
-        compressPrompt: true,
+      const { rawHooks } = await generateHookPayloadsFromSources({
+        url,
+        sources,
+        apiKey: claudeApiKey,
+        context,
+        senderContext,
+        targetRole,
+        customPersona,
+        intentSignals: intentSignalInputs.length > 0 ? intentSignalInputs : undefined,
+        retrievalLibrary: selectorPriors?.retrievalLibrary,
       });
 
       PerformanceMonitor.end(`claude-call-${traceId}`);
@@ -397,7 +457,7 @@ export async function POST(request: Request) {
       }));
 
       // Generate variants for Pro (async, don't block response)
-      if (candidateHooks.length > 0 && (tierId === "pro")) {
+      if (candidateHooks.length > 0 && hasFeature(tierId, "multiChannel")) {
         generateChannelVariants(candidateHooks, claudeApiKey, targetRole)
           .then(withVars => {
             hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
@@ -417,6 +477,25 @@ export async function POST(request: Request) {
       citations = enforceCitationTiers(citations, companyDomain);
     }
 
+    if (citations.length > 0) {
+      retrievalDiagnostics = buildRetrievalDiagnostics(
+        citations.map((citation) => ({
+          url: citation.url,
+          tier: citation.tier as ClassifiedSource["tier"],
+          anchorScore: citation.anchorScore,
+          entity_hit_score: undefined,
+          stale: false,
+        })),
+        {
+          targetDomain: companyDomain || null,
+          lowSignal: isLowSignal,
+          hasAnchoredSources: hasAnchored,
+          newsExpansionAttempted: false,
+          usedCachedResult: cached,
+        },
+      );
+    }
+
     candidateHooks = candidateHooks.map((h: Hook) => {
       if (h.evidence_tier !== "A") return h;
       if (!h.source_url || !companyDomain) return h;
@@ -429,18 +508,21 @@ export async function POST(request: Request) {
     });
 
     // Rank and cap hooks
-    const { top, overflow } = rankAndCap(candidateHooks, 3);
+    const { top, overflow } = rankAndCap(candidateHooks, 3, {
+      targetRole: targetRole ?? null,
+      selectorPriors,
+    });
 
     // Apply quality scoring
-    const finalTop = top.map((hook: Hook) => {
+    let finalTop = top.map((hook: Hook) => {
       const quality = scoreHookQuality(hook, companyDomain);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
+    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
 
-    const finalOverflow = overflow.map((hook: Hook) => {
+    let finalOverflow = overflow.map((hook: Hook) => {
       const quality = scoreHookQuality(hook, companyDomain);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
+    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
 
     // Determine suggestions
     let suggestion: string | undefined;
@@ -467,6 +549,16 @@ export async function POST(request: Request) {
       lowSignal: finalLowSignal,
     });
 
+    const resolvedCompany = resolution && resolution.candidates[0]
+      ? {
+          id: resolution.candidates[0].id,
+          name: resolution.candidates[0].name,
+          url: resolution.candidates[0].url,
+          description: resolution.candidates[0].description,
+          source: resolution.candidates[0].source,
+        }
+      : null;
+
     // Increment hook quota AFTER successful generation (not before)
     if (!isDemo && !cached && session?.user?.id && (finalTop.length > 0 || finalOverflow.length > 0)) {
       try {
@@ -478,18 +570,94 @@ export async function POST(request: Request) {
         console.error(`[${traceId}] Failed to increment hook usage:`, quotaErr);
         return tierError("Unable to record hook usage right now. Please try again.", "USAGE_WRITE_FAILED");
       }
-    }
 
-    // Build response
-    const resolvedCompany = resolution && resolution.candidates[0]
-      ? {
-          id: resolution.candidates[0].id,
-          name: resolution.candidates[0].name,
-          url: resolution.candidates[0].url,
-          description: resolution.candidates[0].description,
-          source: resolution.candidates[0].source,
+      try {
+        const batchId = crypto.randomUUID();
+        const allHooks = [...finalTop, ...finalOverflow];
+        const inserted = await db.insert(schema.generatedHooks).values(
+          allHooks.map((h) => ({
+            userId: session.user.id,
+            batchId,
+            companyUrl: url,
+            companyName: companyName || resolvedCompany?.name || null,
+            hookText: h.hook,
+            angle: h.angle,
+            confidence: h.confidence,
+            evidenceTier: h.evidence_tier,
+            qualityScore: h.quality_score ?? scoreHookQuality(h, companyDomain),
+            sourceSnippet: h.evidence_snippet || null,
+            sourceUrl: h.source_url || null,
+            sourceTitle: h.source_title || null,
+            sourceDate: h.source_date || null,
+            triggerType: h.trigger_type || null,
+            promise: h.promise || null,
+            bridgeQuality: h.bridge_quality || null,
+            buyerTensionId: h.buyer_tension_id || null,
+            structuralVariant: h.structural_variant || null,
+            targetRole: targetRole ?? null,
+            selectorScore: h.selector_score ?? null,
+            rankingScore: h.ranking_score ?? null,
+            roleFitScore: h.role_fit_score ?? null,
+            nonOverlapScore: h.non_overlap_score ?? null,
+          })),
+        ).returning({ id: schema.generatedHooks.id });
+
+        const topLen = finalTop.length;
+        finalTop = finalTop.map((h, i) => ({ ...h, generated_hook_id: inserted[i]?.id }));
+        finalOverflow = finalOverflow.map((h, i) => ({ ...h, generated_hook_id: inserted[topLen + i]?.id }));
+
+        try {
+          const accountId = await ensureAccountV2({
+            userId: session.user.id,
+            companyUrl: url,
+            companyName: companyName || resolvedCompany?.name || null,
+          });
+
+          await persistSignalsV2({
+            accountId,
+            signals: allHooks.map((h, index) => ({
+              sourceUrl: h.source_url || null,
+              sourceType: inferSourceTypeForV2({
+                companyUrl: url,
+                sourceUrl: h.source_url || null,
+                evidenceTier: h.evidence_tier,
+              }),
+              triggerType: h.trigger_type || null,
+              title: h.source_title || null,
+              snippet: h.evidence_snippet || null,
+              publishedAt: h.source_date || null,
+              evidenceTier: h.evidence_tier,
+              metadata: {
+                generatedHookId: inserted[index]?.id ?? null,
+                batchId,
+                angle: h.angle,
+              },
+            })),
+          });
+
+          await persistHookMessagesV2({
+            accountId,
+            hooks: allHooks.map((h, index) => ({
+              generatedHookId: inserted[index]?.id ?? null,
+              body: h.hook,
+              channel: "email",
+              rationale: h.why_this_works || null,
+              sourceUrl: h.source_url || null,
+              sourceTitle: h.source_title || null,
+              sourceSnippet: h.evidence_snippet || null,
+              sourceDate: h.source_date || null,
+              triggerType: h.trigger_type || null,
+              targetRole: targetRole ?? null,
+              angle: h.angle,
+            })),
+          });
+        } catch (dualWriteErr) {
+          console.error(`[${traceId}] Failed to dual-write v2 signals:`, dualWriteErr);
         }
-      : null;
+      } catch (persistErr) {
+        console.error(`[${traceId}] Failed to persist generated hooks:`, persistErr);
+      }
+    }
 
     return NextResponse.json({
       hooks: finalTop.map((h: Hook) => h.hook),
@@ -506,6 +674,10 @@ export async function POST(request: Request) {
       cached,
       targetRole: targetRole || "General",
       hookVariants,
+      retrievalDiagnostics: {
+        ...retrievalDiagnostics,
+        learnedPreferences: retrievalPreferenceSummary,
+      },
       _performance: {
         totalTime,
         cached,

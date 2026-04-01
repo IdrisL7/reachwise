@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { eq, and, desc } from "drizzle-orm";
 import { classifyReply, generateSuggestedResponse } from "@/lib/reply-analysis";
+import { getClaudeApiKey } from "@/lib/env";
+import { inferHookOutcomeFromReply, recordHookOutcome } from "@/lib/hook-feedback";
+import { extractPreviousHookMetadata, extractPreviousSequenceMetadata, inferTargetRoleFromLead } from "@/lib/followup/generate";
+import { getLeadSegmentKey, recordSequenceOutcome } from "@/lib/followup/sequence-memory";
 
 export async function POST(request: NextRequest) {
   // Auth check — SendGrid Inbound Parse doesn't support HMAC signing
@@ -63,6 +67,25 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
 
+    const prevMessages = await db
+      .select()
+      .from(schema.outboundMessages)
+      .where(eq(schema.outboundMessages.leadId, lead.id))
+      .orderBy(desc(schema.outboundMessages.createdAt))
+      .limit(8);
+
+    const recentAttributedOutbound = prevMessages.find((message) => {
+      if (message.direction !== "outbound") return false;
+      const metadata = extractPreviousHookMetadata(message.metadata);
+      return Boolean(metadata?.hookId || metadata?.hookText);
+    });
+    const recentHookMetadata = recentAttributedOutbound
+      ? extractPreviousHookMetadata(recentAttributedOutbound.metadata)
+      : null;
+    const recentSequenceMetadata = recentAttributedOutbound
+      ? extractPreviousSequenceMetadata(recentAttributedOutbound.metadata)
+      : {};
+
     // Store inbound message
     const [msg] = await db
       .insert(schema.outboundMessages)
@@ -105,18 +128,11 @@ export async function POST(request: NextRequest) {
       );
 
     // Classify reply
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (claudeApiKey) {
-      const prevMessages = await db
-        .select()
-        .from(schema.outboundMessages)
-        .where(eq(schema.outboundMessages.leadId, lead.id))
-        .orderBy(desc(schema.outboundMessages.createdAt))
-        .limit(5);
-
       const classification = await classifyReply(
         cleanedText,
-        null,
+        recentHookMetadata?.hookText ?? null,
         prevMessages.map((m) => ({ direction: m.direction, body: m.body })),
         claudeApiKey,
       );
@@ -134,6 +150,62 @@ export async function POST(request: NextRequest) {
             },
           })
           .where(eq(schema.outboundMessages.id, msg.id));
+      }
+
+      const hookOutcomeEvent = inferHookOutcomeFromReply(classification);
+      if (lead.userId && recentHookMetadata?.hookId && hookOutcomeEvent) {
+        await recordHookOutcome({
+          hookId: recentHookMetadata.hookId,
+          userId: lead.userId,
+          event: hookOutcomeEvent,
+          metadata: {
+            channel: "email",
+            inboundMessageId: msg?.id ?? null,
+            replyCategory: classification.category,
+            replySentiment: classification.sentiment,
+            suggestedAction: classification.suggestedAction,
+          },
+        }).catch(() => {});
+      }
+
+      if (
+        lead.userId &&
+        recentAttributedOutbound &&
+        (recentAttributedOutbound.channel === "email" ||
+          recentAttributedOutbound.channel === "linkedin_connection" ||
+          recentAttributedOutbound.channel === "linkedin_message" ||
+          recentAttributedOutbound.channel === "cold_call" ||
+          recentAttributedOutbound.channel === "video_script")
+      ) {
+        const mappedSequenceEvent =
+          classification.category === "interested"
+            ? "reply_win"
+            : classification.category === "unsubscribe"
+              ? "unsubscribe"
+              : classification.category === "wrong_person"
+                ? "wrong_person"
+                : classification.suggestedAction === "respond" && classification.sentiment !== "negative"
+                  ? "positive_reply"
+                  : null;
+
+        if (mappedSequenceEvent) {
+          await recordSequenceOutcome({
+            userId: lead.userId,
+            targetRole: inferTargetRoleFromLead({
+              email: lead.email,
+              title: lead.title,
+            }),
+            leadSegment: getLeadSegmentKey({
+              title: lead.title,
+              source: lead.source,
+              companyWebsite: lead.companyWebsite,
+            }),
+            sequenceType: recentSequenceMetadata.sequenceType ?? (recentAttributedOutbound.sequenceStep === 0 ? "first" : "bump"),
+            channel: recentAttributedOutbound.channel,
+            previousChannel: recentSequenceMetadata.previousChannel ?? null,
+            event: mappedSequenceEvent,
+          }).catch(() => {});
+        }
       }
 
       // Create notification

@@ -7,7 +7,7 @@ export function WhoItsForSection() {
             Who it is for
           </p>
           <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-            Built for people who live in the inbox
+            Built for teams running outbound every day
           </h2>
         </div>
 
@@ -15,15 +15,15 @@ export function WhoItsForSection() {
           {[
             {
               title: "SDRs & BDRs",
-              desc: "Signal-backed opening lines across email, LinkedIn, and calls. Approve drafts in your inbox or let sequences run fully autonomous.",
+              desc: "Signal-backed hooks and messages across email, LinkedIn, and calls. Move from research to review-ready drafts without losing the account context.",
             },
             {
-              title: "Agency owners",
-              desc: "Multi-channel sequences with intent scoring across all your clients. Scale personalized outreach without sinking hours into research.",
+              title: "Revenue teams",
+              desc: "Keep accounts, leads, Inbox, and analytics in one workflow. Scale personalized outbound without turning your reps into researchers.",
             },
             {
-              title: "Founders",
-              desc: "Autonomous outbound that prioritizes hot leads and runs multi-step sequences while you focus on closing.",
+              title: "Founders & GTM leaders",
+              desc: "See where momentum is building, what needs follow-up, and which accounts are stalling so you can focus on the highest-leverage next move.",
             },
           ].map((item) => (
             <div

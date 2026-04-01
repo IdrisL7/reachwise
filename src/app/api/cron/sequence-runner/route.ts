@@ -3,7 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { db, schema } from "@/lib/db";
 import { eq, and, gte } from "drizzle-orm";
 import { resolveSequence } from "@/lib/followup/sequences";
-import { generateFollowUp } from "@/lib/followup/generate";
+import { extractPreviousHookMetadata, generateFollowUp } from "@/lib/followup/generate";
 import type { SequenceStep } from "@/lib/db/schema";
 
 const BATCH_LIMIT = 25;
@@ -228,14 +228,17 @@ export async function GET(req: NextRequest) {
               title: lead.title,
               companyName: lead.companyName,
               companyWebsite: lead.companyWebsite,
+              source: lead.source,
               email: lead.email,
             },
             previousMessages: previousMessages.map((m) => ({
               direction: m.direction,
               sequenceStep: m.sequenceStep,
+              channel: m.channel,
               subject: m.subject,
               body: m.body,
               sentAt: m.sentAt,
+              metadata: extractPreviousHookMetadata(m.metadata),
             })),
             sequence: sequenceConfig,
             currentStep,
@@ -251,13 +254,18 @@ export async function GET(req: NextRequest) {
             leadId: lead.id,
             direction: "outbound",
             sequenceStep: currentStep,
-            channel: step.channel,
+            channel: result.channel,
             subject: result.subject ?? null,
             body: result.body,
             status: "draft",
             metadata: JSON.stringify({
               hookUsed: result.hookUsed,
+              hookId: result.hookUsed?.generatedHookId ?? null,
+              sequenceType: result.orchestration?.sequenceType ?? null,
+              previousChannel: result.orchestration?.previousChannel ?? null,
+              tone: result.orchestration?.tone ?? null,
               hookSource: result.hookSource,
+              orchestration: result.orchestration,
               runId,
               generatedAt: nowISO,
             }),

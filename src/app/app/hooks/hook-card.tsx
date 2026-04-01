@@ -26,6 +26,8 @@ interface Hook {
   promise?: string;
   trigger_type?: string;
   bridge_quality?: string;
+  buyer_tension_id?: string;
+  selector_score?: number;
 }
 
 interface GeneratedEmail {
@@ -108,11 +110,14 @@ interface HookCardProps {
   pushedToCrm?: boolean;
   showCrmPush?: boolean;
   userTierId?: string;
-  onCopyHook: (text: string, index: number) => void;
+  isRecommended?: boolean;
+  onCopyHook: (hook: Hook, index: number) => void;
   onCopyHookWithEvidence: (hook: Hook, index: number) => void;
   onGenerateEmail: (hook: Hook, index: number) => void;
   onCopyEmail: (email: GeneratedEmail, index: number) => void;
   onPushToCrm?: (hook: Hook, index: number) => void;
+  onLeadSaved?: () => void;
+  onSequenceStarted?: () => void;
 }
 
 export function HookCard({
@@ -135,11 +140,14 @@ export function HookCard({
   pushedToCrm,
   showCrmPush,
   userTierId,
+  isRecommended,
   onCopyHook,
   onCopyHookWithEvidence,
   onGenerateEmail,
   onCopyEmail,
   onPushToCrm,
+  onLeadSaved,
+  onSequenceStarted,
 }: HookCardProps) {
   const [showDetails, setShowDetails] = useState(false);
   const [sharingHook, setSharingHook] = useState(false);
@@ -147,6 +155,11 @@ export function HookCard({
   const [wonReply, setWonReply] = useState(false);
   const [showSharePrompt, setShowSharePrompt] = useState(false);
   const [savedTemplate, setSavedTemplate] = useState<"idle" | "saving" | "saved">("idle");
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadError, setLeadError] = useState<string | null>(null);
+  const [leadSuccess, setLeadSuccess] = useState(false);
+  const [leadForm, setLeadForm] = useState({ email: "", name: "" });
 
   // Send Sequence modal state
   const [seqModalOpen, setSeqModalOpen] = useState(false);
@@ -156,6 +169,15 @@ export function HookCard({
   const [seqError, setSeqError] = useState<string | null>(null);
   const [seqSuccess, setSeqSuccess] = useState(false);
   const [seqForm, setSeqForm] = useState({ email: "", name: "", sequenceId: "" });
+
+  function trackHookFeedback(event: string, metadata?: Record<string, unknown>) {
+    if (!hook.generated_hook_id) return;
+    fetch("/api/hooks/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hookId: hook.generated_hook_id, event, metadata }),
+    }).catch(() => {});
+  }
 
   async function handleShare() {
     if (!hook.generated_hook_id) return;
@@ -190,21 +212,59 @@ export function HookCard({
     }).catch(() => {});
   }
 
-  async function saveAsTemplate() {
-    setSavedTemplate("saving");
+  async function handleSaveLead(e: React.FormEvent) {
+    e.preventDefault();
+    if (!leadForm.email.trim()) return;
+    setLeadSubmitting(true);
+    setLeadError(null);
     try {
-      await fetch("/api/templates", {
+      const res = await fetch("/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          hookText: hook.text,
-          angle: hook.angle,
-          promise: hook.promise,
-          companyUrl: companyUrl || (companyDomain ? `https://${companyDomain}` : undefined),
-          companyName: companyName || companyDomain,
+          leads: [{
+            email: leadForm.email.trim(),
+            name: leadForm.name.trim() || undefined,
+            company_website: companyUrl || (companyDomain ? `https://${companyDomain}` : undefined),
+            company_name: companyName || companyDomain || undefined,
+            source: "hook_saved_lead",
+          }],
         }),
       });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.message || data?.error || "Failed to save lead");
+      setLeadSuccess(true);
+      trackHookFeedback("saved_lead");
+      onLeadSaved?.();
+    } catch (err: any) {
+      setLeadError(err?.message || "Failed to save lead");
+    } finally {
+      setLeadSubmitting(false);
+    }
+  }
+
+  async function saveAsTemplate() {
+    setSavedTemplate("saving");
+    try {
+      const signal = hook.source_title || companyName || companyDomain || "Saved hook";
+      const trigger = hook.trigger_type || hook.angle || "signal";
+      const titleBase = companyName || companyDomain || "Saved hook";
+      const res = await fetch("/api/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: `${titleBase} — ${trigger}`,
+          signal,
+          trigger,
+          hook: hook.text,
+          promise: hook.promise,
+        }),
+      });
+      if (!res.ok) {
+        throw new Error("Failed to save template");
+      }
       setSavedTemplate("saved");
+      trackHookFeedback("saved");
     } catch {
       setSavedTemplate("idle");
     }
@@ -254,6 +314,7 @@ export function HookCard({
       if (!leadRes.ok) throw new Error(leadData?.message || "Failed to create lead");
       const leadId = leadData.leads?.[0]?.id;
       if (!leadId) throw new Error("Lead was not created — the email may already exist.");
+      onLeadSaved?.();
 
       // 2. Assign lead to sequence
       const assignRes = await fetch("/api/lead-sequences", {
@@ -269,6 +330,7 @@ export function HookCard({
       if (!assignRes.ok) throw new Error(assignData?.error || "Failed to assign sequence");
 
       setSeqSuccess(true);
+      onSequenceStarted?.();
     } catch (err: any) {
       setSeqError(err?.message || "Something went wrong");
     } finally {
@@ -320,6 +382,9 @@ export function HookCard({
     >
       {/* Badges row — always visible: Quality label, Angle, Freshness, Role */}
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+        {isRecommended && (
+          <Badge variant="fresh">Recommended</Badge>
+        )}
         {hook.quality_label && (
           <Badge variant={qualityVariant(hook.quality_label)}>{hook.quality_label}</Badge>
         )}
@@ -443,25 +508,36 @@ export function HookCard({
 
       {/* Evidence */}
       {hook.source_snippet && (
-        <div className="text-xs text-[#878a8f] italic border-l-2 border-amber-500/30 pl-3 mb-3 bg-amber-500/[0.03] py-2 rounded-r">
-          <p>{hook.source_snippet}</p>
-          {hook.source_url && (
-            <a
-              href={hook.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="not-italic text-zinc-600 hover:text-zinc-400 underline underline-offset-2 transition-colors mt-1 block truncate"
-            >
-              {hook.source_title || hook.source_url}
-            </a>
-          )}
+        <div className="mb-3 rounded-xl border border-amber-500/15 bg-amber-500/[0.04] p-3">
+          <div className="flex flex-wrap items-center gap-2 mb-2 text-[10px] uppercase tracking-[0.16em] text-amber-300/80">
+            <span>Why it passed</span>
+            <span className="text-zinc-600">•</span>
+            <span>Quoted evidence</span>
+            {hook.evidence_tier && <><span className="text-zinc-600">•</span><span>Tier {hook.evidence_tier}</span></>}
+            {freshness && <><span className="text-zinc-600">•</span><span>{freshness.label}</span></>}
+          </div>
+          <p className="text-sm italic leading-6 text-[#d5d1c7]">{hook.source_snippet}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+            {hook.source_title && <span>{hook.source_title}</span>}
+            {hook.source_date && <span>{hook.source_date}</span>}
+            {hook.source_url && (
+              <a
+                href={hook.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-zinc-400 hover:text-zinc-200 underline underline-offset-2 transition-colors"
+              >
+                Open source
+              </a>
+            )}
+          </div>
         </div>
       )}
 
       {/* Action buttons */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#252830]">
         <button
-          onClick={() => onCopyHook(hook.text, index)}
+          onClick={() => onCopyHook(hook, index)}
           className="text-xs font-medium px-3 py-1.5 rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100 transition-colors"
         >
           {copied === index ? "Copied!" : "Copy Hook"}
@@ -488,6 +564,16 @@ export function HookCard({
         >
           {generatingEmail === index ? "Writing..." : generatedEmails[index] ? "Regenerate Email" : "Generate Email"}
         </button>
+        <button
+          onClick={() => {
+            setLeadModalOpen(true);
+            setLeadError(null);
+            setLeadSuccess(false);
+          }}
+          className="text-xs font-medium px-3 py-1.5 rounded-lg border border-sky-800/60 bg-sky-900/20 text-sky-300 hover:bg-sky-900/40 hover:text-sky-200 transition-colors"
+        >
+          {leadSuccess ? "Lead Saved" : "Save Lead"}
+        </button>
         {generatedEmails[index] && (
           <button
             onClick={() => onCopyEmail(generatedEmails[index], index)}
@@ -510,7 +596,7 @@ export function HookCard({
             onClick={() => setSeqModalOpen(true)}
             className="text-xs font-medium px-3 py-1.5 rounded-lg border border-emerald-800/60 bg-emerald-900/20 text-emerald-400 hover:bg-emerald-900/40 hover:text-emerald-300 transition-colors"
           >
-            Send Sequence
+            Add to Sequence
           </button>
         )}
         {hook.generated_hook_id && !wonReply && (
@@ -527,14 +613,14 @@ export function HookCard({
         <button
           onClick={saveAsTemplate}
           disabled={savedTemplate !== "idle"}
-          title="Save to My Templates"
+          title="Save this hook to My Templates"
           className={`text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:cursor-default ml-auto ${
             savedTemplate === "saved"
               ? "border-violet-700 bg-violet-900/20 text-violet-400"
               : "border-zinc-700 bg-zinc-800 text-zinc-500 hover:text-zinc-300 disabled:opacity-60"
           }`}
         >
-          {savedTemplate === "saved" ? "Saved" : savedTemplate === "saving" ? "Saving..." : "Save"}
+          {savedTemplate === "saved" ? "Template Saved" : savedTemplate === "saving" ? "Saving..." : "Save Template"}
         </button>
       </div>
 
@@ -551,6 +637,17 @@ export function HookCard({
         </div>
       )}
 
+      {(generatedEmails[index] || leadSuccess || seqSuccess) && (
+        <div className="mt-3 rounded-lg border border-white/[0.06] bg-black/20 px-3 py-2 text-xs text-[#a3a7ad]">
+          <span className="font-medium text-white">Next step:</span>{" "}
+          {seqSuccess
+            ? "Open Inbox to approve the first draft from this sequence."
+            : generatedEmails[index]
+              ? "Save a lead or add this account to a sequence so the draft turns into workflow, not just copy."
+              : "Use this hook to create the next workflow step."}
+        </div>
+      )}
+
       {/* Generated email */}
       {generatedEmails[index] && (
         <div className="mt-3 bg-[#0e0f10] border border-[#252830] rounded-lg p-4 animate-slide-in-bottom">
@@ -558,6 +655,9 @@ export function HookCard({
           <p className="text-sm text-[#eceae6] font-medium mb-3">{generatedEmails[index].subject}</p>
           <p className="text-xs text-[#878a8f] mb-1">Body:</p>
           <p className="text-sm text-[#eceae6] whitespace-pre-line">{generatedEmails[index].body}</p>
+          <p className="mt-3 text-[11px] text-[#878a8f]">
+            Generated emails stay on this page until you copy them or turn them into workflow by saving a lead and sending them into a sequence. `Save Template` stores the hook in Templates, not the email draft.
+          </p>
         </div>
       )}
 
@@ -573,6 +673,62 @@ export function HookCard({
           >
             Upgrade →
           </a>
+        </div>
+      )}
+
+      {leadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setLeadModalOpen(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative w-full max-w-md mx-4 bg-[#14161a] border border-[#252830] rounded-xl p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-sm font-semibold text-zinc-100">Save lead</h3>
+              <button onClick={() => setLeadModalOpen(false)} className="text-zinc-500 hover:text-zinc-300 transition-colors text-lg leading-none">&times;</button>
+            </div>
+            {leadSuccess ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-emerald-400 mb-3">Lead saved successfully.</p>
+                <p className="text-xs text-zinc-500 mb-4">You can now manage this contact in Leads or add them to a sequence from this hook.</p>
+                <div className="flex gap-2 justify-center">
+                  <a href="/app/leads" className="text-xs font-medium px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-500 transition-colors">Open Leads</a>
+                  <button onClick={() => setLeadModalOpen(false)} className="text-xs font-medium px-4 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors">Close</button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveLead}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Lead email *</label>
+                    <input
+                      type="email"
+                      required
+                      value={leadForm.email}
+                      onChange={(e) => setLeadForm((f) => ({ ...f, email: e.target.value }))}
+                      placeholder="jane@company.com"
+                      className="w-full text-sm px-3 py-2 rounded-lg bg-[#0e0f10] border border-[#252830] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-sky-700 transition-colors"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5">Lead name</label>
+                    <input
+                      type="text"
+                      value={leadForm.name}
+                      onChange={(e) => setLeadForm((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Jane Smith"
+                      className="w-full text-sm px-3 py-2 rounded-lg bg-[#0e0f10] border border-[#252830] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-sky-700 transition-colors"
+                    />
+                  </div>
+                </div>
+                {leadError && <p className="mt-3 text-xs text-rose-400">{leadError}</p>}
+                <button
+                  type="submit"
+                  disabled={leadSubmitting}
+                  className="w-full mt-5 text-sm font-medium px-4 py-2.5 rounded-lg bg-sky-600 text-white hover:bg-sky-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {leadSubmitting ? "Saving..." : "Save lead"}
+                </button>
+              </form>
+            )}
+          </div>
         </div>
       )}
 

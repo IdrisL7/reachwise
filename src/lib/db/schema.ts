@@ -210,10 +210,61 @@ export const generatedHooks = sqliteTable("generated_hooks", {
   triggerType: text("trigger_type"),
   promise: text("promise"),
   bridgeQuality: text("bridge_quality"),
+  buyerTensionId: text("buyer_tension_id"),
+  structuralVariant: text("structural_variant"),
+  targetRole: text("target_role"),
+  selectorScore: real("selector_score"),
+  rankingScore: real("ranking_score"),
+  roleFitScore: real("role_fit_score"),
+  nonOverlapScore: real("non_overlap_score"),
   createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
 }, (table) => [
   index("generated_hooks_user_id_idx").on(table.userId),
   index("generated_hooks_batch_id_idx").on(table.batchId),
+  index("generated_hooks_company_url_idx").on(table.companyUrl),
+]);
+
+export const hookOutcomes = sqliteTable("hook_outcomes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  generatedHookId: text("generated_hook_id").notNull().references(() => generatedHooks.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  event: text("event", {
+    enum: ["viewed", "copied", "copied_with_evidence", "email_copied", "shared", "saved", "used_in_email", "saved_lead", "reply_win", "positive_reply", "edited"],
+  }).notNull(),
+  metadata: text("metadata", { mode: "json" }),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("hook_outcomes_hook_idx").on(table.generatedHookId),
+  index("hook_outcomes_user_id_idx").on(table.userId),
+  index("hook_outcomes_event_idx").on(table.event),
+]);
+
+export const buyerTensionOutcomes = sqliteTable("buyer_tension_outcomes", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  buyerTensionId: text("buyer_tension_id"),
+  targetRole: text("target_role"),
+  triggerType: text("trigger_type"),
+  angle: text("angle"),
+  structuralVariant: text("structural_variant"),
+  impressions: integer("impressions").notNull().default(0),
+  copies: integer("copies").notNull().default(0),
+  shares: integer("shares").notNull().default(0),
+  saves: integer("saves").notNull().default(0),
+  emailsUsed: integer("emails_used").notNull().default(0),
+  replyWins: integer("reply_wins").notNull().default(0),
+  positiveReplies: integer("positive_replies").notNull().default(0),
+  lastEventAt: text("last_event_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("buyer_tension_outcomes_unique_idx").on(
+    table.userId,
+    table.buyerTensionId,
+    table.targetRole,
+    table.triggerType,
+    table.angle,
+    table.structuralVariant,
+  ),
+  index("buyer_tension_outcomes_user_id_idx").on(table.userId),
 ]);
 
 export const hookCrmPushes = sqliteTable("hook_crm_pushes", {
@@ -251,6 +302,181 @@ export const workspaceProfiles = sqliteTable("workspace_profiles", {
   voiceTone: text("voice_tone"),
   updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
 });
+
+export const workspaceStyleMemory = sqliteTable("workspace_style_memory", {
+  workspaceId: text("workspace_id").primaryKey().references(() => workspaces.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  shortCount: real("short_count").notNull().default(0),
+  mediumCount: real("medium_count").notNull().default(0),
+  longCount: real("long_count").notNull().default(0),
+  directCount: real("direct_count").notNull().default(0),
+  conversationalCount: real("conversational_count").notNull().default(0),
+  formalCount: real("formal_count").notNull().default(0),
+  operatorCount: real("operator_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("workspace_style_memory_user_id_idx").on(table.userId),
+]);
+
+export const userOutreachMemory = sqliteTable("user_outreach_memory", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  shortCount: real("short_count").notNull().default(0),
+  mediumCount: real("medium_count").notNull().default(0),
+  longCount: real("long_count").notNull().default(0),
+  directCount: real("direct_count").notNull().default(0),
+  conversationalCount: real("conversational_count").notNull().default(0),
+  formalCount: real("formal_count").notNull().default(0),
+  operatorCount: real("operator_count").notNull().default(0),
+  emailCount: real("email_count").notNull().default(0),
+  linkedinConnectionCount: real("linkedin_connection_count").notNull().default(0),
+  linkedinMessageCount: real("linkedin_message_count").notNull().default(0),
+  coldCallCount: real("cold_call_count").notNull().default(0),
+  videoScriptCount: real("video_script_count").notNull().default(0),
+  conciseToneCount: real("concise_tone_count").notNull().default(0),
+  warmToneCount: real("warm_tone_count").notNull().default(0),
+  directToneCount: real("direct_tone_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("user_outreach_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userTimingMemory = sqliteTable("user_timing_memory", {
+  userId: text("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+  freshSignalCount: real("fresh_signal_count").notNull().default(0),
+  recentSignalCount: real("recent_signal_count").notNull().default(0),
+  staleSignalCount: real("stale_signal_count").notNull().default(0),
+  undatedSignalCount: real("undated_signal_count").notNull().default(0),
+  weekdayMorningCount: real("weekday_morning_count").notNull().default(0),
+  weekdayAfternoonCount: real("weekday_afternoon_count").notNull().default(0),
+  weekdayEveningCount: real("weekday_evening_count").notNull().default(0),
+  weekendCount: real("weekend_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  index("user_timing_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userSequenceMemory = sqliteTable("user_sequence_memory", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetRole: text("target_role"),
+  sequenceType: text("sequence_type").notNull(),
+  channel: text("channel").notNull(),
+  attemptCount: real("attempt_count").notNull().default(0),
+  noReplyCount: real("no_reply_count").notNull().default(0),
+  positiveReplyCount: real("positive_reply_count").notNull().default(0),
+  replyWinCount: real("reply_win_count").notNull().default(0),
+  unsubscribeCount: real("unsubscribe_count").notNull().default(0),
+  wrongPersonCount: real("wrong_person_count").notNull().default(0),
+  unreachableCount: real("unreachable_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("user_sequence_memory_unique_idx").on(
+    table.userId,
+    table.targetRole,
+    table.sequenceType,
+    table.channel,
+  ),
+  index("user_sequence_memory_user_id_idx").on(table.userId),
+  index("user_sequence_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userLeadSequenceMemory = sqliteTable("user_lead_sequence_memory", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetRole: text("target_role"),
+  leadSegment: text("lead_segment").notNull(),
+  sequenceType: text("sequence_type").notNull(),
+  channel: text("channel").notNull(),
+  attemptCount: real("attempt_count").notNull().default(0),
+  noReplyCount: real("no_reply_count").notNull().default(0),
+  positiveReplyCount: real("positive_reply_count").notNull().default(0),
+  replyWinCount: real("reply_win_count").notNull().default(0),
+  unsubscribeCount: real("unsubscribe_count").notNull().default(0),
+  wrongPersonCount: real("wrong_person_count").notNull().default(0),
+  unreachableCount: real("unreachable_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("user_lead_sequence_memory_unique_idx").on(
+    table.userId,
+    table.targetRole,
+    table.leadSegment,
+    table.sequenceType,
+    table.channel,
+  ),
+  index("user_lead_sequence_memory_user_id_idx").on(table.userId),
+  index("user_lead_sequence_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userSequencePathMemory = sqliteTable("user_sequence_path_memory", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetRole: text("target_role"),
+  leadSegment: text("lead_segment"),
+  sequenceType: text("sequence_type").notNull(),
+  fromChannel: text("from_channel"),
+  toChannel: text("to_channel").notNull(),
+  attemptCount: real("attempt_count").notNull().default(0),
+  noReplyCount: real("no_reply_count").notNull().default(0),
+  positiveReplyCount: real("positive_reply_count").notNull().default(0),
+  replyWinCount: real("reply_win_count").notNull().default(0),
+  unsubscribeCount: real("unsubscribe_count").notNull().default(0),
+  wrongPersonCount: real("wrong_person_count").notNull().default(0),
+  unreachableCount: real("unreachable_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("user_sequence_path_memory_unique_idx").on(
+    table.userId,
+    table.targetRole,
+    table.leadSegment,
+    table.sequenceType,
+    table.fromChannel,
+    table.toChannel,
+  ),
+  index("user_sequence_path_memory_user_id_idx").on(table.userId),
+  index("user_sequence_path_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userRetrievalMemory = sqliteTable("user_retrieval_memory", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetRole: text("target_role"),
+  sourceType: text("source_type").notNull(),
+  triggerType: text("trigger_type"),
+  viewCount: real("view_count").notNull().default(0),
+  engagementCount: real("engagement_count").notNull().default(0),
+  emailUseCount: real("email_use_count").notNull().default(0),
+  winCount: real("win_count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("user_retrieval_memory_unique_idx").on(
+    table.userId,
+    table.targetRole,
+    table.sourceType,
+    table.triggerType,
+  ),
+  index("user_retrieval_memory_user_id_idx").on(table.userId),
+  index("user_retrieval_memory_updated_at_idx").on(table.updatedAt),
+]);
+
+export const userRetrievalPins = sqliteTable("user_retrieval_pins", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  targetRole: text("target_role"),
+  sourceType: text("source_type").notNull(),
+  triggerType: text("trigger_type"),
+  boost: real("boost").notNull().default(1.1),
+  createdAt: text("created_at").notNull().default(sql`(datetime('now'))`),
+  updatedAt: text("updated_at").notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex("user_retrieval_pins_unique_idx").on(
+    table.userId,
+    table.targetRole,
+    table.sourceType,
+    table.triggerType,
+  ),
+  index("user_retrieval_pins_user_id_idx").on(table.userId),
+  index("user_retrieval_pins_updated_at_idx").on(table.updatedAt),
+]);
 
 export const rateLimits = sqliteTable("rate_limits", {
   id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),

@@ -13,7 +13,7 @@ export function SalesChatWidget() {
     {
       role: "assistant",
       content:
-        "Hey! I'm the GetSignalHooks assistant. I can answer questions about the product, walk you through pricing, or run a live demo — just drop a company URL and I'll generate hooks for it. What can I help with?",
+        "Hey! I'm the GetSignalHooks assistant. I can answer questions about the product, walk you through pricing, or run a live demo — drop a company URL and I can show you how the signal turns into hooks, drafts, and workflow. What can I help with?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -127,7 +127,7 @@ export function SalesChatWidget() {
                 GetSignalHooks
               </p>
               <p className="text-xs text-zinc-500">
-                Ask anything or drop a URL for a live demo
+                Ask anything or drop a URL for a live workflow demo
               </p>
             </div>
           </div>

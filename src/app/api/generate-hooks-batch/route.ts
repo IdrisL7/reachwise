@@ -6,7 +6,8 @@ import { checkTrialActive, checkBatchSize, getLimits } from "@/lib/tier-guard";
 import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
 import { db, schema } from "@/lib/db";
 import { eq, sql } from "drizzle-orm";
-import type { TierId } from "@/lib/tiers";
+import { hasFeature, type TierId } from "@/lib/tiers";
+import { getClaudeApiKey } from "@/lib/env";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -112,18 +113,19 @@ export async function POST(request: Request) {
             messagingStyle,
           });
           let itemVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> | undefined;
-          if ((tierId === "pro") && result.hooks.length > 0) {
+          if (hasFeature(tierId, "multiChannel") && result.hooks.length > 0) {
             try {
-              const claudeKey = process.env.CLAUDE_API_KEY!;
+              const claudeKey = getClaudeApiKey();
+              if (!claudeKey) throw new Error("Missing Claude API key");
               const withVars = await generateChannelVariants(result.hooks, claudeKey);
               itemVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
             } catch {}
           }
           let intentData: { score: number; temperature: string; signalsCount: number } | null = null;
-          if ((tierId === "pro") && result.hooks.length > 0) {
+          if (hasFeature(tierId, "intentScoring") && result.hooks.length > 0) {
             try {
               const exaKey = process.env.EXA_API_KEY;
-              const claudeKey = process.env.CLAUDE_API_KEY;
+              const claudeKey = getClaudeApiKey();
               if (exaKey && claudeKey) {
                 // Derive company name from URL hostname
                 let companyName: string;

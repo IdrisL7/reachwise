@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
+import { extractPreviousSequenceMetadata, inferTargetRoleFromLead } from "@/lib/followup/generate";
+import { getLeadSegmentKey, recordSequenceOutcome } from "@/lib/followup/sequence-memory";
+import { persistFollowupMessageV2 } from "@/lib/v2-dual-write";
 
 // POST /api/drafts/[id]/approve — approve a draft (lead-based or watchlist-based)
 export async function POST(
@@ -68,6 +71,50 @@ export async function POST(
     .update(schema.outboundMessages)
     .set({ status: "queued", sentAt: now })
     .where(eq(schema.outboundMessages.id, id));
+
+  if (lead.userId) {
+    await persistFollowupMessageV2({
+      userId: lead.userId,
+      companyUrl: lead.companyWebsite,
+      companyName: lead.companyName,
+      outboundMessageId: message.id,
+      leadId: lead.id,
+      subject: message.subject,
+      body: message.body,
+      channel: message.channel,
+      stage: "queued",
+      metadata: message.metadata && typeof message.metadata === "object"
+        ? (message.metadata as Record<string, unknown>)
+        : null,
+    }).catch(() => {});
+  }
+
+  const sequenceMetadata = extractPreviousSequenceMetadata(message.metadata);
+  if (
+    lead.userId &&
+    (message.channel === "email" ||
+      message.channel === "linkedin_connection" ||
+      message.channel === "linkedin_message" ||
+      message.channel === "cold_call" ||
+      message.channel === "video_script")
+  ) {
+    await recordSequenceOutcome({
+      userId: lead.userId,
+      targetRole: inferTargetRoleFromLead({
+        email: lead.email,
+        title: lead.title,
+      }),
+      leadSegment: getLeadSegmentKey({
+        title: lead.title,
+        source: lead.source,
+        companyWebsite: lead.companyWebsite,
+      }),
+      sequenceType: sequenceMetadata.sequenceType ?? (message.sequenceStep === 0 ? "first" : "bump"),
+      channel: message.channel,
+      previousChannel: sequenceMetadata.previousChannel ?? null,
+      event: "attempt",
+    }).catch(() => {});
+  }
 
   // Advance lead sequence step
   const [ls] = await db

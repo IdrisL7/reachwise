@@ -22,8 +22,8 @@ const steps = [
   },
   {
     num: "02",
-    title: "Generate hooks matched to the buyer",
-    desc: "Pick the role you're targeting. We write opening lines from different angles — what changed, what's at risk, what trade-off they're facing — all grounded in the evidence.",
+    title: "Generate the right message for the buyer",
+    desc: "Pick the role you're targeting. We generate hooks, email drafts, and buyer-aware follow-up angles around what changed, what is at risk, and what trade-off they are facing.",
     visual: (
       <div className="mt-4 space-y-2">
         {[
@@ -40,11 +40,11 @@ const steps = [
   },
   {
     num: "03",
-    title: "Send with receipts",
-    desc: "Copy the hook, generate a full email in one click, and export to CSV, Apollo, or Clay. Every message ships with a cited source your rep can defend.",
+    title: "Move it into workflow",
+    desc: "Turn a strong signal into a lead, queue sequence drafts, review them in Inbox, and keep the source context attached from first hook through follow-up.",
     visual: (
       <div aria-hidden="true" className="mt-4 flex flex-wrap gap-2">
-        {["Copy Hook", "Generate Email", "Export CSV"].map((label) => (
+        {["Save Lead", "Start Sequence", "Review Inbox"].map((label) => (
           <span
             key={label}
             className="text-[0.6875rem] font-medium px-2.5 py-1.5 rounded-lg border border-zinc-700/60 bg-zinc-800/60 text-zinc-400"
@@ -65,7 +65,7 @@ export function HowItWorksSection() {
         <Reveal>
           <div className="mb-12 lg:mb-16">
             <h2 id="how-it-works-heading" className="font-[family-name:var(--font-display)] text-[clamp(2rem,3.5vw,3.25rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-              Three steps. Zero invented facts.
+              Find the signal. Create the message. Run the workflow.
             </h2>
           </div>
         </Reveal>

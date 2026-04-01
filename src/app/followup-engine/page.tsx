@@ -21,21 +21,21 @@ const steps = [
   },
   {
     number: "2",
-    title: "Research-backed hook generation",
+    title: "Research-backed message generation",
     description:
-      "For every lead, GetSignalHooks crawls the company's public web presence and generates signal-backed opening lines anchored on real signals — recent news, product launches, job postings, case studies, and more. Each follow-up gets a fresh angle so your sequence never feels repetitive.",
+      "For every lead, GetSignalHooks finds relevant company signals and generates buyer-aware hooks, drafts, and fresh follow-up angles anchored on real evidence — recent news, product launches, job postings, case studies, and more.",
   },
   {
     number: "3",
-    title: "AI-generated follow-up emails",
+    title: "Review-ready follow-up drafts",
     description:
-      "The Follow-Up Engine takes the best hook and writes a complete follow-up email — subject line and body — tailored to the lead's company and role. It automatically rotates between trigger, risk, and tradeoff angles across the sequence, and applies quality gates to block generic copy.",
+      "The Follow-Up Engine turns the best signal into a complete follow-up draft tailored to the lead's company and role. It rotates between trigger, risk, and tradeoff angles across the sequence, and applies quality gates to block generic copy.",
   },
   {
     number: "4",
     title: "Automated sending, tracking, and reporting",
     description:
-      "Emails go out on schedule, automatically. Each send is logged, replies are detected and stop the sequence, and your dashboard updates in real time — no manual intervention needed.",
+      "Drafts move through approval, each send is logged, replies stop the sequence automatically, and your dashboard updates in real time so the team can see what is moving and what is stalling.",
   },
 ];
 
@@ -51,13 +51,13 @@ export default function FollowUpEnginePage() {
             Follow-Up Engine
           </p>
           <h1 className="font-[family-name:var(--font-display)] text-[clamp(2.25rem,4vw,3.25rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white">
-            Automated follow-ups, powered by real research
+            Signal-backed follow-up workflow, powered by real research
           </h1>
           <p className="mt-5 text-[1.0625rem] leading-[1.7] text-zinc-400">
-            Most follow-up sequences blast the same template with a different
-            subject line. The Follow-Up Engine is different: every email is
-            backed by fresh evidence from the lead's company, with a new angle
-            each time. It plugs into your existing workflow and runs hands-free.
+            Most follow-up sequences reuse the same template with a different
+            subject line. The Follow-Up Engine is different: every draft is
+            backed by fresh evidence from the account, routed through review,
+            and tracked through sequence workflow without losing the source context.
           </p>
           <p className="mt-4 text-[0.9375rem] text-zinc-500">
             Available on the{" "}
@@ -106,7 +106,7 @@ export default function FollowUpEnginePage() {
                 <span className="font-medium text-zinc-300">
                   GetSignalHooks
                 </span>{" "}
-                — evidence-based hook generation from real public signals
+                — evidence-based signal discovery and message generation from real public signals
               </span>
             </li>
             <li className="flex items-start gap-2.5">
@@ -115,7 +115,7 @@ export default function FollowUpEnginePage() {
                 <span className="font-medium text-zinc-300">
                   Follow-Up Engine API
                 </span>{" "}
-                — lead tracking, sequence state, and AI email generation
+                — lead tracking, sequence state, draft generation, and approval-aware workflow
               </span>
             </li>
             <li className="flex items-start gap-2.5">

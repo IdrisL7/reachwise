@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { SALES_AGENT_SYSTEM_PROMPT } from "@/lib/sales-agent";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { getClaudeApiKey } from "@/lib/env";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing messages" }, { status: 400 });
     }
 
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (!claudeApiKey) {
       return NextResponse.json(
         { error: "Server misconfiguration" },
@@ -140,7 +141,7 @@ export async function POST(request: Request) {
         return NextResponse.json({
           message: fallback
             ? `${fallback}\n\nI tried to generate hooks for ${demoUrl} but couldn't find enough public signals. This actually demonstrates one of our features — we tell you when evidence is weak rather than making things up. Try a larger company with more public presence, or sign up for the free trial to test it yourself.`
-            : `I tried to generate hooks for ${demoUrl} but couldn't find enough public signals right now. This is actually a feature — we never fabricate hooks. Try a company with more public presence (press releases, blog posts, product updates), or sign up for the 7-day free trial to explore at your own pace.`,
+            : `I tried to generate hooks for ${demoUrl} but couldn't find enough public signals right now. This is actually a feature — we never fabricate hooks. Try a company with more public presence (press releases, blog posts, product updates), or sign up for the free plan to explore at your own pace.`,
         });
       }
     }

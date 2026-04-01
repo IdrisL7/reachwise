@@ -4,9 +4,9 @@ import Link from "next/link";
 import { Reveal } from "./ui/reveal";
 
 const proofPoints = [
-  { label: "Source cited on every hook", detail: "Quote, URL, publication date — included by default." },
+  { label: "Source context stays attached", detail: "Quote, URL, publication date, and evidence quality stay visible from signal to message." },
   { label: "Weak signals are labeled, not dressed up", detail: "Tier A = first-party and fresh. Tier B = secondary. Low confidence is flagged." },
-  { label: "Your URLs are never stored", detail: "Processed, used to generate, then discarded." },
+  { label: "Built around workflow, not just copy", detail: "Accounts, Leads, Inbox, and Analytics stay connected so the signal does not disappear after generation." },
   { label: "Verified against public sources", detail: "No hearsay, no fabricated context — every signal traces to a real, checkable URL." },
 ];
 
@@ -25,7 +25,7 @@ export function SocialProofSection() {
             id="social-proof-heading"
             className="font-[family-name:var(--font-display)] text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-zinc-900 max-w-2xl"
           >
-            Built for reps who get called out on bad outreach.
+            Built for teams that need outbound to hold up under scrutiny.
           </h2>
         </Reveal>
 

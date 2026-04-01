@@ -14,6 +14,12 @@ const TIER_LIMITS: Record<TierId, TierLimits> = {
   pro: { hooksPerMonth: 750, batchSize: 75, discoverySearchesPerMonth: 50 },
 };
 
+function didAffectRows(result: unknown): boolean {
+  if (!result || typeof result !== "object") return true;
+  const rowsAffected = (result as { rowsAffected?: unknown }).rowsAffected;
+  return typeof rowsAffected === "number" ? rowsAffected > 0 : true;
+}
+
 export function tierError(message: string, code = "TIER_LIMIT", upgradeUrl = "/#pricing") {
   return NextResponse.json(
     { status: "error", code, message, upgradeUrl },
@@ -116,7 +122,7 @@ export async function checkHookQuota(userId: string): Promise<NextResponse | nul
   const used = user.hooksUsedThisMonth ?? 0;
   if (used >= limits.hooksPerMonth) {
     return tierError(
-      `You've used all ${limits.hooksPerMonth} free hooks this month. Upgrade to Pro for 750 hooks/month.`,
+      `You've used all ${limits.hooksPerMonth} ${tierId} hooks this month.`,
       "TIER_LIMIT",
     );
   }
@@ -125,41 +131,55 @@ export async function checkHookQuota(userId: string): Promise<NextResponse | nul
 }
 
 /** Increment hook usage AFTER successful generation. Call only when hooks were generated successfully. */
-export async function incrementHookUsage(userId: string): Promise<void> {
+export async function incrementHookUsage(userId: string): Promise<boolean> {
   const [user] = await db
     .select({
+      tierId: schema.users.tierId,
       hooksResetAt: schema.users.hooksResetAt,
     })
     .from(schema.users)
     .where(eq(schema.users.id, userId))
     .limit(1);
 
-  if (!user) return;
+  if (!user) return false;
 
+  const tierId = (user.tierId as TierId) || "free";
+  const limits = getLimits(tierId);
   const now = new Date();
+  const nowIso = now.toISOString();
   const resetDate = user.hooksResetAt ? new Date(user.hooksResetAt) : new Date(0);
   const isNewMonth =
     resetDate.getMonth() !== now.getMonth() ||
     resetDate.getFullYear() !== now.getFullYear();
 
   if (isNewMonth) {
-    // New month — reset counter to 1 (this request)
-    await db
+    const resetResult = await db
       .update(schema.users)
       .set({
         hooksUsedThisMonth: 1,
-        hooksResetAt: now.toISOString(),
+        hooksResetAt: nowIso,
       })
-      .where(eq(schema.users.id, userId));
-  } else {
-    // Same month — atomic increment
-    await db
-      .update(schema.users)
-      .set({
-        hooksUsedThisMonth: sql`${schema.users.hooksUsedThisMonth} + 1`,
-      })
-      .where(eq(schema.users.id, userId));
+      .where(
+        user.hooksResetAt
+          ? sql`${schema.users.id} = ${userId} AND ${schema.users.hooksResetAt} = ${user.hooksResetAt}`
+          : sql`${schema.users.id} = ${userId} AND ${schema.users.hooksResetAt} IS NULL`,
+      );
+
+    if (didAffectRows(resetResult)) {
+      return true;
+    }
   }
+
+  const incrementResult = await db
+    .update(schema.users)
+    .set({
+      hooksUsedThisMonth: sql`coalesce(${schema.users.hooksUsedThisMonth}, 0) + 1`,
+    })
+    .where(
+      sql`${schema.users.id} = ${userId} AND coalesce(${schema.users.hooksUsedThisMonth}, 0) < ${limits.hooksPerMonth}`,
+    );
+
+  return didAffectRows(incrementResult);
 }
 
 /** Check batch size against tier limit */

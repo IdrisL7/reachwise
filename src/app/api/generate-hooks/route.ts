@@ -3,10 +3,7 @@ import { NextResponse, after } from "next/server";
 import {
   fetchSourcesWithGating,
   fetchUserProvidedSource,
-  buildSystemPrompt,
-  buildUserPrompt,
-  callClaude,
-  callClaudeWithRetry,
+  generateHookPayloadsFromSources,
   getProviderFacingErrorMessage,
   publishGate,
   publishGateFinal,
@@ -39,11 +36,52 @@ import { checkHookQuota, incrementHookUsage, tierError } from "@/lib/tier-guard"
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { db, schema } from "@/lib/db";
 import { getClaudeApiKey } from "@/lib/env";
+import { getHookSelectorPriors } from "@/lib/hook-feedback";
+import { hasFeature } from "@/lib/tiers";
+import {
+  ensureAccountV2,
+  inferSourceTypeForV2,
+  persistHookMessagesV2,
+  persistSignalsV2,
+} from "@/lib/v2-dual-write";
+import {
+  buildRetrievalDiagnostics,
+  buildRetrievalPlan,
+  prioritizeRetrievalSources,
+} from "@/lib/retrieval-plan";
 
 // ---------------------------------------------------------------------------
 // Enforce current tier rules on citations (works on both cached and fresh)
 // ---------------------------------------------------------------------------
 type Citation = { source_title: string; publisher: string; date: string; url: string; tier: string; anchorScore?: number };
+
+function summarizeSelectorRetrievalPreferences(selectorPriors?: Awaited<ReturnType<typeof getHookSelectorPriors>>) {
+  const topSourcePreferences = Object.entries(selectorPriors?.sourceTypeBoosts ?? {})
+    .map(([sourceType, adjustment]) => ({
+      sourceType: sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web",
+      adjustment: adjustment ?? 0,
+      pinned: selectorPriors?.pinnedSourceTypes?.[sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web"] ?? false,
+    }))
+    .sort((a, b) => b.adjustment - a.adjustment)
+    .slice(0, 4);
+
+  const topTriggerPreferences = Object.entries(selectorPriors?.triggerSourceTypeBoosts ?? {})
+    .flatMap(([triggerType, boosts]) =>
+      Object.entries(boosts ?? {}).map(([sourceType, adjustment]) => ({
+        triggerType,
+        sourceType: sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web",
+        adjustment: adjustment ?? 0,
+        pinned: selectorPriors?.pinnedTriggerSourceTypes?.[triggerType]?.[sourceType as "first_party" | "trusted_news" | "semantic_web" | "fallback_web"] ?? false,
+      })),
+    )
+    .sort((a, b) => b.adjustment - a.adjustment)
+    .slice(0, 6);
+
+  return {
+    topSourcePreferences,
+    topTriggerPreferences,
+  };
+}
 
 function enforceCitationTiers(citations: Citation[], companyDomain: string): Citation[] {
   return citations.map((c) => {
@@ -306,6 +344,11 @@ export async function POST(request: Request) {
     let cached = false;
     let cacheStale = false;
     let isFastPath = false;
+    let retrievalDiagnostics = buildRetrievalDiagnostics([], {
+      targetDomain: companyDomain || null,
+      lowSignal: false,
+      hasAnchoredSources: false,
+    });
 
     try {
       const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole, messagingStyle);
@@ -330,10 +373,24 @@ export async function POST(request: Request) {
       // Cache miss or error — continue to generate
     }
 
+    const selectorPriors = !isDemo && session?.user?.id
+      ? await getHookSelectorPriors({
+          userId: session.user.id,
+          companyUrl: url!,
+          targetRole: targetRole ?? null,
+        }).catch(() => undefined)
+      : undefined;
+    const retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
+
     let sourceDiagnostics: Awaited<ReturnType<typeof fetchSourcesWithGating>>["_diagnostics"] | null = null;
 
     if (!candidateHooks) {
       try {
+        const retrievalPlan = buildRetrievalPlan({
+          targetDomain: companyDomain || null,
+          hasIntentSignals: hasFeature(tierId, "intentScoring"),
+          userProvidedUrl: Boolean(rawUrl),
+        });
         // -----------------------------------------------------------------------
         // USER-PROVIDED SUBPAGE FAST PATH
         // When the user explicitly provides a subpage URL (e.g. hubspot.com/startups/partners),
@@ -351,9 +408,17 @@ export async function POST(request: Request) {
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
               const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-              const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona, messagingStyle);
-              const userPrompt = buildUserPrompt(url, [userSrc], context);
-              const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
+              const { rawHooks } = await generateHookPayloadsFromSources({
+                url,
+                sources: [userSrc],
+                apiKey: claudeApiKey,
+                context,
+                senderContext: _senderContext,
+                targetRole,
+                customPersona,
+                messagingStyle,
+                retrievalLibrary: selectorPriors?.retrievalLibrary,
+              });
 
               // Bypass publishGate (which calls validateHook with strict rules designed for
               // auto-discovered noise). User-provided sources are trusted — convert directly.
@@ -405,7 +470,7 @@ export async function POST(request: Request) {
         // 1. Gather and classify sources with signal gating + anchor scoring
         let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
-        if (tierId === "pro") {
+        if (hasFeature(tierId, "intentScoring")) {
           try {
             rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", exaApiKey!, claudeApiKey);
             prefetchedSignals = rawSignals;
@@ -436,7 +501,7 @@ export async function POST(request: Request) {
         } else {
           result = await fetchSourcesWithGating(url, exaApiKey!);
         }
-        const sources = result.sources;
+        const sources = prioritizeRetrievalSources(result.sources, companyDomain || null);
         signalCount = result.signalCount;
         sourceDiagnostics = result._diagnostics;
 
@@ -451,6 +516,7 @@ export async function POST(request: Request) {
 
         console.log("[generate-hooks] threshold check:", {
           traceId,
+          retrievalPlan,
           signalCount,
           tierACount,
           highConfidenceIntentCount,
@@ -460,6 +526,14 @@ export async function POST(request: Request) {
           isLowSignal,
           exactMath: "isLowSignal = tierACount < 1",
           tierBreakdown: sources.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
+        });
+
+        retrievalDiagnostics = buildRetrievalDiagnostics(sources, {
+          targetDomain: companyDomain || null,
+          lowSignal: result.lowSignal,
+          hasAnchoredSources: result.hasAnchoredSources,
+          recoveryAttempted: result._diagnostics.recoveryAttempted,
+          newsExpansionAttempted: result._diagnostics.newsExpansionAttempted,
         });
 
         citations = sources.map((s) => ({
@@ -482,7 +556,6 @@ export async function POST(request: Request) {
 
           // 4. Build prompts and call Claude
           const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-          const systemPrompt = buildSystemPrompt(_senderContext, targetRole, customPersona, messagingStyle);
           const promptSignals: IntentSignalInput[] = rawSignals
             .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
             .map((s) => ({
@@ -499,8 +572,18 @@ export async function POST(request: Request) {
             promptSignals: promptSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
           });
 
-          const userPrompt = buildUserPrompt(url, sources, context, promptSignals.length > 0 ? promptSignals : undefined);
-          const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
+          const { rawHooks } = await generateHookPayloadsFromSources({
+            url,
+            sources,
+            apiKey: claudeApiKey,
+            context,
+            senderContext: _senderContext,
+            targetRole,
+            customPersona,
+            messagingStyle,
+            intentSignals: promptSignals.length > 0 ? promptSignals : undefined,
+            retrievalLibrary: selectorPriors?.retrievalLibrary,
+          });
 
           console.log("[generate-hooks] raw hooks from claude", {
             traceId,
@@ -539,6 +622,26 @@ export async function POST(request: Request) {
     // =========================================================================
     if (companyDomain) {
       citations = enforceCitationTiers(citations, companyDomain);
+    }
+
+    if (citations.length > 0) {
+      retrievalDiagnostics = buildRetrievalDiagnostics(
+        citations.map((citation) => ({
+          url: citation.url,
+          tier: citation.tier as ClassifiedSource["tier"],
+          anchorScore: citation.anchorScore,
+          entity_hit_score: undefined,
+          stale: false,
+        })),
+        {
+          targetDomain: companyDomain || null,
+          lowSignal: isLowSignal,
+          hasAnchoredSources: hasAnchored,
+          recoveryAttempted: sourceDiagnostics?.recoveryAttempted,
+          newsExpansionAttempted: sourceDiagnostics?.newsExpansionAttempted,
+          usedCachedResult: cached,
+        },
+      );
     }
 
     // Also enforce tiers on hook evidence_tier fields (cached hooks may have stale tiers)
@@ -622,7 +725,10 @@ export async function POST(request: Request) {
     // =========================================================================
     // RANK + CAP — score and return top 3 (overflow available via showAll)
     // =========================================================================
-    const { top, overflow } = rankAndCap(rankInput, 3);
+    const { top, overflow } = rankAndCap(rankInput, 3, {
+      targetRole: targetRole ?? null,
+      selectorPriors,
+    });
 
     // Build suggestions — short headline, details handled by UI
     const noAnchorSuggestion = "We couldn't confirm these sources are specifically about this company. Paste a URL directly from their press page or newsroom — that gives us verified content to write from.";
@@ -676,12 +782,12 @@ export async function POST(request: Request) {
     finalTop = finalTop.map((hook) => {
       const quality = scoreHookQuality(hook, companyDomain || undefined);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
+    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
 
     finalOverflow = finalOverflow.map((hook) => {
       const quality = scoreHookQuality(hook, companyDomain || undefined);
       return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.quality_score ?? 0) - (a.quality_score ?? 0));
+    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
 
     const resolvedCompany = resolution && resolution.candidates[0]
       ? {
@@ -701,14 +807,14 @@ export async function POST(request: Request) {
 
     if (roleGated.length > 0 && (!cached || cacheStale)) {
       // Generate variants for Pro before caching
-      if (tierId === "pro") {
+      if (hasFeature(tierId, "multiChannel")) {
         try {
           const withVars = await generateChannelVariants(roleGated, claudeApiKey, targetRole);
           hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
         } catch {}
       }
       setCachedHooks(url, roleGated, citations, profileUpdatedAt, targetRole, hookVariants.length > 0 ? hookVariants : undefined, messagingStyle).catch(() => {});
-    } else if (cached && (tierId === "pro")) {
+    } else if (cached && hasFeature(tierId, "multiChannel")) {
       // Load variants from cache
       try {
         const cr = await getCachedHooks(url!, profileUpdatedAt, targetRole, messagingStyle);
@@ -743,7 +849,7 @@ export async function POST(request: Request) {
     // Schedule enrichment to run after response is sent (Vercel waitUntil under the hood)
     after(async () => {
       try {
-        if (tierId === "pro") {
+        if (hasFeature(tierId, "intentScoring")) {
           const [intentResult, intelResult] = await Promise.allSettled([
             prefetchedSignals !== null
               ? Promise.resolve(prefetchedSignals)
@@ -803,12 +909,68 @@ export async function POST(request: Request) {
             triggerType: h.trigger_type || null,
             promise: h.promise || null,
             bridgeQuality: h.bridge_quality || null,
+            buyerTensionId: h.buyer_tension_id || null,
+            structuralVariant: h.structural_variant || null,
+            targetRole: targetRole ?? null,
+            selectorScore: h.selector_score ?? null,
+            rankingScore: h.ranking_score ?? null,
+            roleFitScore: h.role_fit_score ?? null,
+            nonOverlapScore: h.non_overlap_score ?? null,
           })),
         ).returning({ id: schema.generatedHooks.id });
 
         const topLen = finalTop.length;
         finalTop = finalTop.map((h, i) => ({ ...h, generated_hook_id: inserted[i]?.id }));
         finalOverflow = finalOverflow.map((h, i) => ({ ...h, generated_hook_id: inserted[topLen + i]?.id }));
+
+        try {
+          const accountId = await ensureAccountV2({
+            userId: session.user.id,
+            companyUrl: url!,
+            companyName: companyName || resolvedCompany?.name || null,
+          });
+
+          await persistSignalsV2({
+            accountId,
+            signals: allHooks.map((h, index) => ({
+              sourceUrl: h.source_url || null,
+              sourceType: inferSourceTypeForV2({
+                companyUrl: url!,
+                sourceUrl: h.source_url || null,
+                evidenceTier: h.evidence_tier,
+              }),
+              triggerType: h.trigger_type || null,
+              title: h.source_title || null,
+              snippet: h.evidence_snippet || null,
+              publishedAt: h.source_date || null,
+              evidenceTier: h.evidence_tier,
+              metadata: {
+                generatedHookId: inserted[index]?.id ?? null,
+                batchId,
+                angle: h.angle,
+              },
+            })),
+          });
+
+          await persistHookMessagesV2({
+            accountId,
+            hooks: allHooks.map((h, index) => ({
+              generatedHookId: inserted[index]?.id ?? null,
+              body: h.hook,
+              channel: "email",
+              rationale: h.why_this_works || null,
+              sourceUrl: h.source_url || null,
+              sourceTitle: h.source_title || null,
+              sourceSnippet: h.evidence_snippet || null,
+              sourceDate: h.source_date || null,
+              triggerType: h.trigger_type || null,
+              targetRole: targetRole ?? null,
+              angle: h.angle,
+            })),
+          });
+        } catch (dualWriteErr) {
+          console.error("[generate-hooks] failed to dual-write v2 signals", dualWriteErr);
+        }
       } catch (persistErr) {
         console.error("Failed to persist generated hooks:", persistErr);
         batchId = undefined;
@@ -848,6 +1010,10 @@ export async function POST(request: Request) {
       intent: intentData,
       companyIntel,
       isBasicIntel: tierId === "free",
+      retrievalDiagnostics: {
+        ...retrievalDiagnostics,
+        learnedPreferences: retrievalPreferenceSummary,
+      },
       _diagnostics: sourceDiagnostics ?? undefined,
     });
   } catch (error) {

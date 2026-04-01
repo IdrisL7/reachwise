@@ -3,6 +3,10 @@ import { timingSafeEqual } from "crypto";
 import { db, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/sendgrid";
+import { recordHookOutcome } from "@/lib/hook-feedback";
+import { extractPreviousHookMetadata } from "@/lib/followup/generate";
+import { applyPendingNoReplyPenalties } from "@/lib/followup/maintenance";
+import { persistFollowupMessageV2 } from "@/lib/v2-dual-write";
 
 const BATCH_LIMIT = 50;
 
@@ -31,12 +35,18 @@ export async function GET(req: NextRequest) {
 
   let sent = 0;
   let failed = 0;
+  let noReplyPenalized = 0;
 
   for (const message of queuedMessages) {
     try {
       // Look up the lead to get recipient email
       const [lead] = await db
-        .select({ email: schema.leads.email, userId: schema.leads.userId })
+        .select({
+          email: schema.leads.email,
+          userId: schema.leads.userId,
+          companyWebsite: schema.leads.companyWebsite,
+          companyName: schema.leads.companyName,
+        })
         .from(schema.leads)
         .where(eq(schema.leads.id, message.leadId))
         .limit(1);
@@ -63,6 +73,37 @@ export async function GET(req: NextRequest) {
 
       if (result.success) {
         sent++;
+
+        if (lead.userId) {
+          await persistFollowupMessageV2({
+            userId: lead.userId,
+            companyUrl: lead.companyWebsite,
+            companyName: lead.companyName,
+            outboundMessageId: message.id,
+            leadId: message.leadId,
+            subject: message.subject,
+            body: message.body,
+            channel: message.channel,
+            stage: "sent",
+            metadata: message.metadata && typeof message.metadata === "object"
+              ? (message.metadata as Record<string, unknown>)
+              : null,
+          }).catch(() => {});
+        }
+
+        const attribution = extractPreviousHookMetadata(message.metadata);
+        if (lead.userId && attribution?.hookId) {
+          await recordHookOutcome({
+            hookId: attribution.hookId,
+            userId: lead.userId,
+            event: "used_in_email",
+            metadata: {
+              channel: message.channel,
+              messageId: message.id,
+              sequenceStep: message.sequenceStep,
+            },
+          }).catch(() => {});
+        }
 
         // Advance leadSequence currentStep if this message belongs to one
         const [leadSeq] = await db
@@ -116,7 +157,9 @@ export async function GET(req: NextRequest) {
     await new Promise((r) => setTimeout(r, 100));
   }
 
-  console.log(`[send-approved] done — sent: ${sent}, failed: ${failed}`);
+  noReplyPenalized = await applyPendingNoReplyPenalties(200);
 
-  return NextResponse.json({ sent, failed });
+  console.log(`[send-approved] done — sent: ${sent}, failed: ${failed}, no_reply_penalized: ${noReplyPenalized}`);
+
+  return NextResponse.json({ sent, failed, no_reply_penalized: noReplyPenalized });
 }

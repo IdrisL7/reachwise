@@ -3,7 +3,7 @@ import { validateBearerToken, unauthorized } from "@/lib/followup/auth";
 import { db, schema } from "@/lib/db";
 import { eq, desc } from "drizzle-orm";
 import { getSequence } from "@/lib/followup/sequences";
-import { generateFollowUp } from "@/lib/followup/generate";
+import { extractPreviousHookMetadata, generateFollowUp } from "@/lib/followup/generate";
 import type { Hook } from "@/lib/hooks";
 
 export async function POST(request: NextRequest) {
@@ -47,7 +47,9 @@ export async function POST(request: NextRequest) {
 
     const currentStep = typeof body.step === "number" ? body.step : lead.sequenceStep;
 
-    const channel = body.channel || "email";
+    const channel = typeof body.channel === "string" && body.channel.trim()
+      ? body.channel
+      : undefined;
 
     const result = await generateFollowUp({
       lead: {
@@ -57,13 +59,16 @@ export async function POST(request: NextRequest) {
         title: lead.title,
         companyName: lead.companyName,
         companyWebsite: lead.companyWebsite,
+        source: lead.source,
       },
       previousMessages: previousMessages.map((m) => ({
         direction: m.direction,
         sequenceStep: m.sequenceStep,
+        channel: m.channel,
         subject: m.subject,
         body: m.body,
         sentAt: m.sentAt,
+        metadata: extractPreviousHookMetadata(m.metadata),
       })),
       sequence,
       currentStep,
@@ -87,6 +92,7 @@ export async function POST(request: NextRequest) {
         hook_source: result.hookSource,
         sequence_id: sequenceId,
         channel: result.channel,
+        orchestration: result.orchestration,
         mode,
       },
     });

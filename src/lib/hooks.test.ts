@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
-  validateHook,
+  validateHook as baseValidateHook,
   rewriteChangeVerbs,
   hasValidQuestionStructure,
   buildSystemPrompt,
-  publishGate,
-  publishGateFinal,
-  publishGateValidateHook,
+  publishGate as basePublishGate,
+  publishGateFinal as basePublishGateFinal,
+  publishGateValidateHook as basePublishGateValidateHook,
   classifySource,
   computeEntityHitScore,
   findRoleTokenHit,
@@ -25,9 +25,55 @@ import {
   isFirstPartySource,
   isReputablePublisher,
   hasMarketStatMisframing,
+  buildInterpreterSystemPrompt,
+  buildComposerSystemPrompt,
+  buildComposerUserPrompt,
+  computeHookSelectionCriteria,
 } from "./hooks";
 import type { EvidenceTier, StructuredHook } from "./types";
 import type { SenderContext } from "./workspace";
+
+const TEST_PROMISE = "Happy to show you what that looks like at that scale.";
+
+function withTestPromise<T extends { promise?: string }>(value: T): T {
+  return {
+    ...value,
+    promise: value.promise ?? TEST_PROMISE,
+  };
+}
+
+function validateHook(
+  raw: Parameters<typeof baseValidateHook>[0],
+  sourceLookup?: Parameters<typeof baseValidateHook>[1],
+  messagingStyle?: Parameters<typeof baseValidateHook>[2],
+) {
+  return baseValidateHook(withTestPromise(raw), sourceLookup, messagingStyle);
+}
+
+function publishGate(
+  rawHooks: Parameters<typeof basePublishGate>[0],
+  sourceLookup: Parameters<typeof basePublishGate>[1],
+  options?: Parameters<typeof basePublishGate>[2],
+  messagingStyle?: Parameters<typeof basePublishGate>[3],
+) {
+  return basePublishGate(rawHooks.map((hook) => withTestPromise(hook)), sourceLookup, options, messagingStyle);
+}
+
+function publishGateValidateHook(
+  hook: Parameters<typeof basePublishGateValidateHook>[0],
+  messagingStyle?: Parameters<typeof basePublishGateValidateHook>[1],
+) {
+  return basePublishGateValidateHook(withTestPromise(hook), messagingStyle);
+}
+
+function publishGateFinal(
+  hooks: Parameters<typeof basePublishGateFinal>[0],
+  companyDomain?: Parameters<typeof basePublishGateFinal>[1],
+  options?: Parameters<typeof basePublishGateFinal>[2],
+  messagingStyle?: Parameters<typeof basePublishGateFinal>[3],
+) {
+  return basePublishGateFinal(hooks.map((hook) => withTestPromise(hook)), companyDomain, options, messagingStyle);
+}
 
 // ---------------------------------------------------------------------------
 // Helper: build a source lookup from an array of sources
@@ -333,6 +379,7 @@ describe("change verb validator: rewrite or drop", () => {
         hook: `You switched to "$250/reply" pricing — is that to de-risk clients, or to push quality?`,
       },
       sourceLookup,
+      "challenger",
     );
     expect(result).not.toBeNull();
     expect(result!.hook).toContain("You use");
@@ -346,6 +393,7 @@ describe("change verb validator: rewrite or drop", () => {
         hook: `You recently changed to "$250/reply" — are clients buying on cost, or outcomes?`,
       },
       sourceLookup,
+      "challenger",
     );
     expect(result).not.toBeNull();
     expect(result!.hook).not.toMatch(/\brecently changed\b/i);
@@ -554,24 +602,26 @@ describe("first-person framing validator", () => {
     confidence: "high",
   };
 
-  it("rejects hooks with 'we'", () => {
+  it("rejects hooks with 'we' in challenger mode", () => {
     const result = validateHook(
       {
         ...basePayload,
         hook: `We noticed your "3.2X reply rate vs templates" — is the lever list quality, or personalization?`,
       },
       sourceLookup,
+      "challenger",
     );
     expect(result).toBeNull();
   });
 
-  it("rejects hooks with 'our'", () => {
+  it("rejects hooks with 'our' in challenger mode", () => {
     const result = validateHook(
       {
         ...basePayload,
         hook: `Your "3.2X reply rate vs templates" aligns with our findings — is the lever list quality, or personalization?`,
       },
       sourceLookup,
+      "challenger",
     );
     expect(result).toBeNull();
   });
@@ -1254,19 +1304,21 @@ describe("sender context prompt injection", () => {
     const prompt = buildSystemPrompt(ctx);
     expect(prompt).toContain("SENDER CONTEXT");
     expect(prompt).toContain("We help B2B teams book more meetings");
-    expect(prompt).toContain("at most ONE sentence");
-    expect(prompt).not.toContain("## VERIFICATION-ONLY MODE");
+    expect(prompt).toContain("SENDER CONTEXT");
+    expect(prompt).toContain("MANDATORY OUTCOME");
+    expect(prompt).toContain("Meetings");
   });
 
-  it("buildSystemPrompt uses verification-only mode when null", () => {
+  it("buildSystemPrompt uses the default custom persona when sender context is null", () => {
     const prompt = buildSystemPrompt(null);
-    expect(prompt).toContain("VERIFICATION-ONLY");
+    expect(prompt).toContain("PERSONA: Custom");
     expect(prompt).not.toContain("SENDER CONTEXT");
   });
 
-  it("buildSystemPrompt uses verification-only mode when undefined", () => {
+  it("buildSystemPrompt uses the default custom persona when sender context is undefined", () => {
     const prompt = buildSystemPrompt();
-    expect(prompt).toContain("VERIFICATION-ONLY");
+    expect(prompt).toContain("PERSONA: Custom");
+    expect(prompt).not.toContain("SENDER CONTEXT");
   });
 });
 
@@ -1680,7 +1732,7 @@ describe("Persona-level tailoring", () => {
   it("buildSystemPrompt includes role framing for VP Sales", () => {
     const prompt = buildSystemPrompt(null, "VP Sales");
     expect(prompt).toContain("TARGET ROLE: VP Sales");
-    expect(prompt).toContain("pipeline coverage");
+    expect(prompt).toContain("forecast pressure");
   });
 
   it("buildSystemPrompt includes role framing for RevOps", () => {
@@ -1822,7 +1874,11 @@ describe("Rank and Cap", () => {
   }
 
   it("caps to 3 hooks by default", () => {
-    const hooks = Array.from({ length: 8 }, () => makeHook());
+    const hooks = Array.from({ length: 8 }, (_, index) => makeHook({
+      buyer_tension_id: `t-${index}`,
+      source_url: `https://example.com/blog/${index}`,
+      hook: `You added "predictive scoring" to segment ${index} — is that improving forecast accuracy, or just giving managers one more dashboard to inspect?`,
+    }));
     const { top, overflow } = rankAndCap(hooks);
     expect(top).toHaveLength(3);
     expect(overflow).toHaveLength(5);
@@ -1830,8 +1886,20 @@ describe("Rank and Cap", () => {
 
   it("ranks Tier A above Tier B", () => {
     const hooks = [
-      makeHook({ evidence_tier: "B", source_date: "2026-02-15" }),
-      makeHook({ evidence_tier: "A", source_date: "2026-02-15" }),
+      makeHook({
+        evidence_tier: "B",
+        source_date: "2026-02-15",
+        buyer_tension_id: "tier-b",
+        source_url: "https://example.com/blog/tier-b",
+        hook: 'You added "predictive scoring" to SMB — is that improving forecast accuracy or just changing rep inspection rhythm?',
+      }),
+      makeHook({
+        evidence_tier: "A",
+        source_date: "2026-02-15",
+        buyer_tension_id: "tier-a",
+        source_url: "https://example.com/blog/tier-a",
+        hook: 'You added "predictive scoring" to enterprise — is that improving forecast accuracy or just changing rep inspection rhythm?',
+      }),
     ];
     const { top } = rankAndCap(hooks, 2);
     expect(top[0].evidence_tier).toBe("A");
@@ -1839,8 +1907,18 @@ describe("Rank and Cap", () => {
 
   it("ranks newer hooks higher", () => {
     const hooks = [
-      makeHook({ source_date: "2024-01-01" }),
-      makeHook({ source_date: "2026-03-01" }),
+      makeHook({
+        source_date: "2024-01-01",
+        buyer_tension_id: "older",
+        source_url: "https://example.com/blog/older",
+        hook: 'You added "predictive scoring" last year — is that helping managers inspect commit risk or just documenting slippage later?',
+      }),
+      makeHook({
+        source_date: "2026-03-01",
+        buyer_tension_id: "newer",
+        source_url: "https://example.com/blog/newer",
+        hook: 'You added "predictive scoring" this quarter — is that helping managers inspect commit risk or just documenting slippage later?',
+      }),
     ];
     const { top } = rankAndCap(hooks, 2);
     expect(top[0].source_date).toBe("2026-03-01");
@@ -1856,10 +1934,739 @@ describe("Rank and Cap", () => {
   });
 
   it("returns all hooks if fewer than cap", () => {
-    const hooks = [makeHook(), makeHook()];
+    const hooks = [
+      makeHook({ buyer_tension_id: "a", source_url: "https://example.com/blog/a", hook: 'You added "predictive scoring" — is that tightening forecast calls or exposing rep judgment drift?' }),
+      makeHook({ buyer_tension_id: "b", source_url: "https://example.com/blog/b", hook: 'You launched "deal inspection" workflows — is that helping managers coach in-quarter or just standardizing postmortems?' }),
+    ];
     const { top, overflow } = rankAndCap(hooks, 3);
     expect(top).toHaveLength(2);
     expect(overflow).toHaveLength(0);
+  });
+
+  it("prefers credible and interesting hooks over flatter compliant hooks", () => {
+    const hooks = [
+      makeHook({
+        evidence_tier: "A",
+        specificity_score: 8,
+        interestingness_score: 9,
+        tension_richness_score: 8,
+        hook: 'You added "predictive scoring" for enterprise accounts — is that tightening forecast calls, or exposing where rep judgment still drifts quarter to quarter?',
+      }),
+      makeHook({
+        evidence_tier: "A",
+        specificity_score: 5,
+        interestingness_score: 3,
+        tension_richness_score: 4,
+        hook: 'You added "predictive scoring" — is the team using it?',
+      }),
+    ];
+
+    const { top } = rankAndCap(hooks, 2);
+    expect(top[0].interestingness_score).toBe(9);
+  });
+
+  it("deduplicates near-identical hooks from the same tension", () => {
+    const hooks = [
+      makeHook({
+        buyer_tension_id: "t1",
+        hook: 'You added "predictive scoring" — is that tightening forecast calls or exposing where rep judgment drifts?',
+      }),
+      makeHook({
+        buyer_tension_id: "t1",
+        hook: 'You added "predictive scoring" — is that tightening forecast calls or just exposing where rep judgment still drifts?',
+      }),
+      makeHook({
+        buyer_tension_id: "t2",
+        source_url: "https://example.com/blog/t2",
+        hook: 'You rolled out "deal inspection" workflows — is that helping managers coach in-quarter or just documenting misses after the fact?',
+      }),
+    ];
+
+    const { top, overflow } = rankAndCap(hooks, 3, { targetRole: "VP Sales" });
+    expect(top).toHaveLength(2);
+    expect(overflow).toHaveLength(0);
+    expect(new Set(top.map((hook) => hook.buyer_tension_id)).size).toBe(2);
+  });
+
+  it("rewards non-overlap when selecting the set", () => {
+    const selected = [makeHook({
+      structural_variant: "curiosity-gap",
+      trigger_type: "stat",
+      buyer_tension_id: "t1",
+      hook: 'You added "predictive scoring" — is that tightening forecast calls or exposing where rep judgment drifts?',
+    })];
+    const overlapping = makeHook({
+      structural_variant: "curiosity-gap",
+      trigger_type: "stat",
+      buyer_tension_id: "t1",
+      hook: 'You added "predictive scoring" — is that tightening forecast calls or just exposing where rep judgment still drifts?',
+    });
+    const distinct = makeHook({
+      structural_variant: "scale-friction",
+      trigger_type: "hiring",
+      buyer_tension_id: "t2",
+      hook: 'You are hiring 12 AEs — is inspection cadence keeping pace, or are managers finding commit risk after the week is already gone?',
+    });
+
+    const overlapScore = computeHookSelectionCriteria(overlapping, selected, "VP Sales");
+    const distinctScore = computeHookSelectionCriteria(distinct, selected, "VP Sales");
+    expect(distinctScore.nonOverlap).toBeGreaterThan(overlapScore.nonOverlap);
+  });
+
+  it("applies selector priors and company memory penalties", () => {
+    const hook = makeHook({
+      buyer_tension_id: "t-prior",
+      structural_variant: "scale-friction",
+      trigger_type: "hiring",
+      hook: 'You are hiring 12 AEs — is inspection cadence keeping pace, or are managers finding commit risk after the week is already gone?',
+    });
+
+    const favored = computeHookSelectionCriteria(hook, [], "VP Sales", {
+      buyerTensionBoosts: { "t-prior": 1.5 },
+      structuralVariantBoosts: { "scale-friction": 0.5 },
+      angleBoosts: { trigger: 0.25 },
+      triggerTypeBoosts: { hiring: 0.5 },
+      buyerTensionTrials: { "t-prior": 8 },
+      structuralVariantTrials: { "scale-friction": 12 },
+      angleTrials: { trigger: 20 },
+      triggerTypeTrials: { hiring: 10 },
+      totalTrials: 30,
+      explorationWeight: 0.85,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    const penalized = computeHookSelectionCriteria(hook, [], "VP Sales", {
+      buyerTensionBoosts: { "t-prior": 1.5 },
+      structuralVariantBoosts: { "scale-friction": 0.5 },
+      angleBoosts: { trigger: 0.25 },
+      triggerTypeBoosts: { hiring: 0.5 },
+      buyerTensionTrials: { "t-prior": 8 },
+      structuralVariantTrials: { "scale-friction": 12 },
+      angleTrials: { trigger: 20 },
+      triggerTypeTrials: { hiring: 10 },
+      totalTrials: 30,
+      explorationWeight: 0.85,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: {
+        buyerTensionIds: ["t-prior"],
+        structuralVariants: ["scale-friction"],
+        hookTexts: [hook.hook],
+      },
+    });
+
+    expect(favored.priorAdjustment).toBeGreaterThan(penalized.priorAdjustment);
+    expect(favored.total).toBeGreaterThan(penalized.total);
+  });
+
+  it("adds exploration bonus for under-tested patterns", () => {
+    const exploratory = makeHook({
+      buyer_tension_id: "fresh-tension",
+      structural_variant: "proof-to-problem",
+      trigger_type: "case_study",
+      hook: 'You published that customer proof point — is that creating more qualified pipeline, or just giving reps another static proof asset to reuse?',
+    });
+
+    const established = makeHook({
+      buyer_tension_id: "mature-tension",
+      structural_variant: "curiosity-gap",
+      trigger_type: "stat",
+      hook: 'You added "predictive scoring" — is that tightening forecast calls or just exposing rep judgment drift?',
+    });
+
+    const exploratoryScore = computeHookSelectionCriteria(exploratory, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: { "fresh-tension": 0, "mature-tension": 18 },
+      structuralVariantTrials: { "proof-to-problem": 0, "curiosity-gap": 24 },
+      angleTrials: { trigger: 30 },
+      triggerTypeTrials: { case_study: 0, stat: 22 },
+      totalTrials: 40,
+      explorationWeight: 1,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    const exploratoryNoExploration = computeHookSelectionCriteria(exploratory, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: { "fresh-tension": 0, "mature-tension": 18 },
+      structuralVariantTrials: { "proof-to-problem": 0, "curiosity-gap": 24 },
+      angleTrials: { trigger: 30 },
+      triggerTypeTrials: { case_study: 0, stat: 22 },
+      totalTrials: 40,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    const establishedScore = computeHookSelectionCriteria(established, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: { "fresh-tension": 0, "mature-tension": 18 },
+      structuralVariantTrials: { "proof-to-problem": 0, "curiosity-gap": 24 },
+      angleTrials: { trigger: 30 },
+      triggerTypeTrials: { case_study: 0, stat: 22 },
+      totalTrials: 40,
+      explorationWeight: 1,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    expect(exploratoryScore.explorationBonus).toBeGreaterThan(establishedScore.explorationBonus);
+    expect(exploratoryScore.total).toBeGreaterThan(exploratoryNoExploration.total);
+  });
+
+  it("adds personalization bonus for workspace style fit", () => {
+    const conciseOperatorHook = makeHook({
+      hook: 'You added "predictive scoring" — is that tightening forecast calls or exposing commit risk earlier?',
+    });
+    const formalHook = makeHook({
+      hook: "Following your predictive scoring rollout, a consideration: whether organizational alignment is evolving in step with the broader planning process across leadership reviews?",
+    });
+
+    const conciseScore = computeHookSelectionCriteria(conciseOperatorHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: "short",
+        directnessPreference: 0.9,
+        conversationalPreference: 0.1,
+        formalPreference: 0,
+        operatorPreference: 0.8,
+        explicitVoiceTone: "Direct & Professional",
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    const formalScore = computeHookSelectionCriteria(formalHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: "short",
+        directnessPreference: 0.9,
+        conversationalPreference: 0.1,
+        formalPreference: 0,
+        operatorPreference: 0.8,
+        explicitVoiceTone: "Direct & Professional",
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    expect(conciseScore.personalizationBonus).toBeGreaterThan(formalScore.personalizationBonus);
+    expect(conciseScore.total).toBeGreaterThan(formalScore.total);
+  });
+
+  it("lets user-level style memory override the broader workspace default", () => {
+    const directHook = makeHook({
+      hook: 'You added "predictive scoring" — is that tightening forecast calls or exposing commit risk earlier?',
+    });
+    const conversationalHook = makeHook({
+      hook: "So you rolled out predictive scoring. Are managers actually catching commit risk earlier, or just reviewing the same pipeline story with nicer labels?",
+    });
+
+    const directScore = computeHookSelectionCriteria(directHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: "medium",
+        directnessPreference: 0.1,
+        conversationalPreference: 0.8,
+        formalPreference: 0,
+        operatorPreference: 0.5,
+        explicitVoiceTone: "Conversational",
+      },
+      userStyle: {
+        preferredLength: "short",
+        directnessPreference: 1,
+        conversationalPreference: 0.1,
+        formalPreference: 0,
+        operatorPreference: 0.9,
+        preferredTone: "direct",
+        preferredChannel: "email",
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    const conversationalScore = computeHookSelectionCriteria(conversationalHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: "medium",
+        directnessPreference: 0.1,
+        conversationalPreference: 0.8,
+        formalPreference: 0,
+        operatorPreference: 0.5,
+        explicitVoiceTone: "Conversational",
+      },
+      userStyle: {
+        preferredLength: "short",
+        directnessPreference: 1,
+        conversationalPreference: 0.1,
+        formalPreference: 0,
+        operatorPreference: 0.9,
+        preferredTone: "direct",
+        preferredChannel: "email",
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    });
+
+    expect(directScore.personalizationBonus).toBeGreaterThanOrEqual(conversationalScore.personalizationBonus);
+    expect(directScore.total).toBeGreaterThan(conversationalScore.total);
+  });
+
+  it("applies counterfactual penalties for historically weak source, wording, and timing patterns", () => {
+    const diagnosedHook = makeHook({
+      buyer_tension_id: "underperforming-tension",
+      structural_variant: "signal-mirror",
+      evidence_tier: "B",
+      source_date: "",
+      hook: 'You launched a partner program — is that helping pipeline quality, or just creating another broad top-of-funnel motion to manage?',
+    });
+
+    const cleanHook = makeHook({
+      buyer_tension_id: "healthy-tension",
+      structural_variant: "proof-to-problem",
+      evidence_tier: "A",
+      source_date: "2026-03-01",
+      hook: 'You published the implementation proof point — is forecast confidence improving because inspection is tighter, or because rep handoffs are cleaner?',
+    });
+
+    const diagnosedScore = computeHookSelectionCriteria(diagnosedHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+      counterfactuals: {
+        buyerTensionPenalties: { "underperforming-tension": 0.8 },
+        structuralVariantPenalties: { "signal-mirror": 0.7 },
+        evidenceTierPenalties: { B: 0.6 },
+        targetRolePenalties: { "VP Sales": 0.4 },
+        staleSourcePenalty: 0.5,
+        undatedSourcePenalty: 0.35,
+      },
+    });
+
+    const cleanScore = computeHookSelectionCriteria(cleanHook, [], "VP Sales", {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+      counterfactuals: {
+        buyerTensionPenalties: { "underperforming-tension": 0.8 },
+        structuralVariantPenalties: { "signal-mirror": 0.7 },
+        evidenceTierPenalties: { B: 0.6 },
+        targetRolePenalties: { "VP Sales": 0.4 },
+        staleSourcePenalty: 0.5,
+        undatedSourcePenalty: 0.35,
+      },
+    });
+
+    expect(diagnosedScore.counterfactualPenalty).toBeGreaterThan(0);
+    expect(diagnosedScore.counterfactualPenalty).toBeGreaterThan(cleanScore.counterfactualPenalty);
+    expect(diagnosedScore.total).toBeLessThan(cleanScore.total);
+  });
+
+  it("adds retrieval bonus for hooks that match a proven reusable archetype", () => {
+    const matchingHook = makeHook({
+      buyer_tension_id: "retrieval-tension",
+      structural_variant: "proof-to-problem",
+      trigger_type: "case_study",
+      evidence_tier: "A",
+      angle: "risk",
+      hook: 'You published the customer proof point — is that helping forecast confidence, or just giving reps another proof asset without cleaner inspection?',
+    });
+
+    const nonMatchingHook = makeHook({
+      buyer_tension_id: "other-tension",
+      structural_variant: "signal-mirror",
+      trigger_type: "hiring",
+      evidence_tier: "B",
+      angle: "trigger",
+      hook: 'You are hiring 14 reps — is onboarding speed masking where pipeline quality is slipping?',
+    });
+
+    const priors = {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+      retrievalLibrary: [{
+        generatedHookId: "g-1",
+        buyerTensionId: "retrieval-tension",
+        structuralVariant: "proof-to-problem",
+        angle: "risk" as const,
+        triggerType: "case_study" as const,
+        targetRole: "VP Sales",
+        evidenceTier: "A" as const,
+        hookText: "Winning example hook",
+        evidenceSnippet: "Customer proof",
+        sourceTitle: "Case study",
+        outcomeScore: 5.6,
+      }],
+      counterfactuals: {
+        buyerTensionPenalties: {},
+        structuralVariantPenalties: {},
+        evidenceTierPenalties: {},
+        targetRolePenalties: {},
+        staleSourcePenalty: 0,
+        undatedSourcePenalty: 0,
+      },
+    };
+
+    const matchingScore = computeHookSelectionCriteria(matchingHook, [], "VP Sales", priors);
+    const nonMatchingScore = computeHookSelectionCriteria(nonMatchingHook, [], "VP Sales", priors);
+
+    expect(matchingScore.retrievalBonus).toBeGreaterThan(0);
+    expect(matchingScore.retrievalBonus).toBeGreaterThan(nonMatchingScore.retrievalBonus);
+    expect(matchingScore.total).toBeGreaterThan(nonMatchingScore.total);
+  });
+
+  it("adds retrieval bonus when the hook matches a learned source-type preference", () => {
+    const firstPartyHook = makeHook({
+      source_url: "https://acme.com/news/launch",
+      evidence_tier: "A",
+      source_date: "2026-03-20",
+      hook: "You just launched the new workflow release — is that making pipeline inspection easier, or adding more rep coaching overhead?",
+    });
+
+    const fallbackHook = makeHook({
+      source_url: "https://unknown-example-blog.io/acme-roundup",
+      evidence_tier: "C",
+      source_date: "2026-03-20",
+      hook: "Saw a roundup mentioning Acme — is the workflow release changing pipeline inspection yet?",
+    });
+
+    const priors = {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+      currentCompanyDomain: "acme.com",
+      retrievalLibrary: [],
+      sourceTypeBoosts: {
+        first_party: 0.8,
+        fallback_web: -0.2,
+      },
+      counterfactuals: {
+        buyerTensionPenalties: {},
+        structuralVariantPenalties: {},
+        evidenceTierPenalties: {},
+        targetRolePenalties: {},
+        staleSourcePenalty: 0,
+        undatedSourcePenalty: 0,
+      },
+    };
+
+    const firstPartyScore = computeHookSelectionCriteria(firstPartyHook, [], "VP Sales", priors);
+    const fallbackScore = computeHookSelectionCriteria(fallbackHook, [], "VP Sales", priors);
+
+    expect(firstPartyScore.retrievalBonus).toBeGreaterThan(fallbackScore.retrievalBonus);
+    expect(firstPartyScore.total).toBeGreaterThan(fallbackScore.total);
+  });
+
+  it("adds retrieval bonus when the hook matches a learned trigger-specific source preference", () => {
+    const trustedFundingHook = makeHook({
+      trigger_type: "funding",
+      source_url: "https://www.reuters.com/business/acme-funding-round-2026-03-20/",
+      evidence_tier: "B",
+      source_date: "2026-03-20",
+      hook: "Reuters says Acme just raised fresh capital — does that change how tightly pipeline inspection gets reviewed this quarter?",
+    });
+
+    const fallbackFundingHook = makeHook({
+      trigger_type: "funding",
+      source_url: "https://random-startup-blog.biz/acme-funding-rumor",
+      evidence_tier: "C",
+      source_date: "2026-03-20",
+      hook: "Saw a blog mention Acme funding — does that change pipeline inspection this quarter?",
+    });
+
+    const priors = {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+      currentCompanyDomain: "acme.com",
+      retrievalLibrary: [],
+      sourceTypeBoosts: {},
+      triggerSourceTypeBoosts: {
+        funding: {
+          trusted_news: 0.95,
+          fallback_web: -0.35,
+        },
+      },
+      counterfactuals: {
+        buyerTensionPenalties: {},
+        structuralVariantPenalties: {},
+        evidenceTierPenalties: {},
+        targetRolePenalties: {},
+        staleSourcePenalty: 0,
+        undatedSourcePenalty: 0,
+      },
+    };
+
+    const trustedFundingScore = computeHookSelectionCriteria(trustedFundingHook, [], "VP Sales", priors);
+    const fallbackFundingScore = computeHookSelectionCriteria(fallbackFundingHook, [], "VP Sales", priors);
+
+    expect(trustedFundingScore.retrievalBonus).toBeGreaterThan(fallbackFundingScore.retrievalBonus);
+    expect(trustedFundingScore.total).toBeGreaterThan(fallbackFundingScore.total);
+  });
+
+  it("adds timing bonus when a hook matches learned freshness preferences", () => {
+    const freshHook = makeHook({
+      source_date: "2026-03-25",
+      evidence_tier: "A",
+      hook: 'You launched the rollout last week — is that improving forecast inspection already, or just shifting pressure downstream?',
+    });
+    const staleHook = makeHook({
+      source_date: "2025-08-01",
+      evidence_tier: "A",
+      hook: 'You launched the rollout last year — is that still helping forecast inspection, or has the value plateaued?',
+    });
+
+    const priors = {
+      buyerTensionBoosts: {},
+      structuralVariantBoosts: {},
+      angleBoosts: {},
+      triggerTypeBoosts: {},
+      buyerTensionTrials: {},
+      structuralVariantTrials: {},
+      angleTrials: {},
+      triggerTypeTrials: {},
+      totalTrials: 0,
+      explorationWeight: 0,
+      workspaceStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        explicitVoiceTone: null,
+      },
+      userStyle: {
+        preferredLength: null,
+        directnessPreference: 0,
+        conversationalPreference: 0,
+        formalPreference: 0,
+        operatorPreference: 0,
+        preferredTone: null,
+        preferredChannel: null,
+      },
+      timingPreference: {
+        preferredFreshness: "fresh" as const,
+        freshPreference: 1.1,
+        recentPreference: 0.4,
+        staleTolerance: 0,
+        undatedTolerance: 0,
+        preferredSendWindow: null,
+      },
+      recentCompanyMemory: { buyerTensionIds: [], structuralVariants: [], hookTexts: [] },
+    };
+
+    const freshScore = computeHookSelectionCriteria(freshHook, [], "VP Sales", priors);
+    const staleScore = computeHookSelectionCriteria(staleHook, [], "VP Sales", priors);
+
+    expect(freshScore.timingBonus).toBeGreaterThan(staleScore.timingBonus);
+    expect(freshScore.total).toBeGreaterThan(staleScore.total);
+  });
+});
+
+describe("Phase 2 prompts", () => {
+  it("builds an explicit interpreter prompt", () => {
+    const prompt = buildInterpreterSystemPrompt(null, "VP Sales");
+    expect(prompt).toContain("Signal Interpreter stage");
+    expect(prompt).toContain("structured buyer tensions");
+  });
+
+  it("builds a composer prompt that requires buyer tension ids", () => {
+    const prompt = buildComposerSystemPrompt(null, "VP Sales");
+    expect(prompt).toContain("Hook Composer stage");
+    expect(prompt).toContain("buyer_tension_id");
+  });
+
+  it("includes reusable winning patterns in the composer prompt when available", () => {
+    const prompt = buildComposerUserPrompt("https://acme.com", [{
+      id: "tension-1",
+      news_item: 1,
+      source_title: "Acme launch",
+      source_date: "2026-03-01",
+      source_url: "https://acme.com/news",
+      evidence_tier: "A",
+      evidence_snippet: "Launched workflow automation",
+      angle: "trigger",
+      buyer_tension: "Pipeline inspection is getting harder",
+      pattern_family: "proof-to-problem",
+      specificity_tokens: ["workflow automation"],
+      confidence: "high",
+      richness_score: 8,
+      specificity_score: 8,
+      interestingness_score: 7,
+    }], undefined, [{
+      generatedHookId: "g-1",
+      buyerTensionId: "tension-1",
+      structuralVariant: "proof-to-problem",
+      angle: "trigger",
+      triggerType: "case_study",
+      targetRole: "VP Sales",
+      evidenceTier: "A",
+      hookText: "Winning example hook",
+      evidenceSnippet: "Launched workflow automation",
+      sourceTitle: "Acme launch",
+      outcomeScore: 5.2,
+    }]);
+
+    expect(prompt).toContain("Reusable Winning Patterns");
+    expect(prompt).toContain("Winning example hook");
+    expect(prompt).toContain("Do not repeat wording verbatim");
   });
 });
 

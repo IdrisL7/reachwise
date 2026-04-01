@@ -145,6 +145,28 @@ const endpoints = [
   },
 ];
 
+const trustPrinciples = [
+  {
+    title: "Evidence-first outputs",
+    body: "Hooks return source-backed context instead of ungrounded personalization filler, so teams can see why a line was generated before using it.",
+  },
+  {
+    title: "Built for workflow handoff",
+    body: "The API matches the product flow: generate hooks, save leads, assign sequences, then review queued drafts in Inbox.",
+  },
+  {
+    title: "Safe to test incrementally",
+    body: "Start with a single endpoint and a single API key. Free and Pro limits make it easy to verify value before rolling into production.",
+  },
+];
+
+const quickstartSteps = [
+  "Generate hooks from a company URL or company name.",
+  "Save the best contacts into Leads.",
+  "Assign a sequence if the lead should move into follow-up.",
+  "Approve or reject queued drafts in Inbox before send.",
+];
+
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
     GET: "bg-emerald-900/50 text-emerald-400 border-emerald-700",
@@ -176,6 +198,44 @@ export default function DocsPage() {
           </code>{" "}
           header.
         </p>
+
+        <section className="mb-16 grid gap-4 md:grid-cols-3">
+          {trustPrinciples.map((item) => (
+            <div key={item.title} className="rounded-2xl border border-zinc-800 bg-zinc-900/80 p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-300/80">
+                Trust surface
+              </p>
+              <h2 className="mt-3 text-lg font-semibold text-white">{item.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-400">{item.body}</p>
+            </div>
+          ))}
+        </section>
+
+        <section className="mb-16 rounded-2xl border border-zinc-800 bg-[linear-gradient(135deg,rgba(24,24,35,0.95),rgba(14,14,18,0.98))] p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-300/80">
+                Quickstart flow
+              </p>
+              <h2 className="mt-3 text-2xl font-semibold text-white">Map the API to the actual product workflow</h2>
+              <p className="mt-3 text-sm leading-6 text-zinc-400">
+                If you are evaluating whether the API matches the app, this is the shortest path to proving it in a real outbound loop.
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-zinc-300">
+              Base URL
+              <div className="mt-1 font-mono text-violet-300">{API_BASE}</div>
+            </div>
+          </div>
+          <ol className="mt-6 grid gap-3 md:grid-cols-2">
+            {quickstartSteps.map((step, index) => (
+              <li key={step} className="rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-sm text-zinc-300">
+                <span className="mr-2 text-violet-300">{index + 1}.</span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        </section>
 
         {/* Auth section */}
         <section className="mb-16">

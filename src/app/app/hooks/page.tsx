@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import ContextWalletModal from "@/components/context-wallet-modal";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Sparkles, ChevronDown, CheckCircle } from 'lucide-react';
+import { Sparkles, ChevronDown, CheckCircle, Mail, Users, ListChecks, Inbox, BarChart3 } from 'lucide-react';
 import { CompanySearchInput } from "@/components/company-search-input";
 import { HookCard } from "./hook-card";
 import { IntentSignals } from "./intent-signals";
+import { RetrievalDiagnostics } from "./retrieval-diagnostics";
 import { UpgradePrompt } from "./upgrade-prompt";
 import { CompanyIntelPanel } from "./company-intel-panel";
 import type { CompanyIntelligence } from "@/lib/company-intel";
@@ -29,6 +31,8 @@ interface Hook {
   promise?: string;
   trigger_type?: string;
   bridge_quality?: string;
+  buyer_tension_id?: string;
+  selector_score?: number;
 }
 
 interface GeneratedEmail {
@@ -41,6 +45,33 @@ interface ChannelVariant {
   text: string;
 }
 
+interface RetrievalDiagnosticsState {
+  retrievalMode: "first_party" | "hybrid" | "web_only" | "empty";
+  sourceMix: {
+    firstParty: number;
+    trustedNews: number;
+    semanticWeb: number;
+    fallbackWeb: number;
+  };
+  newsExpansionUsed: boolean;
+  fallbackUsed: boolean;
+  recommendedNextPass: "none" | "news_expansion" | "generic_fallback";
+  reasons: string[];
+  learnedPreferences?: {
+    topSourcePreferences: Array<{
+      sourceType: "first_party" | "trusted_news" | "semantic_web" | "fallback_web";
+      adjustment: number;
+      pinned?: boolean;
+    }>;
+    topTriggerPreferences: Array<{
+      triggerType: string;
+      sourceType: "first_party" | "trusted_news" | "semantic_web" | "fallback_web";
+      adjustment: number;
+      pinned?: boolean;
+    }>;
+  };
+}
+
 function trackEvent(event: string) {
   fetch("/api/track-event", {
     method: "POST",
@@ -49,7 +80,17 @@ function trackEvent(event: string) {
   }).catch(() => {});
 }
 
+function trackHookFeedback(hookId: string | undefined, event: string, metadata?: Record<string, unknown>) {
+  if (!hookId) return;
+  fetch("/api/hooks/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ hookId, event, metadata }),
+  }).catch(() => {});
+}
+
 export default function HooksPage() {
+  const router = useRouter();
   const [url, setUrl] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [hooks, setHooks] = useState<Hook[]>([]);
@@ -111,11 +152,17 @@ export default function HooksPage() {
   const [companyIntel, setCompanyIntel] = useState<CompanyIntelligence | null>(null);
   const [isBasicIntel, setIsBasicIntel] = useState(false);
   const [activeChannel, setActiveChannel] = useState<Record<number, string>>({});
-  const [rightTab, setRightTab] = useState<"intel" | "intent">("intel");
+  const [retrievalDiagnostics, setRetrievalDiagnostics] = useState<RetrievalDiagnosticsState | null>(null);
+  const [managingRetrievalMemory, setManagingRetrievalMemory] = useState(false);
+  const [retrievalMemoryAction, setRetrievalMemoryAction] = useState<"dampen" | "reset" | "pin" | "unpin" | null>(null);
+  const [rightTab, setRightTab] = useState<"intel" | "intent" | "retrieval">("intel");
   const [upgradePrompt, setUpgradePrompt] = useState<{
     title: string; message: string; cta: string; href: string;
   } | null>(null);
   const [onboardingStep, setOnboardingStep] = useState<number | null>(null);
+  const [savedLeadCount, setSavedLeadCount] = useState(0);
+  const [sequenceStartedCount, setSequenceStartedCount] = useState(0);
+  const [savingWatchlist, setSavingWatchlist] = useState(false);
   const [targetRole, setTargetRole] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const saved = localStorage.getItem("gsh_targetRole");
@@ -129,11 +176,19 @@ export default function HooksPage() {
     }
     return "evidence";
   });
+  const prefillAutoRunPendingRef = useRef(false);
+  const prefillAutoRunStartedRef = useRef(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const prefillUrl = params.get("url");
+    const prefillCompanyName = params.get("companyName");
+    if (prefillUrl || prefillCompanyName) {
+      prefillAutoRunPendingRef.current = true;
+      prefillAutoRunStartedRef.current = false;
+    }
     if (prefillUrl) setUrl(prefillUrl);
+    if (prefillCompanyName) setCompanyName(prefillCompanyName);
   }, []);
 
   useEffect(() => {
@@ -206,7 +261,54 @@ export default function HooksPage() {
     }
   }
 
-  async function copyHook(text: string, index: number) {
+  async function addCurrentCompanyToWatchlist() {
+    const trimmedCompanyName = companyName.trim();
+    const trimmedDomain = companyDomain.trim();
+    const fallbackName = trimmedDomain ? trimmedDomain.split(".")[0] : "";
+
+    if (!trimmedCompanyName && !trimmedDomain) {
+      router.push("/app/watchlist?source=hooks&status=missing");
+      return;
+    }
+
+    setSavingWatchlist(true);
+    try {
+      const body = trimmedDomain
+        ? { companyName: trimmedCompanyName || fallbackName, domain: trimmedDomain }
+        : { companyName: trimmedCompanyName };
+
+      const res = await fetch("/api/watchlist", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => null);
+
+      const params = new URLSearchParams({
+        source: "hooks",
+        company: trimmedCompanyName || trimmedDomain || fallbackName,
+      });
+
+      if (res.ok) {
+        params.set("status", "saved");
+      } else if (res.status === 409) {
+        params.set("status", "exists");
+      } else if (res.status === 403) {
+        params.set("status", "locked");
+      } else {
+        params.set("status", "error");
+        if (data?.error) params.set("message", data.error);
+      }
+
+      router.push(`/app/watchlist?${params.toString()}`);
+    } catch {
+      router.push("/app/watchlist?source=hooks&status=error");
+    } finally {
+      setSavingWatchlist(false);
+    }
+  }
+
+  async function copyHook(hook: Hook, index: number) {
     const active = activeChannel[index] || "email";
     if (active !== "email") {
       const variantEntry = hookVariants.find((v) => v.hook_index === index);
@@ -214,12 +316,14 @@ export default function HooksPage() {
       if (variant) {
         await navigator.clipboard.writeText(variant.text);
         setCopied(index); markCopied();
+        trackHookFeedback(hook.generated_hook_id, "copied", { channel: active });
         setTimeout(() => setCopied(null), 2000);
         return;
       }
     }
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(hook.text);
     setCopied(index); markCopied();
+    trackHookFeedback(hook.generated_hook_id, "copied", { channel: active });
     setTimeout(() => setCopied(null), 2000);
   }
 
@@ -235,7 +339,52 @@ export default function HooksPage() {
     if (hook.source_url) content += `\nSource: ${hook.source_url}`;
     await navigator.clipboard.writeText(content);
     setCopiedEvidence(index); markCopied();
+    trackHookFeedback(hook.generated_hook_id, "copied_with_evidence", { channel: active });
     setTimeout(() => setCopiedEvidence(null), 2000);
+  }
+
+  async function manageRetrievalMemory(
+    action: "dampen" | "reset" | "pin" | "unpin",
+    options?: {
+      sourceType?: "first_party" | "trusted_news" | "semantic_web" | "fallback_web";
+      triggerType?: string | null;
+    },
+  ) {
+    if (!retrievalDiagnostics?.learnedPreferences) return;
+    setManagingRetrievalMemory(true);
+    setRetrievalMemoryAction(action);
+    setError("");
+
+    try {
+      const res = await fetch("/api/hooks/retrieval-memory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          sourceType: options?.sourceType,
+          triggerType: options?.triggerType ?? null,
+          targetRole: targetRole === "Not sure / Any role" ? "General" : targetRole,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Failed to update retrieval learning.");
+      }
+
+      setRetrievalDiagnostics((current) => current ? {
+        ...current,
+        learnedPreferences: data?.learnedPreferences ?? {
+          topSourcePreferences: [],
+          topTriggerPreferences: [],
+        },
+      } : current);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update retrieval learning.");
+    } finally {
+      setManagingRetrievalMemory(false);
+      setRetrievalMemoryAction(null);
+    }
   }
 
   async function generateEmail(hook: Hook, index: number) {
@@ -272,6 +421,7 @@ export default function HooksPage() {
     const content = `Subject: ${email.subject}\n\n${email.body}`;
     await navigator.clipboard.writeText(content);
     setCopiedEmail(index); markCopied();
+    trackHookFeedback(hooks[index]?.generated_hook_id, "email_copied");
     setTimeout(() => setCopiedEmail(null), 2000);
   }
 
@@ -362,11 +512,14 @@ export default function HooksPage() {
     setOverflowHooks([]);
     setShowAll(false);
     setGeneratedEmails({});
+    setSavedLeadCount(0);
+    setSequenceStartedCount(0);
     setHookVariants([]);
     setActiveChannel({});
     setIntentData(null);
     setCompanyIntel(null);
     setIsBasicIntel(false);
+    setRetrievalDiagnostics(null);
     setSuggestion("");
     setLowSignal(false);
     setLinkedinSlug(null);
@@ -383,9 +536,11 @@ export default function HooksPage() {
         body: JSON.stringify({
           url: effectiveUrl ? (effectiveUrl.match(/^https?:\/\//) ? effectiveUrl : `https://${effectiveUrl}`) : undefined,
           companyName: companyName || undefined,
-          targetRole: targetRole !== "Not sure / Any role" && targetRole !== "General"
-            ? (targetRole === "Custom" ? customRoleInput.trim() || undefined : targetRole)
-            : undefined,
+          targetRole: targetRole === "Custom"
+            ? customRoleInput.trim() || undefined
+            : targetRole === "Not sure / Any role"
+              ? "General"
+              : targetRole || undefined,
           customPain: targetRole === "Custom" && customPain.trim() ? customPain.trim() : undefined,
           customPromise: targetRole === "Custom" && customPromise.trim() ? customPromise.trim() : undefined,
           context: userTier !== "free" && pitchContext.trim() ? pitchContext.trim() : undefined,
@@ -443,6 +598,7 @@ export default function HooksPage() {
       setIntentData(data.intent || null);
       setCompanyIntel(data.companyIntel || null);
       setIsBasicIntel(!!data.isBasicIntel);
+      setRetrievalDiagnostics(data.retrievalDiagnostics || null);
       if (data.suggestion) {
         setSuggestion(data.suggestion);
         // Surface suggestion as a visible error when no hooks were returned
@@ -475,6 +631,16 @@ export default function HooksPage() {
     }
   }, [url, companyName, targetRole, messagingStyle, customRoleInput, customPain, customPromise, pitchContext, userTier, hooksUsed]);
 
+  useEffect(() => {
+    if (!prefillAutoRunPendingRef.current || prefillAutoRunStartedRef.current) return;
+    if (loading) return;
+    if (!url && !companyName) return;
+    if (targetRole === "Custom" && !customRoleInput.trim()) return;
+
+    prefillAutoRunStartedRef.current = true;
+    void doGenerate();
+  }, [url, companyName, loading, targetRole, customRoleInput, doGenerate]);
+
   async function generateHooks(e: React.FormEvent) {
     e.preventDefault();
     if (!url && !companyName) return;
@@ -499,20 +665,22 @@ export default function HooksPage() {
   return (
     <div className="bg-[#030014] min-h-screen text-white p-8">
       <div className="max-w-5xl mx-auto">
-        {/* Header with Stepper */}
-        <div className="flex justify-between items-center mb-12">
-          <h1 className="text-3xl font-bold">Generate Hooks</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-green-400 text-sm font-bold">
-              <CheckCircle size={16}/>
-              1. Profile
-            </div>
-            <div className="h-px w-8 bg-slate-700" />
-            <div className="flex items-center gap-2 text-purple-400 text-sm font-bold underline decoration-2">
-              2. Generate
-            </div>
-            <div className="h-px w-8 bg-slate-700" />
-            <div className="text-slate-600 text-sm font-bold">3. Copy</div>
+        {/* Header with workflow */}
+        <div className="flex flex-col gap-6 mb-10 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.28em] text-slate-500 font-black mb-3">Hooks Control Center</p>
+            <h1 className="text-3xl font-bold mb-2">Generate hooks and move them straight into outbound</h1>
+            <p className="text-sm text-slate-400 max-w-2xl">
+              This is the workflow start point: generate the signal, write the email, save the lead, add the sequence, then approve the draft in Inbox.
+            </p>
+          </div>
+          <div className="grid gap-2 text-[11px] font-bold uppercase tracking-widest text-slate-500 sm:grid-cols-5">
+            {["Generate hook", "Create email", "Save lead", "Add sequence", "Approve draft"].map((step, index) => (
+              <div key={step} className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-3 text-center">
+                <div className={`mb-1 ${index === 0 ? "text-purple-400" : "text-slate-600"}`}>{`0${index + 1}`}</div>
+                <div>{step}</div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -586,6 +754,32 @@ export default function HooksPage() {
           </div>
         </form>
 
+        <div className="grid gap-4 mb-8 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500 font-black mb-2">Recommended path</p>
+            <div className="grid gap-2 sm:grid-cols-5">
+              {[
+                { icon: Sparkles, label: "Generate hook" },
+                { icon: Mail, label: "Create email" },
+                { icon: Users, label: "Save lead" },
+                { icon: ListChecks, label: "Add sequence" },
+                { icon: Inbox, label: "Approve in inbox" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/5 bg-[#0B0F1A] px-3 py-3 text-center text-xs text-slate-300">
+                  <item.icon size={14} className="mx-auto mb-2 text-violet-400" />
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-5">
+            <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500 font-black mb-2">After generation</p>
+            <p className="text-sm text-slate-400 leading-6">
+              The best outcome from this page is not just a copied hook. It is a saved lead, an assigned sequence, and a draft waiting for approval.
+            </p>
+          </div>
+        </div>
+
         {error && (
           <div className="bg-red-900/30 border border-red-800 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm animate-scale-in">
             {error}
@@ -633,9 +827,9 @@ export default function HooksPage() {
             <div className="bg-purple-500/10 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 text-purple-400">
               <Sparkles size={40} />
             </div>
-            <h2 className="text-2xl font-bold mb-3">Ready to find some evidence?</h2>
-            <p className="text-slate-500 mb-8 max-w-sm mx-auto">
-              Paste a URL to turn public signals into personalized outbound hooks with cited receipts.
+            <h2 className="text-2xl font-bold mb-3">Start with one account and one buyer</h2>
+            <p className="text-slate-500 mb-8 max-w-xl mx-auto">
+              Paste a company URL or search by name, pick the buyer role, and we will turn recent public signals into hooks you can immediately turn into an email, lead, and sequence.
             </p>
             <div className="flex justify-center gap-3">
               {EXAMPLE_COMPANIES.map((example) => (
@@ -782,6 +976,46 @@ export default function HooksPage() {
                     </button>
                   </div>
                 )}
+                <div className="rounded-2xl border border-violet-500/15 bg-violet-500/[0.05] p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.22em] text-violet-300/80 mb-2">Next best action</p>
+                      <h2 className="text-lg font-semibold text-white mb-2">{generatedEmails[0] ? "Turn the draft into workflow" : "Start with the recommended hook"}</h2>
+                      <p className="text-sm text-slate-300 max-w-2xl leading-6">
+                        {generatedEmails[0]
+                          ? "You have a draft. Save a lead or add the account to a sequence so Inbox becomes your review queue."
+                          : "Hook 1 is your strongest starting point. Generate the email first, then save the lead and assign a sequence before you move on."}
+                      </p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:min-w-[280px]">
+                      <Link href="/app/leads" className="rounded-xl border border-white/10 bg-[#0B0F1A] px-3 py-3 text-sm text-slate-200 hover:border-violet-500/25 transition-colors">Open leads</Link>
+                      <Link href="/app/inbox" className="rounded-xl border border-white/10 bg-[#0B0F1A] px-3 py-3 text-sm text-slate-200 hover:border-violet-500/25 transition-colors">Open inbox</Link>
+                      <button
+                        type="button"
+                        onClick={addCurrentCompanyToWatchlist}
+                        disabled={savingWatchlist}
+                        className="rounded-xl border border-white/10 bg-[#0B0F1A] px-3 py-3 text-sm text-slate-200 hover:border-violet-500/25 disabled:opacity-60 disabled:cursor-not-allowed transition-colors text-left"
+                      >
+                        {savingWatchlist ? "Adding to watchlist..." : "Add to watchlist"}
+                      </button>
+                      <Link href="/app/analytics" className="rounded-xl border border-white/10 bg-[#0B0F1A] px-3 py-3 text-sm text-slate-200 hover:border-violet-500/25 transition-colors">View analytics</Link>
+                    </div>
+                  </div>
+                  <div className="mt-4 grid gap-2 sm:grid-cols-4">
+                    {[
+                      { label: "Hooks ready", done: hooks.length > 0 },
+                      { label: "Email drafted", done: Object.keys(generatedEmails).length > 0 },
+                      { label: "Lead saved", done: savedLeadCount > 0 },
+                      { label: "Sequence started", done: sequenceStartedCount > 0 },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-lg border border-white/5 bg-black/20 px-3 py-3 text-xs">
+                        <p className={`font-black uppercase tracking-[0.18em] ${item.done ? "text-emerald-400" : "text-slate-600"}`}>{item.done ? "Done" : "Next"}</p>
+                        <p className="mt-1 text-slate-300">{item.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-3 justify-between">
                   <h2 className="text-lg font-semibold">
                     Top {visibleHooks.length} hook{visibleHooks.length !== 1 ? "s" : ""}
@@ -806,6 +1040,8 @@ export default function HooksPage() {
                     hook={hook}
                     index={i}
                     companyDomain={companyDomain}
+                    companyUrl={url || (companyDomain ? `https://${companyDomain}` : undefined)}
+                    companyName={companyName || companyDomain}
                     targetRole={targetRole}
                     customRoleInput={customRoleInput}
                     hookVariants={hookVariants}
@@ -824,6 +1060,9 @@ export default function HooksPage() {
                     onGenerateEmail={generateEmail}
                     onCopyEmail={copyEmail}
                     onPushToCrm={pushSingleHookToCrm}
+                    isRecommended={i === 0}
+                    onLeadSaved={() => setSavedLeadCount((count) => count + 1)}
+                    onSequenceStarted={() => setSequenceStartedCount((count) => count + 1)}
                   />
                 ))}
                 {overflowHooks.length > 0 && !showAll && (
@@ -846,28 +1085,66 @@ export default function HooksPage() {
 
               {/* Right: sticky intel/intent panel */}
               <div className="lg:sticky lg:top-20 space-y-4">
-                {companyIntel && intentData ? (
+                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-500 font-black mb-2">Control center links</p>
+                  <div className="space-y-2 text-sm">
+                    <Link href="/app/inbox" className="flex items-center justify-between rounded-lg border border-white/5 bg-[#0B0F1A] px-3 py-2 text-slate-300 hover:border-violet-500/20 transition-colors">Approve drafts <Inbox size={14} /></Link>
+                    <Link href="/app/leads" className="flex items-center justify-between rounded-lg border border-white/5 bg-[#0B0F1A] px-3 py-2 text-slate-300 hover:border-violet-500/20 transition-colors">Manage leads <Users size={14} /></Link>
+                    <Link href="/app/sequences" className="flex items-center justify-between rounded-lg border border-white/5 bg-[#0B0F1A] px-3 py-2 text-slate-300 hover:border-violet-500/20 transition-colors">Review sequences <ListChecks size={14} /></Link>
+                    <Link href="/app/analytics" className="flex items-center justify-between rounded-lg border border-white/5 bg-[#0B0F1A] px-3 py-2 text-slate-300 hover:border-violet-500/20 transition-colors">See hot accounts <BarChart3 size={14} /></Link>
+                  </div>
+                </div>
+                {(companyIntel || intentData || retrievalDiagnostics) ? (
                   <>
+                    {(() => {
+                      const availableTabs = [
+                        companyIntel ? "intel" : null,
+                        intentData ? "intent" : null,
+                        retrievalDiagnostics ? "retrieval" : null,
+                      ].filter(Boolean) as Array<"intel" | "intent" | "retrieval">;
+                      const activeTab = availableTabs.includes(rightTab) ? rightTab : availableTabs[0];
+
+                      return (
+                        <>
                     <div className="flex gap-0 bg-[#0e0f10] rounded-lg p-0.5 w-fit mb-2">
-                      {(["intel", "intent"] as const).map((tab) => (
+                      {availableTabs.map((tab) => (
                         <button
                           key={tab}
                           onClick={() => setRightTab(tab)}
                           className={`text-xs px-3 py-1 rounded-md transition-all capitalize ${
-                            rightTab === tab ? "bg-[#1c1e20] text-white shadow-inner-glow" : "text-zinc-500"
+                            activeTab === tab ? "bg-[#1c1e20] text-white shadow-inner-glow" : "text-zinc-500"
                           }`}
                         >
-                          {tab === "intel" ? "Company" : "Signals"}
+                          {tab === "intel" ? "Company" : tab === "intent" ? "Signals" : "Retrieval"}
                         </button>
                       ))}
                     </div>
-                    {rightTab === "intel" && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
-                    {rightTab === "intent" && <IntentSignals data={intentData} />}
+                    {activeTab === "intel" && companyIntel && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
+                    {activeTab === "intent" && intentData && <IntentSignals data={intentData} />}
+                    {activeTab === "retrieval" && retrievalDiagnostics && (
+                      <RetrievalDiagnostics
+                        data={retrievalDiagnostics}
+                        onManageMemory={manageRetrievalMemory}
+                        managingMemory={managingRetrievalMemory}
+                        memoryAction={retrievalMemoryAction}
+                      />
+                    )}
+                        </>
+                      );
+                    })()}
                   </>
                 ) : (
                   <>
                     {companyIntel && <CompanyIntelPanel intel={companyIntel} isBasic={isBasicIntel} />}
                     {intentData && <IntentSignals data={intentData} />}
+                    {retrievalDiagnostics && (
+                      <RetrievalDiagnostics
+                        data={retrievalDiagnostics}
+                        onManageMemory={manageRetrievalMemory}
+                        managingMemory={managingRetrievalMemory}
+                        memoryAction={retrievalMemoryAction}
+                      />
+                    )}
                   </>
                 )}
 

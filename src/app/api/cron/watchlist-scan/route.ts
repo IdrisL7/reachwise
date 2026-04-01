@@ -4,15 +4,14 @@ import { db, schema } from "@/lib/db";
 import { eq, isNull, or, lt } from "drizzle-orm";
 import {
   fetchSourcesWithGating,
-  buildSystemPrompt,
-  buildUserPrompt,
-  callClaude,
+  generateHookPayloadsFromSources,
   validateHook,
   scoreHookQuality,
   getDomain,
 } from "@/lib/hooks";
 import { watchlistDigestHtml } from "@/lib/email/sendgrid";
 import { sendEmail } from "@/lib/email/sendgrid";
+import { getClaudeApiKey } from "@/lib/env";
 
 const BATCH_SIZE = 10;
 const STALE_HOURS = 23;
@@ -51,7 +50,7 @@ export async function GET(req: NextRequest) {
   }
 
   const exaApiKey = process.env.EXA_API_KEY;
-  const claudeApiKey = process.env.CLAUDE_API_KEY;
+  const claudeApiKey = getClaudeApiKey();
 
   if (!exaApiKey || !claudeApiKey) {
     return NextResponse.json({ error: "Missing API keys" }, { status: 500 });
@@ -140,9 +139,11 @@ export async function GET(req: NextRequest) {
             .sort()
             .at(-1) ?? now.toISOString();
 
-          const systemPrompt = buildSystemPrompt(null, null);
-          const userPrompt = buildUserPrompt(url, result.sources);
-          const rawHooks = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+          const { rawHooks } = await generateHookPayloadsFromSources({
+            url,
+            sources: result.sources,
+            apiKey: claudeApiKey,
+          });
 
           // Validate and score
           const validHooks = rawHooks

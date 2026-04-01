@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { checkFeature, featureError } from "@/lib/tier-guard";
 import { getCompanyIntelligence } from "@/lib/company-intel";
+import { getClaudeApiKey } from "@/lib/env";
 
 export async function GET(request: Request) {
   try {
@@ -26,12 +27,12 @@ export async function GET(request: Request) {
     }
 
     const exaApiKey = process.env.EXA_API_KEY;
-    const claudeApiKey = process.env.CLAUDE_API_KEY;
+    const claudeApiKey = getClaudeApiKey();
     if (!exaApiKey || !claudeApiKey) {
       return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
     }
 
-    const fullAccess = tierId === "pro";
+    const fullAccess = tierId !== "free";
     const intel = await getCompanyIntelligence(url, exaApiKey, claudeApiKey, fullAccess);
 
     return NextResponse.json(intel);

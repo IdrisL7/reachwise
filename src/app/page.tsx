@@ -25,12 +25,12 @@ const jsonLd = {
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web",
   description:
-    "Generate signal-backed opening lines anchored on real company signals. Signal-backed outbound, follow-up automation, and CRM integrations for modern sales teams.",
+    "Signal-backed outbound for modern sales teams: find real company signals, generate buyer-aware messages, review drafts, and run follow-up workflow with evidence attached.",
   offers: {
     "@type": "Offer",
     price: "0",
     priceCurrency: "GBP",
-    description: "7-day free trial",
+    description: "Free plan available with optional Pro upgrade",
   },
   publisher: {
     "@type": "Organization",

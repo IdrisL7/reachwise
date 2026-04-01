@@ -9,6 +9,13 @@ import {
   type TargetRole,
 } from "@/lib/hooks";
 import { mapStepToSequenceType, type SequenceConfig } from "./sequences";
+import {
+  getSequenceMemoryPriors,
+  getLeadSegmentKey,
+  type OutreachChannel,
+  type SequenceMemoryPriors,
+  type SequenceType,
+} from "./sequence-memory";
 import { getClaudeApiKey } from "@/lib/env";
 import { getCachedHooks } from "@/lib/hook-cache";
 import { db, schema } from "@/lib/db";
@@ -24,15 +31,26 @@ export type LeadInfo = {
   title?: string | null;
   companyName?: string | null;
   companyWebsite?: string | null;
+  source?: string | null;
   email: string;
 };
 
 export type PreviousMessage = {
   direction: string;
   sequenceStep: number;
+  channel?: string | null;
   subject?: string | null;
   body: string;
   sentAt?: string | null;
+  metadata?: {
+    hookId?: string | null;
+    previousChannel?: string | null;
+    angle?: string | null;
+    buyerTensionId?: string | null;
+    structuralVariant?: string | null;
+    hookText?: string | null;
+    evidenceSnippet?: string | null;
+  } | null;
 };
 
 export type FollowUpResult = {
@@ -40,13 +58,128 @@ export type FollowUpResult = {
   body: string;
   channel: string;
   hookSource?: "provided" | "hook_cache_exact" | "hook_cache_root" | "generated_hooks" | "subpage_live" | "subpage_fallback" | "live_generation";
+  orchestration?: SequenceOrchestrationPlan;
   hookUsed?: {
+    generatedHookId?: string;
     angle: string;
+    hookText: string;
     evidence: string;
+    buyerTensionId?: string;
+    structuralVariant?: string;
   };
 };
 
-function inferTargetRoleFromLead(lead: LeadInfo): TargetRole | null {
+type LearnedOutreachPreferences = {
+  preferredChannel: OutreachChannel | null;
+  preferredTone: "concise" | "warm" | "direct" | null;
+  preferredSendWindow: SequenceOrchestrationPlan["sendWindow"] | null;
+  sequencePriors?: SequenceMemoryPriors | null;
+};
+
+export type SequenceOrchestrationPlan = {
+  sequenceType: SequenceType;
+  channel: OutreachChannel;
+  previousChannel: OutreachChannel | null;
+  tone: "concise" | "warm" | "direct";
+  wordCountHint: number;
+  ctaStyle: "problem_question" | "permission_check" | "soft_breakup" | "connection_reason" | "video_nudge";
+  sendWindow: "weekday_morning" | "weekday_afternoon" | "weekday_evening" | "weekend";
+  reasoning: string[];
+};
+
+type SequenceHookFit = {
+  total: number;
+  baseScore: number;
+  sequenceFit: number;
+  channelFit: number;
+  freshnessFit: number;
+  antiRepeatFit: number;
+  confidenceFit: number;
+};
+
+export function extractPreviousHookMetadata(
+  raw: unknown,
+): PreviousMessage["metadata"] {
+  if (!raw || typeof raw !== "object") return null;
+  const metadata = raw as Record<string, unknown>;
+  const nestedHookUsed =
+    metadata.hookUsed && typeof metadata.hookUsed === "object"
+      ? (metadata.hookUsed as Record<string, unknown>)
+      : null;
+
+  const pickString = (...values: unknown[]): string | null => {
+    for (const value of values) {
+      if (typeof value === "string" && value.trim()) return value;
+    }
+    return null;
+  };
+
+  return {
+    hookId: pickString(metadata.hookId, nestedHookUsed?.generatedHookId),
+    angle: pickString(metadata.angle, nestedHookUsed?.angle),
+    buyerTensionId: pickString(metadata.buyerTensionId, nestedHookUsed?.buyerTensionId),
+    structuralVariant: pickString(metadata.structuralVariant, nestedHookUsed?.structuralVariant),
+    hookText: pickString(metadata.hookText, nestedHookUsed?.hookText),
+    evidenceSnippet: pickString(metadata.evidenceSnippet, nestedHookUsed?.evidence),
+  };
+}
+
+export function extractPreviousSequenceMetadata(
+  raw: unknown,
+): {
+  sequenceType?: SequenceType | null;
+  tone?: "concise" | "warm" | "direct" | null;
+  previousChannel?: OutreachChannel | null;
+} {
+  if (!raw || typeof raw !== "object") return {};
+  const metadata = raw as Record<string, unknown>;
+  const orchestration =
+    metadata.orchestration && typeof metadata.orchestration === "object"
+      ? (metadata.orchestration as Record<string, unknown>)
+      : null;
+
+  const sequenceType =
+    typeof metadata.sequenceType === "string"
+      ? metadata.sequenceType
+      : typeof orchestration?.sequenceType === "string"
+        ? orchestration.sequenceType
+        : null;
+
+  const tone =
+    typeof metadata.tone === "string"
+      ? metadata.tone
+      : typeof orchestration?.tone === "string"
+        ? orchestration.tone
+        : null;
+
+  const previousChannel =
+    typeof metadata.previousChannel === "string"
+      ? metadata.previousChannel
+      : typeof orchestration?.previousChannel === "string"
+        ? orchestration.previousChannel
+        : null;
+
+  return {
+    sequenceType:
+      sequenceType === "first" || sequenceType === "bump" || sequenceType === "breakup"
+        ? sequenceType
+        : null,
+    tone:
+      tone === "concise" || tone === "warm" || tone === "direct"
+        ? tone
+        : null,
+    previousChannel:
+      previousChannel === "email" ||
+      previousChannel === "linkedin_connection" ||
+      previousChannel === "linkedin_message" ||
+      previousChannel === "cold_call" ||
+      previousChannel === "video_script"
+        ? previousChannel
+        : null,
+  };
+}
+
+export function inferTargetRoleFromLead(lead: LeadInfo): TargetRole | null {
   const title = (lead.title || "").toLowerCase();
   if (!title) return null;
 
@@ -304,6 +437,68 @@ async function generateHooksFastForSubpage(
   };
 }
 
+async function getLearnedOutreachPreferences(
+  userId?: string | null,
+  targetRole?: TargetRole | null,
+  leadSegment?: string | null,
+): Promise<LearnedOutreachPreferences | null> {
+  if (!userId) return null;
+
+  const [userOutreachMemory, userTimingMemory, sequencePriors] = await Promise.all([
+    db
+      .select()
+      .from(schema.userOutreachMemory)
+      .where(eq(schema.userOutreachMemory.userId, userId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    db
+      .select()
+      .from(schema.userTimingMemory)
+      .where(eq(schema.userTimingMemory.userId, userId))
+      .limit(1)
+      .then((rows) => rows[0] ?? null),
+    getSequenceMemoryPriors({ userId, targetRole, leadSegment }),
+  ]);
+
+  const preferredChannel = userOutreachMemory
+    ? [...([
+        ["email", userOutreachMemory.emailCount],
+        ["linkedin_connection", userOutreachMemory.linkedinConnectionCount],
+        ["linkedin_message", userOutreachMemory.linkedinMessageCount],
+        ["cold_call", userOutreachMemory.coldCallCount],
+        ["video_script", userOutreachMemory.videoScriptCount],
+      ] as const)].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    : null;
+
+  const preferredTone = userOutreachMemory
+    ? [...([
+        ["concise", userOutreachMemory.conciseToneCount],
+        ["warm", userOutreachMemory.warmToneCount],
+        ["direct", userOutreachMemory.directToneCount],
+      ] as const)].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    : null;
+
+  const preferredSendWindow = userTimingMemory
+    ? [...([
+        ["weekday_morning", userTimingMemory.weekdayMorningCount],
+        ["weekday_afternoon", userTimingMemory.weekdayAfternoonCount],
+        ["weekday_evening", userTimingMemory.weekdayEveningCount],
+        ["weekend", userTimingMemory.weekendCount],
+      ] as const)].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    : null;
+
+  if (!preferredChannel && !preferredTone && !preferredSendWindow && !sequencePriors) {
+    return null;
+  }
+
+  return {
+    preferredChannel: preferredChannel as OutreachChannel | null,
+    preferredTone: preferredTone as "concise" | "warm" | "direct" | null,
+    preferredSendWindow: preferredSendWindow as SequenceOrchestrationPlan["sendWindow"] | null,
+    sequencePriors,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Email-specific banned phrases (same as generate-email route)
 // ---------------------------------------------------------------------------
@@ -330,6 +525,7 @@ function buildFollowUpSystemPrompt(
   tone: string,
   sequenceStep: "first" | "bump" | "breakup",
   wordCountHint: number,
+  ctaStyle: SequenceOrchestrationPlan["ctaStyle"] = "problem_question",
 ): string {
   const toneGuide: Record<string, string> = {
     concise:
@@ -347,6 +543,19 @@ function buildFollowUpSystemPrompt(
       "This is a follow-up to an unanswered previous email. Reference the original signal briefly, add a new angle or implication, and keep it shorter than the first email.",
     breakup:
       "This is a final follow-up. Be respectful, brief, and give the recipient an easy out. Still anchor on the original signal but frame it as a last note.",
+  };
+
+  const ctaGuide: Record<SequenceOrchestrationPlan["ctaStyle"], string> = {
+    problem_question:
+      "CTA style: end with a concrete diagnostic question about the problem created by the signal.",
+    permission_check:
+      "CTA style: use a low-friction permission-based question that still references the operational problem.",
+    soft_breakup:
+      "CTA style: close with a respectful last-note question that gives the reader an easy out.",
+    connection_reason:
+      "CTA style: explain the reason for reaching out and make the ask feel lightweight, not meeting-hungry.",
+    video_nudge:
+      "CTA style: close with a soft nudge that makes a quick async review feel easier than a live meeting.",
   };
 
   return [
@@ -367,6 +576,9 @@ function buildFollowUpSystemPrompt(
     "",
     `## Sequence step: ${sequenceStep}`,
     stepGuide[sequenceStep] || stepGuide["first"],
+    "",
+    `## CTA style: ${ctaStyle}`,
+    ctaGuide[ctaStyle],
     "",
     `## Length: aim for roughly ${wordCountHint} words in the body. Shorter is better than longer.`,
     "",
@@ -459,44 +671,155 @@ function stripTrailingSignature(body: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Pick the best hook (prefer different angle than previous messages)
+// Sequence-aware hook selection
 // ---------------------------------------------------------------------------
 
-function pickBestHook(hooks: Hook[], previousMessages: PreviousMessage[], avoidAngle?: string): Hook {
+function getHookLengthBucket(hook: Hook): "short" | "medium" | "long" {
+  const length = hook.hook.trim().length;
+  if (length <= 120) return "short";
+  if (length <= 190) return "medium";
+  return "long";
+}
+
+function getRecentHookMemory(previousMessages: PreviousMessage[]) {
+  const usedAngles = new Set<string>();
+  const usedTensions = new Set<string>();
+  const usedVariants = new Set<string>();
+  const usedHooks = new Set<string>();
+
+  for (const message of previousMessages) {
+    if (message.direction !== "outbound") continue;
+    const metadata = message.metadata ?? null;
+    if (metadata?.angle) usedAngles.add(metadata.angle);
+    if (metadata?.buyerTensionId) usedTensions.add(metadata.buyerTensionId);
+    if (metadata?.structuralVariant) usedVariants.add(metadata.structuralVariant);
+    if (metadata?.hookText) usedHooks.add(metadata.hookText.trim().toLowerCase());
+  }
+
+  return { usedAngles, usedTensions, usedVariants, usedHooks };
+}
+
+export function computeSequenceHookFit(
+  hook: Hook,
+  opts: {
+    previousMessages: PreviousMessage[];
+    sequenceType: SequenceType;
+    channel: string;
+    avoidAngle?: string;
+  },
+): SequenceHookFit {
+  const { previousMessages, sequenceType, channel, avoidAngle } = opts;
+  const memory = getRecentHookMemory(previousMessages);
+  const baseScore = hook.selector_score ?? hook.ranking_score ?? hook.quality_score ?? 0;
+  let sequenceFit = 0;
+  let channelFit = 0;
+  let freshnessFit = 0;
+  let antiRepeatFit = 0;
+  let confidenceFit = 0;
+
+  if (sequenceType === "first") {
+    sequenceFit += hook.angle === "trigger" ? 2.5 : hook.angle === "risk" ? 1.2 : 0.5;
+  } else if (sequenceType === "bump") {
+    sequenceFit += hook.angle === "risk" ? 2.2 : hook.angle === "tradeoff" ? 1.8 : 0.3;
+  } else {
+    sequenceFit += hook.angle === "tradeoff" ? 2.4 : hook.angle === "risk" ? 1.8 : 0.2;
+  }
+
+  const lengthBucket = getHookLengthBucket(hook);
+  switch (channel) {
+    case "linkedin_connection":
+      channelFit += lengthBucket === "short" ? 2.6 : lengthBucket === "medium" ? 0.8 : -2.5;
+      channelFit += hook.angle === "trigger" ? 1 : hook.angle === "tradeoff" ? 0.3 : -0.8;
+      break;
+    case "linkedin_message":
+      channelFit += lengthBucket === "medium" ? 1.8 : lengthBucket === "short" ? 1 : -0.5;
+      channelFit += hook.interestingness_score ? Math.min(hook.interestingness_score / 3, 1.2) : 0;
+      break;
+    case "cold_call":
+      channelFit += lengthBucket === "short" ? 1.8 : lengthBucket === "medium" ? 0.8 : -1.5;
+      channelFit += hook.angle === "trigger" ? 1.2 : hook.angle === "risk" ? 1 : -0.2;
+      break;
+    case "video_script":
+      channelFit += lengthBucket === "medium" ? 1.6 : lengthBucket === "short" ? 0.8 : -0.4;
+      channelFit += hook.interestingness_score ? Math.min(hook.interestingness_score / 2.5, 1.4) : 0;
+      break;
+    default:
+      channelFit += lengthBucket === "medium" ? 0.8 : 0;
+      break;
+  }
+
+  if (hook.confidence === "high") confidenceFit += 2;
+  else if (hook.confidence === "med") confidenceFit += 0.8;
+  else confidenceFit -= 1.5;
+
+  if (avoidAngle && hook.angle === avoidAngle) antiRepeatFit -= 5;
+  if (memory.usedAngles.has(hook.angle)) antiRepeatFit -= sequenceType === "first" ? 0.5 : 2.2;
+  else freshnessFit += 1.4;
+
+  if (hook.buyer_tension_id) {
+    if (memory.usedTensions.has(hook.buyer_tension_id)) antiRepeatFit -= 2.8;
+    else freshnessFit += 1.8;
+  }
+
+  if (hook.structural_variant) {
+    if (memory.usedVariants.has(hook.structural_variant)) antiRepeatFit -= 1.5;
+    else freshnessFit += 0.9;
+  }
+
+  const normalizedText = hook.hook.trim().toLowerCase();
+  if (memory.usedHooks.has(normalizedText)) antiRepeatFit -= 4;
+
+  if (sequenceType !== "first" && hook.non_overlap_score) {
+    freshnessFit += Math.min(hook.non_overlap_score / 2, 1.8);
+  }
+
+  if (sequenceType === "breakup" && lengthBucket === "long") {
+    antiRepeatFit -= 1.2;
+  }
+
+  const total =
+    baseScore +
+    sequenceFit +
+    channelFit +
+    freshnessFit +
+    antiRepeatFit +
+    confidenceFit;
+
+  return {
+    total,
+    baseScore,
+    sequenceFit,
+    channelFit,
+    freshnessFit,
+    antiRepeatFit,
+    confidenceFit,
+  };
+}
+
+export function pickBestHook(
+  hooks: Hook[],
+  previousMessages: PreviousMessage[],
+  opts: {
+    avoidAngle?: string;
+    sequenceType: SequenceType;
+    channel: string;
+  },
+): Hook {
   if (hooks.length === 0) {
     throw new Error("No hooks available for this company");
   }
 
-  // Filter out avoided angle if specified
-  const candidates = avoidAngle
-    ? hooks.filter((h) => h.angle !== avoidAngle)
-    : hooks;
-
-  // Fall back to all hooks if filtering removed everything
-  const pool = candidates.length > 0 ? candidates : hooks;
-
-  // If no previous messages, just pick the first high-confidence one
-  if (previousMessages.length === 0) {
-    const highConf = pool.find((h) => h.confidence === "high");
-    return highConf || pool[0];
-  }
-
-  // Try to pick a hook with a different angle than the most recent message's hook
-  // We don't have the exact angle used before, so just diversify by picking
-  // high-confidence hooks and rotating through angles
-  const usedCount = previousMessages.length;
-  const angleOrder: Hook["angle"][] = ["trigger", "risk", "tradeoff"];
-  const preferredAngle = angleOrder[usedCount % angleOrder.length];
-
-  const preferred = pool.find(
-    (h) => h.angle === preferredAngle && h.confidence === "high",
-  );
-  if (preferred) return preferred;
-
-  const anyPreferred = pool.find((h) => h.angle === preferredAngle);
-  if (anyPreferred) return anyPreferred;
-
-  return pool[0];
+  return hooks
+    .map((hook) => ({
+      hook,
+      fit: computeSequenceHookFit(hook, {
+        previousMessages,
+        sequenceType: opts.sequenceType,
+        channel: opts.channel,
+        avoidAngle: opts.avoidAngle,
+      }),
+    }))
+    .sort((a, b) => b.fit.total - a.fit.total)[0]!.hook;
 }
 
 // ---------------------------------------------------------------------------
@@ -522,7 +845,14 @@ function getChannelSystemPrompt(channel: string): string {
 // Build user prompt for non-email channels
 // ---------------------------------------------------------------------------
 
-function buildChannelUserPrompt(lead: LeadInfo, hook: Hook): string {
+function buildChannelUserPrompt(
+  lead: LeadInfo,
+  hook: Hook,
+  previousMessages: PreviousMessage[],
+  sequenceType: SequenceType,
+  channel: string,
+  ctaStyle: SequenceOrchestrationPlan["ctaStyle"],
+): string {
   const lines: string[] = [];
 
   if (lead.companyWebsite) lines.push(`Company URL: ${lead.companyWebsite}`);
@@ -538,8 +868,276 @@ function buildChannelUserPrompt(lead: LeadInfo, hook: Hook): string {
   lines.push(`- Source: ${hook.source_title}`);
 
   lines.push("");
+  lines.push(`Sequence step type: ${sequenceType}`);
+  lines.push(`Channel: ${channel}`);
+  lines.push(`CTA style: ${ctaStyle}`);
+
+  if (previousMessages.length > 0) {
+    lines.push("Use this as a fresh next touch, not a repeat of earlier messages.");
+    lines.push("Previous outbound messages:");
+    for (const msg of previousMessages.slice(0, 3)) {
+      lines.push(`- Step ${msg.sequenceStep} (${msg.channel || "email"}): ${msg.body}`);
+    }
+  }
+
+  lines.push("");
   lines.push("Write the message now. Return only the message text, no JSON wrapping.");
   return lines.join("\n");
+}
+
+function getRecentOutboundMessages(previousMessages: PreviousMessage[]): PreviousMessage[] {
+  return previousMessages.filter((message) => message.direction === "outbound");
+}
+
+function getCurrentSendWindow(now = new Date()): SequenceOrchestrationPlan["sendWindow"] {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return "weekend";
+  const hour = now.getHours();
+  if (hour < 12) return "weekday_morning";
+  if (hour < 17) return "weekday_afternoon";
+  return "weekday_evening";
+}
+
+function scoreSequenceChannelPlan(
+  channel: OutreachChannel,
+  sequenceType: SequenceType,
+  previousMessages: PreviousMessage[],
+  sendWindow: SequenceOrchestrationPlan["sendWindow"],
+  learnedPreferences?: LearnedOutreachPreferences | null,
+): { score: number; reasons: string[] } {
+  const outbound = getRecentOutboundMessages(previousMessages);
+  const priorChannels = outbound.map((message) => message.channel || "email");
+  const sameChannelCount = priorChannels.filter((value) => value === channel).length;
+  let score = 0;
+  const reasons: string[] = [];
+
+  const sequencePreferences: Record<SequenceType, Record<OutreachChannel, number>> = {
+    first: {
+      email: 3.2,
+      linkedin_connection: 2.6,
+      linkedin_message: 1.4,
+      cold_call: 0.8,
+      video_script: 1.5,
+    },
+    bump: {
+      email: 1.8,
+      linkedin_connection: 0.2,
+      linkedin_message: 3,
+      cold_call: 1.9,
+      video_script: 2.2,
+    },
+    breakup: {
+      email: 2.8,
+      linkedin_connection: -1,
+      linkedin_message: 1.7,
+      cold_call: 2.1,
+      video_script: 1.8,
+    },
+  };
+
+  score += sequencePreferences[sequenceType][channel];
+  reasons.push(`${sequenceType} step prefers ${channel}`);
+
+  if (sameChannelCount === 0) {
+    score += 1.3;
+    reasons.push("fresh channel for this thread");
+  } else if (sameChannelCount >= 2) {
+    score -= 1.6;
+    reasons.push("channel fatigue from repeated prior touches");
+  }
+
+  const mostRecentChannel = priorChannels[0];
+  if (mostRecentChannel && mostRecentChannel !== channel) {
+    score += 0.8;
+    reasons.push("varies from most recent channel");
+  }
+
+  if (sequenceType === "first" && outbound.length === 0 && channel === "email") {
+    score += 0.9;
+    reasons.push("email remains the clearest first-touch format");
+  }
+
+  if (sequenceType === "bump" && outbound.length > 0 && channel === "linkedin_message") {
+    score += 0.9;
+    reasons.push("LinkedIn message works as a lighter second touch");
+  }
+
+  if (sequenceType === "breakup" && channel === "email") {
+    score += 0.7;
+    reasons.push("email supports a clean final note");
+  }
+
+  if (sendWindow === "weekday_morning") {
+    if (channel === "email") {
+      score += 0.8;
+      reasons.push("morning favors email review");
+    }
+    if (channel === "cold_call") {
+      score += 0.5;
+      reasons.push("morning is workable for call outreach");
+    }
+  } else if (sendWindow === "weekday_afternoon") {
+    if (channel === "linkedin_message") {
+      score += 0.55;
+      reasons.push("afternoon suits lighter async channels");
+    }
+    if (channel === "video_script") {
+      score += 0.35;
+      reasons.push("afternoon supports async video follow-up");
+    }
+  } else if (sendWindow === "weekday_evening" || sendWindow === "weekend") {
+    if (channel === "cold_call") {
+      score -= 1.6;
+      reasons.push("avoid call-led outreach outside business hours");
+    }
+    if (channel === "linkedin_connection") {
+      score -= 0.4;
+      reasons.push("connection requests are weaker off-hours");
+    }
+    if (channel === "email") {
+      score += 0.35;
+      reasons.push("email remains safest outside core hours");
+    }
+    if (channel === "video_script") {
+      score += 0.25;
+      reasons.push("async video can still travel well off-hours");
+    }
+  }
+
+  if (learnedPreferences?.preferredChannel === channel) {
+    score += 2.1;
+    reasons.unshift("matches learned channel preference");
+  }
+
+  if (
+    learnedPreferences?.preferredSendWindow &&
+    learnedPreferences.preferredSendWindow !== sendWindow
+  ) {
+    if (channel === "cold_call") {
+      score -= 0.8;
+      reasons.unshift("call is riskier outside the learned send window");
+    } else if (channel === "linkedin_connection") {
+      score -= 0.35;
+      reasons.unshift("connection requests are less reliable outside the learned send window");
+    } else if (channel === "video_script") {
+      score += 0.7;
+      reasons.unshift("video is a safer async touch outside the learned send window");
+    } else if (channel === "linkedin_message") {
+      score += 0.3;
+      reasons.unshift("async message fits better outside the learned send window");
+    } else {
+      score += 0.15;
+      reasons.unshift("email remains safe outside the learned send window");
+    }
+  }
+
+  const sequenceAdjustment = learnedPreferences?.sequencePriors?.adjustments[sequenceType]?.[channel] ?? 0;
+  if (sequenceAdjustment > 0.2) {
+    score += sequenceAdjustment;
+    reasons.unshift("matches a historically successful sequence pattern");
+  } else if (sequenceAdjustment < -0.2) {
+    score += sequenceAdjustment;
+    reasons.unshift("historically weaker for this step and role");
+  }
+
+  const pathAdjustment =
+    learnedPreferences?.sequencePriors?.pathAdjustments?.[sequenceType]?.[mostRecentChannel ?? "__none__"]?.[channel] ?? 0;
+  if (pathAdjustment > 0.2) {
+    score += pathAdjustment;
+    reasons.unshift("transition has worked well after the prior channel");
+  } else if (pathAdjustment < -0.2) {
+    score += pathAdjustment;
+    reasons.unshift("transition has underperformed after the prior channel");
+  }
+
+  return { score, reasons };
+}
+
+export function buildSequenceOrchestrationPlan(opts: {
+  currentStep: number;
+  maxSteps: number;
+  previousMessages: PreviousMessage[];
+  preferredChannel?: string;
+  preferredTone?: "concise" | "warm" | "direct";
+  preferredWordCountHint?: number;
+  learnedPreferredChannel?: OutreachChannel | null;
+  learnedPreferredTone?: "concise" | "warm" | "direct" | null;
+  learnedPreferredSendWindow?: SequenceOrchestrationPlan["sendWindow"] | null;
+  learnedSequencePriors?: SequenceMemoryPriors | null;
+  now?: Date;
+}): SequenceOrchestrationPlan {
+  const sequenceType = mapStepToSequenceType(opts.currentStep, opts.maxSteps);
+  const sendWindow = getCurrentSendWindow(opts.now);
+  const explicitChannel = opts.preferredChannel as OutreachChannel | undefined;
+  const previousChannel = (getRecentOutboundMessages(opts.previousMessages)[0]?.channel as OutreachChannel | null) ?? null;
+  const learnedPreferences: LearnedOutreachPreferences | null =
+    opts.learnedPreferredChannel || opts.learnedPreferredTone || opts.learnedPreferredSendWindow || opts.learnedSequencePriors
+      ? {
+          preferredChannel: opts.learnedPreferredChannel ?? null,
+          preferredTone: opts.learnedPreferredTone ?? null,
+          preferredSendWindow: opts.learnedPreferredSendWindow ?? null,
+          sequencePriors: opts.learnedSequencePriors ?? null,
+        }
+      : null;
+  const candidateChannels: OutreachChannel[] = explicitChannel
+    ? [explicitChannel]
+    : sequenceType === "first"
+      ? ["email", "linkedin_connection", "video_script"]
+      : sequenceType === "bump"
+        ? ["linkedin_message", "email", "video_script", "cold_call"]
+        : ["email", "cold_call", "linkedin_message", "video_script"];
+
+  const ranked = candidateChannels
+    .map((channel) => ({
+      channel,
+      ...scoreSequenceChannelPlan(channel, sequenceType, opts.previousMessages, sendWindow, learnedPreferences),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const selected = ranked[0]!;
+  const tone = opts.preferredTone
+    ?? opts.learnedPreferredTone
+    ?? (selected.channel === "email"
+      ? (sequenceType === "breakup" ? "concise" : "direct")
+      : selected.channel === "linkedin_message"
+        ? "warm"
+        : "direct");
+
+  const wordCountHint = opts.preferredWordCountHint
+    ?? (selected.channel === "email"
+      ? (sequenceType === "first" ? 80 : sequenceType === "bump" ? 60 : 45)
+      : selected.channel === "linkedin_connection"
+        ? 35
+        : selected.channel === "cold_call"
+          ? 55
+          : 70);
+
+  const adjustedWordCountHint =
+    sendWindow === "weekday_evening" || sendWindow === "weekend"
+      ? Math.max(30, wordCountHint - 10)
+      : wordCountHint;
+
+  const ctaStyle: SequenceOrchestrationPlan["ctaStyle"] =
+    selected.channel === "linkedin_connection"
+      ? "connection_reason"
+      : selected.channel === "cold_call"
+        ? "permission_check"
+        : selected.channel === "video_script"
+          ? "video_nudge"
+          : sequenceType === "breakup"
+            ? "soft_breakup"
+            : "problem_question";
+
+  return {
+    sequenceType,
+    channel: selected.channel,
+    previousChannel,
+    tone,
+    wordCountHint: adjustedWordCountHint,
+    ctaStyle,
+    sendWindow,
+    reasoning: selected.reasons.slice(0, 3),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -599,8 +1197,33 @@ export async function generateFollowUp(opts: {
     throw new Error("Could not generate any hooks for this lead's company");
   }
 
-  const channel = opts.channel || "email";
-  const hook = pickBestHook(hooks, opts.previousMessages, opts.avoidAngle);
+  const targetRole = inferTargetRoleFromLead(opts.lead);
+  const leadSegment = getLeadSegmentKey({
+    title: opts.lead.title,
+    source: opts.lead.source,
+    companyWebsite: opts.lead.companyWebsite,
+  });
+  const learnedPreferences = await getLearnedOutreachPreferences(opts.lead.userId, targetRole, leadSegment);
+
+  const orchestration = buildSequenceOrchestrationPlan({
+    currentStep: opts.currentStep,
+    maxSteps: opts.sequence.maxSteps,
+    previousMessages: opts.previousMessages,
+    preferredChannel: opts.channel,
+    preferredTone: opts.tone as SequenceOrchestrationPlan["tone"] | undefined,
+    preferredWordCountHint: opts.wordCountHint,
+    learnedPreferredChannel: learnedPreferences?.preferredChannel,
+    learnedPreferredTone: learnedPreferences?.preferredTone,
+    learnedPreferredSendWindow: learnedPreferences?.preferredSendWindow,
+    learnedSequencePriors: learnedPreferences?.sequencePriors,
+  });
+  const channel = orchestration.channel;
+  const sequenceType = orchestration.sequenceType;
+  const hook = pickBestHook(hooks, opts.previousMessages, {
+    avoidAngle: opts.avoidAngle,
+    sequenceType,
+    channel,
+  });
 
   // --- Non-email channels: simpler Claude call, no subject line ---
   if (channel !== "email") {
@@ -609,7 +1232,14 @@ export async function generateFollowUp(opts: {
       throw new Error(`Unsupported channel: ${channel}`);
     }
 
-    const userPrompt = buildChannelUserPrompt(opts.lead, hook);
+    const userPrompt = buildChannelUserPrompt(
+      opts.lead,
+      hook,
+      opts.previousMessages,
+      sequenceType,
+      channel,
+      orchestration.ctaStyle,
+    );
     const raw = await callClaudeText(channelPrompt, userPrompt, claudeApiKey, 800);
 
     // Strip any accidental markdown fences
@@ -629,20 +1259,29 @@ export async function generateFollowUp(opts: {
     return {
       body,
       channel,
+      orchestration,
       hookSource,
       hookUsed: {
+        generatedHookId: hook.generated_hook_id,
         angle: hook.angle,
+        hookText: hook.hook,
         evidence: hook.evidence_snippet,
+        buyerTensionId: hook.buyer_tension_id,
+        structuralVariant: hook.structural_variant,
       },
     };
   }
 
   // --- Email channel: full generation with subject line ---
-  const sequenceType = mapStepToSequenceType(opts.currentStep, opts.sequence.maxSteps);
-  const tone = opts.tone || "direct";
-  const wordCountHint = opts.wordCountHint || (sequenceType === "first" ? 80 : 60);
+  const tone = orchestration.tone;
+  const wordCountHint = orchestration.wordCountHint;
 
-  const systemPrompt = buildFollowUpSystemPrompt(tone, sequenceType, wordCountHint);
+  const systemPrompt = buildFollowUpSystemPrompt(
+    tone,
+    sequenceType,
+    wordCountHint,
+    orchestration.ctaStyle,
+  );
   const userPrompt = buildFollowUpUserPrompt(
     opts.lead,
     hook,
@@ -680,10 +1319,15 @@ export async function generateFollowUp(opts: {
     subject: parsed.subject,
     body: parsed.body,
     channel,
+    orchestration,
     hookSource,
     hookUsed: {
+      generatedHookId: hook.generated_hook_id,
       angle: hook.angle,
+      hookText: hook.hook,
       evidence: hook.evidence_snippet,
+      buyerTensionId: hook.buyer_tension_id,
+      structuralVariant: hook.structural_variant,
     },
   };
 }

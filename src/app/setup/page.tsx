@@ -207,7 +207,7 @@ export default function SetupWizard() {
           <div>
             <h1 className="text-3xl font-bold mb-4">Developer Integration Setup</h1>
             <p className="text-zinc-400 mb-4">
-              This wizard configures GetSignalHooks for API access, CRM integration (HubSpot / Salesforce), and workflow automation via n8n.
+              This wizard is only for advanced setup: API access, CRM integration (HubSpot / Salesforce), and workflow automation via n8n.
             </p>
 
             {/* Escape hatch for regular users */}
@@ -217,12 +217,12 @@ export default function SetupWizard() {
               </svg>
               <div>
                 <p className="text-sm text-zinc-300 font-medium mb-1">Just using the web app?</p>
-                <p className="text-sm text-zinc-500 mb-3">You don&apos;t need this wizard. Go straight to the hook generator.</p>
+                <p className="text-sm text-zinc-500 mb-3">You can skip this entirely. Go straight to hooks, leads, sequences, and the inbox from the main app.</p>
                 <a
                   href="/app/hooks"
                   className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-400 hover:text-violet-300 transition-colors"
                 >
-                  Start generating hooks
+                  Open the app
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                   </svg>
@@ -252,7 +252,7 @@ export default function SetupWizard() {
               }}
               className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
             >
-              Begin Setup
+              Continue with Advanced Setup
             </button>
           </div>
         )}

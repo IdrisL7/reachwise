@@ -88,6 +88,7 @@ describe("tierError", () => {
       status: "error",
       code: "TIER_LIMIT",
       message: "Limit reached",
+      upgradeUrl: "/#pricing",
     });
   });
 
@@ -267,8 +268,8 @@ describe("checkHookQuota", () => {
 
     const res = await checkHookQuota("user-1");
     expect(res).toBeNull();
-    // Verify update was called (counter reset)
-    expect(mockUpdate).toHaveBeenCalled();
+    // checkHookQuota no longer mutates counters; increment happens only after successful generation
+    expect(mockUpdate).not.toHaveBeenCalled();
   });
 
   it("allows when usage is under the limit (same month)", async () => {
@@ -342,6 +343,7 @@ describe("checkHookQuota", () => {
     const res = await checkHookQuota("user-1");
     expect(res).toBeNull();
   });
+
 });
 
 describe("checkBatchSize", () => {
@@ -372,6 +374,7 @@ describe("checkBatchSize", () => {
     expect(checkBatchSize("pro", 74)).toBeNull();
     expect(checkBatchSize("pro", 75)).toBeNull();
   });
+
 
   it("rejects pro tier above 75", async () => {
     const res = checkBatchSize("pro", 76);

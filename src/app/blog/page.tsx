@@ -7,14 +7,14 @@ import { Footer } from "@/components/footer";
 export const metadata: Metadata = {
   title: "Blog | GetSignalHooks",
   description:
-    "Guides, how-tos, and comparison content to help outbound teams write signal-backed opening lines that convert.",
+    "Guides, how-tos, and comparison content to help outbound teams run signal-backed outbound workflow that converts.",
   alternates: {
     canonical: "https://www.getsignalhooks.com/blog",
   },
   openGraph: {
     title: "GetSignalHooks Blog",
     description:
-      "Guides, how-tos, and comparison content to help outbound teams write signal-backed opening lines that convert.",
+      "Guides, how-tos, and comparison content to help outbound teams run signal-backed outbound workflow that converts.",
     url: "https://www.getsignalhooks.com/blog",
     type: "website",
   },
@@ -42,7 +42,7 @@ export default async function BlogIndexPage() {
             Outbound playbooks built on real buying signals
           </h1>
           <p className="mt-4 max-w-3xl text-zinc-400">
-            Tactical guides, practical how-tos, and honest comparisons to help sales teams write opening lines people actually reply to.
+            Tactical guides, practical how-tos, and honest comparisons to help sales teams turn real account signals into better messages and cleaner outbound workflow.
           </p>
         </div>
 

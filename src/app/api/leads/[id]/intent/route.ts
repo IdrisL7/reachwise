@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 import { eq, and } from "drizzle-orm";
 import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
+import { getClaudeApiKey } from "@/lib/env";
 
 export async function POST(
   request: NextRequest,
@@ -30,7 +31,7 @@ export async function POST(
   }
 
   const exaApiKey = process.env.EXA_API_KEY;
-  const claudeApiKey = process.env.CLAUDE_API_KEY;
+  const claudeApiKey = getClaudeApiKey();
 
   if (!exaApiKey || !claudeApiKey) {
     return NextResponse.json({ error: "Missing API keys" }, { status: 500 });

@@ -3,7 +3,8 @@ import { validateBearerToken, unauthorized } from "@/lib/followup/auth";
 import { db, schema } from "@/lib/db";
 import { eq, desc } from "drizzle-orm";
 import { getSequence, getDelayForStep } from "@/lib/followup/sequences";
-import { generateFollowUp } from "@/lib/followup/generate";
+import { extractPreviousHookMetadata, generateFollowUp } from "@/lib/followup/generate";
+import { persistFollowupMessageV2 } from "@/lib/v2-dual-write";
 
 export async function POST(request: NextRequest) {
   if (!validateBearerToken(request)) return unauthorized();
@@ -137,13 +138,16 @@ export async function POST(request: NextRequest) {
         title: lead.title,
         companyName: lead.companyName,
         companyWebsite: lead.companyWebsite,
+        source: lead.source,
       },
       previousMessages: previousMessages.map((m) => ({
         direction: m.direction,
         sequenceStep: m.sequenceStep,
+        channel: m.channel,
         subject: m.subject,
         body: m.body,
         sentAt: m.sentAt,
+        metadata: extractPreviousHookMetadata(m.metadata),
       })),
       sequence,
       currentStep: lead.sequenceStep,
@@ -155,16 +159,53 @@ export async function POST(request: NextRequest) {
 
     const now = new Date().toISOString();
 
-    await db.insert(schema.outboundMessages).values({
+    const [insertedMessage] = await db.insert(schema.outboundMessages).values({
       leadId: lead.id,
       direction: "outbound",
       sequenceStep: lead.sequenceStep,
-      channel: "email",
+      channel: result.channel,
       subject: result.subject,
       body: result.body,
       status: "draft",
       sentAt: null,
-    });
+      metadata: result.hookUsed
+        ? {
+            hookId: result.hookUsed.generatedHookId ?? null,
+            sequenceType: result.orchestration?.sequenceType ?? null,
+            previousChannel: result.orchestration?.previousChannel ?? null,
+            tone: result.orchestration?.tone ?? null,
+            angle: result.hookUsed.angle,
+            buyerTensionId: result.hookUsed.buyerTensionId ?? null,
+            structuralVariant: result.hookUsed.structuralVariant ?? null,
+            hookText: result.hookUsed.hookText,
+            evidenceSnippet: result.hookUsed.evidence,
+            orchestration: result.orchestration ?? null,
+          }
+        : null,
+    }).returning({ id: schema.outboundMessages.id });
+
+    if (lead.userId) {
+      await persistFollowupMessageV2({
+        userId: lead.userId,
+        companyUrl: lead.companyWebsite,
+        companyName: lead.companyName,
+        outboundMessageId: insertedMessage.id,
+        leadId: lead.id,
+        subject: result.subject,
+        body: result.body,
+        channel: result.channel,
+        stage: "generated",
+        metadata: result.hookUsed
+          ? {
+              hookId: result.hookUsed.generatedHookId ?? null,
+              sequenceType: result.orchestration?.sequenceType ?? null,
+              previousChannel: result.orchestration?.previousChannel ?? null,
+              tone: result.orchestration?.tone ?? null,
+              angle: result.hookUsed.angle,
+            }
+          : null,
+      }).catch(() => {});
+    }
 
     await db.update(schema.leads).set({
       sequenceStep: lead.sequenceStep + 1,
@@ -195,6 +236,7 @@ export async function POST(request: NextRequest) {
         subject: result.subject,
         body: result.body,
         hook_source: result.hookSource,
+        orchestration: result.orchestration,
       },
     });
   } catch (error: any) {

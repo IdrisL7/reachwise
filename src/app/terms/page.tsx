@@ -52,8 +52,8 @@ export default function TermsPage() {
           <section>
             <h2 className="text-lg font-semibold text-white mb-3">4. Subscriptions and billing</h2>
             <ul className="list-disc pl-6 space-y-1">
-              <li>Paid plans are billed monthly via Stripe. All prices are in GBP.</li>
-              <li>The Free plan requires no payment. The Pro plan is billed monthly at $79/mo.</li>
+              <li>Paid plans are billed monthly via Stripe in the currency shown at checkout.</li>
+              <li>The Free plan requires no payment. The Pro plan currently starts at £65 / $79 / €74 per month.</li>
               <li>You may cancel at any time through the billing portal. Access continues until the end of the current billing period.</li>
               <li>Refunds are not provided for partial billing periods, except as required by law.</li>
               <li>We reserve the right to change pricing with 30 days&apos; notice to existing subscribers.</li>

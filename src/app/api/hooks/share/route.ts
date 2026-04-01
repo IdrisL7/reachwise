@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { recordHookOutcome } from "@/lib/hook-feedback";
 
 export async function POST(request: Request) {
   const session = await auth();
@@ -48,6 +49,13 @@ export async function POST(request: Request) {
   const shareId = shared.id;
   const baseUrl = process.env.NEXTAUTH_URL || "https://getsignalhooks.com";
   const shareUrl = `${baseUrl}/h/${shareId}`;
+
+  await recordHookOutcome({
+    hookId: body.hookId,
+    userId: session.user.id,
+    event: "shared",
+    metadata: { shareId },
+  }).catch(() => {});
 
   return NextResponse.json({ shareId, shareUrl });
 }

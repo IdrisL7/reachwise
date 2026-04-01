@@ -5,21 +5,21 @@ import { Reveal } from "./ui/reveal";
 const testimonials = [
   {
     quote:
-      "Sent this to a VP at Databricks and got a reply in 4 hours. First time that's happened with a cold open in months.",
+      "Sent this to a VP at Databricks and got a reply in 4 hours. First time that happened in months, and the rep knew exactly why the message worked.",
     name: "Jamie R.",
     role: "Senior SDR",
     company: "Series B SaaS",
   },
   {
     quote:
-      "We run Clay enrichment first, then GSH for the opener. The source citation makes it feel like you actually did the research.",
+      "We run Clay enrichment first, then GetSignalHooks for the signal, hook, and draft. The source citation makes it feel like you actually did the research.",
     name: "Marcus T.",
     role: "RevOps Lead",
     company: "",
   },
   {
     quote:
-      "Our team of 6 switched from writing custom intros manually. We're sending 3× the volume with better reply rates.",
+      "Our team of 6 stopped writing custom intros manually. We are moving faster, approving better drafts, and keeping much better context on every account.",
     name: "Sarah K.",
     role: "Head of Outbound",
     company: "",
@@ -38,7 +38,7 @@ export function TestimonialsSection() {
             id="testimonials-heading"
             className="font-[family-name:var(--font-display)] text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-zinc-100"
           >
-            SDRs who stopped guessing.
+            Teams that stopped guessing and started operating from signal.
           </h2>
         </Reveal>
 

@@ -370,6 +370,134 @@ export type Hook = {
   genericness_penalty?: number;
   novelty_score?: number;
   buyer_tension_score?: number;
+  specificity_score?: number;
+  interestingness_score?: number;
+  tension_richness_score?: number;
+  credibility_score?: number;
+  ranking_score?: number;
+  buyer_tension_id?: string;
+  selector_score?: number;
+  role_fit_score?: number;
+  non_overlap_score?: number;
+  duplicate_cluster_key?: string;
+  diversity_bucket?: string;
+};
+
+export type RetrievedHookPattern = {
+  generatedHookId: string;
+  buyerTensionId?: string | null;
+  structuralVariant?: string | null;
+  angle: Angle;
+  triggerType?: TriggerType | null;
+  targetRole?: string | null;
+  evidenceTier: EvidenceTier;
+  hookText: string;
+  evidenceSnippet?: string | null;
+  sourceTitle?: string | null;
+  sourceType?: "first_party" | "trusted_news" | "semantic_web" | "fallback_web";
+  outcomeScore: number;
+};
+
+export type HookSelectionCriteria = {
+  credibility: number;
+  interestingness: number;
+  roleFit: number;
+  novelty: number;
+  nonOverlap: number;
+  priorAdjustment: number;
+  explorationBonus: number;
+  personalizationBonus: number;
+  retrievalBonus: number;
+  timingBonus: number;
+  counterfactualPenalty: number;
+  total: number;
+};
+
+export type HookSelectorPriors = {
+  buyerTensionBoosts: Record<string, number>;
+  structuralVariantBoosts: Record<string, number>;
+  angleBoosts: Record<string, number>;
+  triggerTypeBoosts: Record<string, number>;
+  buyerTensionTrials: Record<string, number>;
+  structuralVariantTrials: Record<string, number>;
+  angleTrials: Record<string, number>;
+  triggerTypeTrials: Record<string, number>;
+  totalTrials: number;
+  explorationWeight: number;
+  workspaceStyle: {
+    preferredLength: "short" | "medium" | "long" | null;
+    directnessPreference: number;
+    conversationalPreference: number;
+    formalPreference: number;
+    operatorPreference: number;
+    explicitVoiceTone?: string | null;
+  };
+  userStyle?: {
+    preferredLength: "short" | "medium" | "long" | null;
+    directnessPreference: number;
+    conversationalPreference: number;
+    formalPreference: number;
+    operatorPreference: number;
+    preferredTone?: "concise" | "warm" | "direct" | null;
+    preferredChannel?: "email" | "linkedin_connection" | "linkedin_message" | "cold_call" | "video_script" | null;
+  };
+  timingPreference?: {
+    preferredFreshness: "fresh" | "recent" | "stale" | "undated" | null;
+    freshPreference: number;
+    recentPreference: number;
+    staleTolerance: number;
+    undatedTolerance: number;
+    preferredSendWindow: "weekday_morning" | "weekday_afternoon" | "weekday_evening" | "weekend" | null;
+  };
+  recentCompanyMemory: {
+    buyerTensionIds: string[];
+    structuralVariants: string[];
+    hookTexts: string[];
+  };
+  currentCompanyDomain?: string | null;
+  retrievalLibrary?: RetrievedHookPattern[];
+  sourceTypeBoosts?: Partial<Record<"first_party" | "trusted_news" | "semantic_web" | "fallback_web", number>>;
+  triggerSourceTypeBoosts?: Partial<Record<string, Partial<Record<"first_party" | "trusted_news" | "semantic_web" | "fallback_web", number>>>>;
+  pinnedSourceTypes?: Partial<Record<"first_party" | "trusted_news" | "semantic_web" | "fallback_web", boolean>>;
+  pinnedTriggerSourceTypes?: Partial<Record<string, Partial<Record<"first_party" | "trusted_news" | "semantic_web" | "fallback_web", boolean>>>>;
+  counterfactuals?: {
+    buyerTensionPenalties: Record<string, number>;
+    structuralVariantPenalties: Record<string, number>;
+    evidenceTierPenalties: Partial<Record<EvidenceTier, number>>;
+    targetRolePenalties: Record<string, number>;
+    staleSourcePenalty: number;
+    undatedSourcePenalty: number;
+  };
+};
+
+export type TensionPattern =
+  | "direct-challenger"
+  | "curiosity-gap"
+  | "pain-forward"
+  | "signal-mirror"
+  | "hidden-cost"
+  | "scale-friction"
+  | "proof-to-problem";
+
+export type BuyerTension = {
+  id: string;
+  news_item: number;
+  source_title: string;
+  source_date: string;
+  source_url: string;
+  evidence_tier: EvidenceTier;
+  evidence_snippet: string;
+  trigger_type?: TriggerType;
+  angle: Angle;
+  buyer_tension: string;
+  why_now?: string;
+  affected_metric?: string;
+  pattern_family: TensionPattern;
+  specificity_tokens: string[];
+  confidence: Confidence;
+  richness_score: number;
+  specificity_score: number;
+  interestingness_score: number;
 };
 
 export type IntentSignalInput = {
@@ -406,6 +534,7 @@ export type ClassifiedSource = Source & {
   entity_mismatch?: boolean;
   tier_reason?: string;
   userProvided?: boolean;
+  duplicate_cluster_key?: string;
 };
 
 export type CompanyCandidate = {
@@ -444,6 +573,31 @@ export type ClaudeHookPayload = {
   buyer_tension?: string;
   why_now?: string;
   affected_metric?: string;
+  buyer_tension_id?: string;
+  tension_richness_score?: number;
+  specificity_score?: number;
+  interestingness_score?: number;
+};
+
+type ClaudeBuyerTensionPayload = {
+  id?: string;
+  news_item?: number;
+  source_title?: string;
+  source_date?: string;
+  source_url?: string;
+  evidence_tier?: string;
+  evidence_snippet?: string;
+  trigger_type?: string;
+  angle?: string;
+  buyer_tension?: string;
+  why_now?: string;
+  affected_metric?: string;
+  pattern_family?: string;
+  specificity_tokens?: string[];
+  confidence?: string;
+  richness_score?: number;
+  specificity_score?: number;
+  interestingness_score?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -1811,6 +1965,71 @@ async function runFirstPartyRecovery(
   return { sources, diagnostics };
 }
 
+async function runRecentNewsExpansion(
+  domain: string,
+  companyName: string,
+  apiKey: string,
+  alreadyAttemptedUrls: Set<string>,
+): Promise<{ sources: ClassifiedSource[]; diagnostics: NewsExpansionDiagnostic[] }> {
+  const queries = buildRecentNewsExpansionQueries(companyName, domain);
+
+  const seen = new Set<string>();
+  const sources: ClassifiedSource[] = [];
+  const diagnostics: NewsExpansionDiagnostic[] = [];
+
+  for (const query of queries) {
+    const results = await exaSearch(query, apiKey, {
+      num_results: 8,
+      days: 120,
+      exclude_domains: [domain],
+    }).catch(() => [] as ExaResult[]);
+
+    let queryResultCount = 0;
+    let trustedCount = 0;
+
+    for (const r of results) {
+      if (!r.url || alreadyAttemptedUrls.has(r.url) || seen.has(r.url)) continue;
+
+      const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
+      if (!text.includes(companyName.toLowerCase()) && !text.includes(domain.toLowerCase())) {
+        continue;
+      }
+
+      seen.add(r.url);
+      const rawSource = exaResultToSource(r, domain);
+      if (!rawSource) continue;
+
+      const classified = applyRecencyDowngrade({
+        ...rawSource,
+        tier: classifySource(rawSource, false, domain),
+      });
+
+      queryResultCount += 1;
+      if (isReputablePublisher(classified.url)) trustedCount += 1;
+      sources.push(classified);
+    }
+
+    diagnostics.push({
+      query,
+      resultCount: queryResultCount,
+      trustedCount,
+    });
+  }
+
+  return { sources, diagnostics };
+}
+
+export function buildRecentNewsExpansionQueries(
+  companyName: string,
+  domain: string,
+): string[] {
+  return [
+    `"${companyName}" OR "${domain}" funding OR raised OR series OR investment`,
+    `"${companyName}" OR "${domain}" launch OR launched OR product OR feature OR AI`,
+    `"${companyName}" OR "${domain}" hiring OR hires OR appointed OR partnership OR expansion`,
+  ];
+}
+
 // ---------------------------------------------------------------------------
 // Merge & Deduplicate
 // ---------------------------------------------------------------------------
@@ -1831,27 +2050,70 @@ function normalizeTitle(title: string): string {
   return title.toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function stripSyndicationSuffixes(title: string): string {
+  return title
+    .replace(/\s+[\|\-–—]\s+(business wire|globenewswire|pr newswire|reuters|techcrunch|bloomberg|marketwatch|yahoo finance)\b.*$/i, "")
+    .replace(/^(business wire|globenewswire|pr newswire|reuters|techcrunch|bloomberg|marketwatch|yahoo finance)\s*[:\-]\s*/i, "")
+    .trim();
+}
+
+function normalizeEventPhrase(title: string): string {
+  return normalizeTitle(stripSyndicationSuffixes(title))
+    .replace(/\b(series [a-z]|series [0-9]+)\b/g, "series")
+    .replace(/\b(announces|announced|launches|launched|introduces|introduced)\b/g, "launch")
+    .replace(/\b(raises|raised|raising)\b/g, "raise")
+    .replace(/\b(hires|hired|appoints|appointed)\b/g, "hire")
+    .replace(/\b(partners|partnered|partnership)\b/g, "partnership")
+    .replace(/\b(acquires|acquired|acquisition)\b/g, "acquisition")
+    .replace(/\b(expands|expanded|expansion)\b/g, "expansion")
+    .replace(/\b(ai)\b/g, "ai")
+    .replace(/\b(\d+m|\d+ million|\d+ billion)\b/g, "amount")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function getSourceDuplicateClusterKey(source: Pick<Source, "title" | "date">): string {
+  const normalized = normalizeEventPhrase(source.title);
+  const words = normalized.split(" ").filter(Boolean);
+  const meaningful = words.filter((word) => word.length > 2).slice(0, 8).join(" ");
+  const monthBucket = source.date ? source.date.slice(0, 7) : "undated";
+  return `${meaningful || normalized || "untitled"}::${monthBucket}`;
+}
+
 function deduplicateSources(sources: ClassifiedSource[]): ClassifiedSource[] {
   const seen = new Map<string, ClassifiedSource>();
   const seenTitles = new Set<string>();
   const seenDomainPaths = new Set<string>();
+  const clustered = new Map<string, ClassifiedSource>();
 
   for (const source of sources) {
     const canonUrl = canonicalizeUrl(source.url);
-    const normTitle = normalizeTitle(source.title);
+    const normTitle = normalizeTitle(stripSyndicationSuffixes(source.title));
     const domainPath = canonUrl.split("?")[0]; // URL without query string
+    const clusterKey = getSourceDuplicateClusterKey(source);
+    source.duplicate_cluster_key = clusterKey;
 
     // Skip if we've seen this URL, title, or domain+path
     if (seen.has(canonUrl)) continue;
-    if (normTitle.length > 10 && seenTitles.has(normTitle)) continue;
     if (seenDomainPaths.has(domainPath)) continue;
 
+    const existingCluster = clustered.get(clusterKey);
+    if (existingCluster) {
+      if (scoreSource(source) > scoreSource(existingCluster)) {
+        clustered.set(clusterKey, source);
+      }
+      continue;
+    }
+
+    if (normTitle.length > 10 && seenTitles.has(normTitle)) continue;
+
     seen.set(canonUrl, source);
+    clustered.set(clusterKey, source);
     if (normTitle.length > 10) seenTitles.add(normTitle);
     seenDomainPaths.add(domainPath);
   }
 
-  return Array.from(seen.values());
+  return Array.from(clustered.values());
 }
 
 /** Compute specificity score for a source's facts. Higher = more specific claims. */
@@ -1926,6 +2188,12 @@ type RecoveryDiagnostic = {
   via: "exa-recovery";
 };
 
+type NewsExpansionDiagnostic = {
+  query: string;
+  resultCount: number;
+  trustedCount: number;
+};
+
 export type FetchSourcesResult = {
   sources: ClassifiedSource[];
   signalCount: number;
@@ -1946,6 +2214,8 @@ export type FetchSourcesResult = {
     lowSignalReason: string | null;
     recoveryAttempted: boolean;
     recoveryResults: RecoveryDiagnostic[];
+    newsExpansionAttempted: boolean;
+    newsExpansionResults: NewsExpansionDiagnostic[];
   };
 };
 
@@ -2117,6 +2387,7 @@ export async function fetchSourcesWithGating(
   // against the company domain using press/newsroom/changelog keywords.
   // Exa handles JS-heavy pages (gong.io/press, etc.) that direct fetching can't access.
   let recoveryDiagnostics: RecoveryDiagnostic[] = [];
+  let newsExpansionDiagnostics: NewsExpansionDiagnostic[] = [];
   let finalRanked: ClassifiedSource[] = ranked;
 
   if (tierACount === 0 && domain && companyName) {
@@ -2131,6 +2402,30 @@ export async function fetchSourcesWithGating(
       hasAnchoredSources = finalRanked.some((s) => s.tier === "A");
     }
     recoveryDiagnostics = recovery.diagnostics;
+  }
+
+  const hasTrustedNews = finalRanked.some((s) => isReputablePublisher(s.url));
+  const shouldRunNewsExpansion =
+    domain &&
+    companyName &&
+    (
+      tierACount === 0 ||
+      (!hasTrustedNews && finalRanked.length <= 3) ||
+      (finalRanked.length > 0 && finalRanked.every((s) => s.stale))
+    );
+
+  if (shouldRunNewsExpansion) {
+    const attempted = new Set(finalRanked.map((s) => s.url));
+    const expansion = await runRecentNewsExpansion(domain, companyName, apiKey, attempted);
+
+    if (expansion.sources.length > 0) {
+      finalRanked = deduplicateSources([...expansion.sources, ...finalRanked])
+        .sort((a, b) => scoreSource(b) - scoreSource(a))
+        .slice(0, 10);
+      tierACount = finalRanked.filter((s) => s.tier === "A").length;
+      hasAnchoredSources = finalRanked.some((s) => s.tier === "A");
+    }
+    newsExpansionDiagnostics = expansion.diagnostics;
   }
 
   // INTENT SIGNAL FALLBACK: if Exa + recovery both returned no Tier A sources,
@@ -2204,6 +2499,8 @@ export async function fetchSourcesWithGating(
     lowSignalReason: tierACount === 0 ? "zero_tier_a" : null,
     recoveryAttempted: recoveryDiagnostics.length > 0,
     recoveryResults: recoveryDiagnostics,
+    newsExpansionAttempted: newsExpansionDiagnostics.length > 0,
+    newsExpansionResults: newsExpansionDiagnostics,
   };
 
   console.log("[fetchSourcesWithGating] threshold check (with intent):", {
@@ -2454,6 +2751,257 @@ const DEFAULT_TONE_BLOCK = [
   "- The goal is: recipient reads it and thinks 'hm, how did they know that's actually a problem for me', not 'wow that was a slick opener'.",
 ].join("\n");
 
+const VALID_TENSION_PATTERNS: TensionPattern[] = [
+  "direct-challenger",
+  "curiosity-gap",
+  "pain-forward",
+  "signal-mirror",
+  "hidden-cost",
+  "scale-friction",
+  "proof-to-problem",
+];
+
+function clampScore(value: number | undefined, fallback = 5): number {
+  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+  return Math.max(1, Math.min(10, Math.round(value)));
+}
+
+function normalizeBuyerTension(
+  raw: ClaudeBuyerTensionPayload,
+  sourceLookup: Map<number, ClassifiedSource>,
+): BuyerTension | null {
+  const newsItem = typeof raw.news_item === "number" ? raw.news_item : 1;
+  const source = sourceLookup.get(newsItem);
+  if (!source) return null;
+
+  const angle = ((raw.angle || "trigger").toLowerCase() as Angle);
+  if (!VALID_ANGLES.includes(angle)) return null;
+
+  const buyerTension = (raw.buyer_tension || "").trim();
+  if (buyerTension.length < 16) return null;
+
+  const confidence = ((raw.confidence || "med").toLowerCase() as Confidence);
+  const validConfidence = VALID_CONFIDENCES.includes(confidence) ? confidence : "med";
+
+  const rawPattern = ((raw.pattern_family || "").trim() as TensionPattern);
+  const patternFamily = VALID_TENSION_PATTERNS.includes(rawPattern) ? rawPattern : "curiosity-gap";
+
+  const rawTriggerType = ((raw.trigger_type || "").toLowerCase().replace(/-/g, "_") as TriggerType);
+  const triggerType = ([
+    "award", "stat", "case_study", "hiring", "funding", "ipo", "expansion",
+  ] as TriggerType[]).includes(rawTriggerType) ? rawTriggerType : undefined;
+
+  const specificityTokens = Array.isArray(raw.specificity_tokens)
+    ? raw.specificity_tokens.map((token) => String(token).trim()).filter(Boolean).slice(0, 6)
+    : [];
+
+  return {
+    id: (raw.id || `tension-${newsItem}-${patternFamily}`).trim(),
+    news_item: newsItem,
+    source_title: (raw.source_title || source.title || "").trim(),
+    source_date: (raw.source_date || source.date || "").trim(),
+    source_url: (raw.source_url || source.url || "").trim(),
+    evidence_tier: ((raw.evidence_tier || source.tier || "B").toUpperCase() as EvidenceTier) === "A" ? "A" : "B",
+    evidence_snippet: (raw.evidence_snippet || source.facts[0] || "").trim(),
+    trigger_type: triggerType,
+    angle,
+    buyer_tension: buyerTension,
+    why_now: (raw.why_now || "").trim() || undefined,
+    affected_metric: (raw.affected_metric || "").trim() || undefined,
+    pattern_family: patternFamily,
+    specificity_tokens: specificityTokens,
+    confidence: validConfidence,
+    richness_score: clampScore(raw.richness_score),
+    specificity_score: clampScore(raw.specificity_score),
+    interestingness_score: clampScore(raw.interestingness_score),
+  };
+}
+
+function enforceTensionPatternCoverage(
+  tensions: BuyerTension[],
+  maxCount = 6,
+): BuyerTension[] {
+  if (tensions.length <= 1) return tensions.slice(0, maxCount);
+
+  const sorted = [...tensions].sort((a, b) => {
+    const aScore = a.richness_score + a.specificity_score + a.interestingness_score;
+    const bScore = b.richness_score + b.specificity_score + b.interestingness_score;
+    return bScore - aScore;
+  });
+
+  const chosen: BuyerTension[] = [];
+  const seenPatterns = new Set<string>();
+  const seenSources = new Set<string>();
+
+  for (const tension of sorted) {
+    if (chosen.length >= maxCount) break;
+    if (!seenPatterns.has(tension.pattern_family)) {
+      chosen.push(tension);
+      seenPatterns.add(tension.pattern_family);
+      seenSources.add(`${tension.news_item}:${tension.source_url}`);
+    }
+  }
+
+  for (const tension of sorted) {
+    if (chosen.length >= maxCount) break;
+    const key = `${tension.news_item}:${tension.source_url}`;
+    if (seenSources.has(key) && chosen.some((item) => item.pattern_family === tension.pattern_family)) continue;
+    chosen.push(tension);
+    seenSources.add(key);
+  }
+
+  return chosen;
+}
+
+export function buildInterpreterSystemPrompt(
+  senderContext?: SenderContext | null,
+  targetRole?: TargetRole | null,
+): string {
+  const activeRole = targetRole ?? "General";
+  return [
+    "You are the Signal Interpreter stage for outbound hook generation.",
+    "Your job is to convert raw company sources into structured buyer tensions before any hook writing happens.",
+    "Do not draft hooks. Do not write outreach copy. Only interpret evidence into tension objects.",
+    "",
+    `TARGET ROLE: ${activeRole}`,
+    `PERSONA:\n${getPersonaSection(activeRole)}`,
+    "",
+    "For each usable source, identify the most credible internal tension that the target role would feel first.",
+    "Prefer operational pressure over article summary.",
+    "Every tension must stay grounded in the cited source facts and exact evidence snippet.",
+    "Pattern coverage requirement: diversify pattern_family across the set when the evidence supports it.",
+    "Score each object separately on richness, specificity, and interestingness from 1-10.",
+    "Richness = how much real buyer pressure is present.",
+    "Specificity = how anchored it is to concrete facts, metrics, names, or workflows.",
+    "Interestingness = how non-obvious and conversation-worthy the tension is while staying credible.",
+    "Allowed pattern_family values: direct-challenger, curiosity-gap, pain-forward, signal-mirror, hidden-cost, scale-friction, proof-to-problem.",
+    "Allowed angles: trigger, risk, tradeoff.",
+    "Return a JSON array only.",
+    "",
+    "JSON shape:",
+    "[{",
+    '  "id": "tension-1",',
+    '  "news_item": 1,',
+    '  "source_title": "string",',
+    '  "source_date": "YYYY-MM-DD or empty",',
+    '  "source_url": "https://...",',
+    '  "evidence_tier": "A | B",',
+    '  "evidence_snippet": "short verbatim quoteable evidence",',
+    '  "trigger_type": "award | stat | case_study | hiring | funding | ipo | expansion",',
+    '  "angle": "trigger | risk | tradeoff",',
+    `  "buyer_tension": "internal pressure stated in the buyer's world",`,
+    '  "why_now": "why this matters now",',
+    '  "affected_metric": "metric or workflow under pressure",',
+    '  "pattern_family": "one allowed value",',
+    '  "specificity_tokens": ["exact number", "named workflow"],',
+    '  "confidence": "high | med",',
+    '  "richness_score": 1,',
+    '  "specificity_score": 1,',
+    '  "interestingness_score": 1',
+    "}]",
+    ...(senderContext?.buyerRoles?.length ? [
+      "",
+      `Sender context buyer roles: ${senderContext.buyerRoles.join(", ")}`,
+    ] : []),
+  ].join("\n");
+}
+
+export function buildInterpreterUserPrompt(
+  url: string,
+  sources: ClassifiedSource[],
+  context?: string,
+  intentSignals?: IntentSignalInput[],
+): string {
+  const basePrompt = buildUserPrompt(url, sources, context, intentSignals);
+  return [
+    basePrompt,
+    "",
+    "Interpret the sources into BuyerTension objects only.",
+    "Do not write hooks yet.",
+  ].join("\n");
+}
+
+export function buildComposerSystemPrompt(
+  senderContext?: SenderContext | null,
+  targetRole?: TargetRole | null,
+  customPersona?: { pain: string; promise: string },
+  messagingStyle: MessagingStyle = "evidence",
+): string {
+  return [
+    buildSystemPrompt(senderContext, targetRole, customPersona, messagingStyle),
+    "",
+    "You are now in the Hook Composer stage.",
+    "The BuyerTension objects below are the only approved interpretation layer. Compose hooks from them, not from raw source summaries.",
+    "Each hook must cite one buyer_tension_id from the provided tension objects.",
+    "Coverage requirement: vary structural_variant across the set when multiple high-quality tensions are available.",
+    "Rank intent internally on credible + interesting, not just compliance.",
+    "Use tension richness, specificity, and interestingness to decide which tensions deserve hooks.",
+    'Add these JSON fields to every output object: "buyer_tension_id", "tension_richness_score", "specificity_score", "interestingness_score".',
+    "Return a JSON array only.",
+  ].join("\n");
+}
+
+export function buildComposerUserPrompt(
+  url: string,
+  tensions: BuyerTension[],
+  context?: string,
+  retrievalLibrary: RetrievedHookPattern[] = [],
+): string {
+  const tensionBlock = tensions.map((tension, index) => [
+    `### Buyer Tension ${index + 1}`,
+    `id: ${tension.id}`,
+    `news_item: ${tension.news_item}`,
+    `source_title: ${tension.source_title}`,
+    tension.source_date ? `source_date: ${tension.source_date}` : "source_date: unknown",
+    `source_url: ${tension.source_url}`,
+    `evidence_tier: ${tension.evidence_tier}`,
+    `angle: ${tension.angle}`,
+    tension.trigger_type ? `trigger_type: ${tension.trigger_type}` : "",
+    `pattern_family: ${tension.pattern_family}`,
+    `buyer_tension: ${tension.buyer_tension}`,
+    tension.why_now ? `why_now: ${tension.why_now}` : "",
+    tension.affected_metric ? `affected_metric: ${tension.affected_metric}` : "",
+    `specificity_tokens: ${tension.specificity_tokens.join(", ") || "none"}`,
+    `scores: richness=${tension.richness_score}, specificity=${tension.specificity_score}, interestingness=${tension.interestingness_score}`,
+    `evidence_snippet: ${tension.evidence_snippet}`,
+  ].filter(Boolean).join("\n")).join("\n\n");
+
+  return [
+    `Prospect URL: ${url}`,
+    "",
+    "### Buyer Tensions",
+    tensionBlock,
+    ...(retrievalLibrary.length > 0
+      ? [
+          "",
+          "### Reusable Winning Patterns",
+          "Use these as bounded pattern references, not templates to copy.",
+          "Reuse the archetype only when it fits the current BuyerTension. Do not repeat wording verbatim.",
+          ...retrievalLibrary.map((pattern, index) => [
+            `#### Pattern ${index + 1}`,
+            `angle: ${pattern.angle}`,
+            pattern.triggerType ? `trigger_type: ${pattern.triggerType}` : "",
+            pattern.structuralVariant ? `structural_variant: ${pattern.structuralVariant}` : "",
+            pattern.buyerTensionId ? `buyer_tension_id: ${pattern.buyerTensionId}` : "",
+            pattern.targetRole ? `target_role: ${pattern.targetRole}` : "",
+            `evidence_tier: ${pattern.evidenceTier}`,
+            `outcome_score: ${pattern.outcomeScore}`,
+            pattern.sourceTitle ? `source_title: ${pattern.sourceTitle}` : "",
+            pattern.evidenceSnippet ? `evidence_snippet: ${pattern.evidenceSnippet}` : "",
+            `pattern_example: ${pattern.hookText}`,
+          ].filter(Boolean).join("\n")),
+        ]
+      : []),
+    ...(context ? ["", "### Salesperson context", context] : []),
+    "",
+    "Write multiple hooks from these BuyerTension objects.",
+    "Do not restate the source list. Do not invent new tensions.",
+    "Spread coverage across different pattern families when credible.",
+    "If you use a reusable winning pattern, adapt its structure to the current tension instead of copying phrasing.",
+    "Output JSON array only.",
+  ].join("\n");
+}
+
 export function buildSystemPrompt(senderContext?: SenderContext | null, targetRole?: TargetRole | null, customPersona?: { pain: string; promise: string }, messagingStyle: MessagingStyle = "evidence"): string {
   const activeRole = customPersona ? null : (targetRole ?? null);
   const personaSection = activeRole
@@ -2516,10 +3064,12 @@ export function buildSystemPrompt(senderContext?: SenderContext | null, targetRo
     "---",
     "",
     "PROMISE GUIDELINES:",
-    "- Formula: [evidence-backed outcome claim] — [soft peer-level CTA referencing the prospect by name or scale]",
-    "- Good example: 'Teams at similar scale cut manager review time by 60% — happy to show you what that looks like for Hostinger.'",
+    "- Formula: [what we help/provide for this role, tied to the signal] + [specific outcome] + [soft peer-level CTA].",
+    "- Preferred framing: start the promise with 'We help...', 'We can help...', or 'We provide...' when sender context exists.",
+    "- Good example: 'We help SDR managers coach from live rep data instead of last week's call reviews — happy to show you what that looks like for Federato.'",
     "- If sender context has proof points: use one specific proof point. Don't invent stats.",
     "- If sender context has no proof: state the outcome claim from the 'Outcome' field in sender context, then add a soft CTA.",
+    "- The promise should read like a standalone value proposition, not commentary about the market or stage of growth.",
     "- The promise must be tied to the specific signal in the hook — not a generic capability.",
     "- Position: use your judgment — either a separate sentence after the question, or woven naturally into/after it.",
     "- Never sound like a brochure. Peer-level confidence, not a sales pitch.",
@@ -2671,12 +3221,12 @@ export function buildUserPrompt(
 // Call Claude Messages API
 // ---------------------------------------------------------------------------
 
-export async function callClaude(
+async function callClaudeJson<T>(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
-): Promise<ClaudeHookPayload[]> {
+): Promise<T[]> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -2747,31 +3297,40 @@ export async function callClaude(
 
   if (!Array.isArray(parsed)) {
     if (parsed && typeof parsed === "object") {
-      return [parsed as ClaudeHookPayload];
+      return [parsed as T];
     }
     throw new Error("Claude did not return valid JSON");
   }
 
-  return parsed as ClaudeHookPayload[];
+  return parsed as T[];
+}
+
+export async function callClaude(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  model = "claude-sonnet-4-20250514",
+): Promise<ClaudeHookPayload[]> {
+  return callClaudeJson<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model);
 }
 
 // ---------------------------------------------------------------------------
 // Call Claude with retry (exponential backoff for transient errors)
 // ---------------------------------------------------------------------------
 
-export async function callClaudeWithRetry(
+export async function callClaudeJsonWithRetry<T>(
   systemPrompt: string,
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
-): Promise<ClaudeHookPayload[]> {
+): Promise<T[]> {
   const RETRYABLE = [429, 500, 502, 503];
   const MAX_ATTEMPTS = 3;
   let lastError: unknown;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      return await callClaude(systemPrompt, userPrompt, apiKey, model);
+      return await callClaudeJson<T>(systemPrompt, userPrompt, apiKey, model);
     } catch (err) {
       lastError = err;
       // Extract HTTP status from error message (format: "Anthropic API error <status>: ...")
@@ -2790,6 +3349,76 @@ export async function callClaudeWithRetry(
 
   // Should not reach here, but satisfy TypeScript
   throw lastError;
+}
+
+export async function callClaudeWithRetry(
+  systemPrompt: string,
+  userPrompt: string,
+  apiKey: string,
+  model = "claude-sonnet-4-20250514",
+): Promise<ClaudeHookPayload[]> {
+  return callClaudeJsonWithRetry<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model);
+}
+
+export async function generateHookPayloadsFromSources(opts: {
+  url: string;
+  sources: ClassifiedSource[];
+  apiKey: string;
+  context?: string;
+  senderContext?: SenderContext | null;
+  targetRole?: TargetRole | null;
+  customPersona?: { pain: string; promise: string };
+  messagingStyle?: MessagingStyle;
+  intentSignals?: IntentSignalInput[];
+  model?: string;
+  retrievalLibrary?: RetrievedHookPattern[];
+}): Promise<{ tensions: BuyerTension[]; rawHooks: ClaudeHookPayload[] }> {
+  const usableSources = opts.sources.filter((source) => source.tier !== "C");
+  if (usableSources.length === 0) {
+    return { tensions: [], rawHooks: [] };
+  }
+
+  const sourceLookup = new Map<number, ClassifiedSource>();
+  usableSources.forEach((source, index) => sourceLookup.set(index + 1, source));
+
+  const interpreterSystemPrompt = buildInterpreterSystemPrompt(opts.senderContext, opts.targetRole);
+  const interpreterUserPrompt = buildInterpreterUserPrompt(opts.url, opts.sources, opts.context, opts.intentSignals);
+  const rawTensions = await callClaudeJsonWithRetry<ClaudeBuyerTensionPayload>(
+    interpreterSystemPrompt,
+    interpreterUserPrompt,
+    opts.apiKey,
+    opts.model,
+  );
+
+  const normalizedTensions = rawTensions
+    .map((tension) => normalizeBuyerTension(tension, sourceLookup))
+    .filter((tension): tension is BuyerTension => tension !== null);
+
+  const selectedTensions = enforceTensionPatternCoverage(normalizedTensions);
+  if (selectedTensions.length === 0) {
+    return { tensions: [], rawHooks: [] };
+  }
+
+  const composerSystemPrompt = buildComposerSystemPrompt(
+    opts.senderContext,
+    opts.targetRole,
+    opts.customPersona,
+    opts.messagingStyle ?? "evidence",
+  );
+  const composerUserPrompt = buildComposerUserPrompt(
+    opts.url,
+    selectedTensions,
+    opts.context,
+    opts.retrievalLibrary ?? [],
+  );
+  const rawHooks = await callClaudeJsonWithRetry<ClaudeHookPayload>(
+    composerSystemPrompt,
+    composerUserPrompt,
+    opts.apiKey,
+    opts.model,
+  );
+
+  return { tensions: selectedTensions, rawHooks };
 }
 
 export function getProviderFacingErrorMessage(error: unknown): {
@@ -2885,6 +3514,8 @@ function computePromisePenalty(hook: Hook): number {
 
   if (/\btypically\b/i.test(promise) && !/\d/.test(hook.evidence_snippet || "")) penalty += 6;
   if (/\b(pre-ipo|that scale|similar scale|this stage)\b/i.test(promise) && !/\b(board|forecast|commit|pipeline|deal)\b/i.test(hook.hook)) penalty += 4;
+  if (!/^\s*(we help|we can help|we provide|i can help|i can provide|happy to show|happy to share)\b/i.test(promise)) penalty += 5;
+  if (/\b(usually|often|tends to|typically)\b/i.test(promise) && !/^\s*(we help|we can help|we provide|i can help|i can provide)\b/i.test(promise)) penalty += 4;
 
   return Math.min(penalty, 20);
 }
@@ -3403,6 +4034,24 @@ export function validateHook(
     why_now: whyNow,
     affected_metric: affectedMetric,
   });
+  const specificityScore = clampScore(
+    typeof (raw as any).specificity_score === "number"
+      ? (raw as any).specificity_score
+      : (/\d/.test(`${hook} ${evidenceSnippet}`) ? 7 : 5),
+    5,
+  );
+  const interestingnessScore = clampScore(
+    typeof (raw as any).interestingness_score === "number"
+      ? (raw as any).interestingness_score
+      : noveltyScore,
+    noveltyScore || 5,
+  );
+  const tensionRichnessScore = clampScore(
+    typeof (raw as any).tension_richness_score === "number"
+      ? (raw as any).tension_richness_score
+      : buyerTensionScore,
+    buyerTensionScore || 5,
+  );
 
   return {
     news_item: typeof raw.news_item === "number" ? raw.news_item : 1,
@@ -3426,6 +4075,10 @@ export function validateHook(
     genericness_penalty: genericnessPenalty,
     novelty_score: noveltyScore,
     buyer_tension_score: buyerTensionScore,
+    specificity_score: specificityScore,
+    interestingness_score: interestingnessScore,
+    tension_richness_score: tensionRichnessScore,
+    buyer_tension_id: ((raw as any).buyer_tension_id || "").trim() || undefined,
   };
 }
 
@@ -3857,11 +4510,13 @@ export function scoreHookQuality(hook: Hook, companyDomain?: string): number {
   if (companyDomain && (`${hook.hook} ${hook.evidence_snippet}`).toLowerCase().includes(companyDomain.toLowerCase())) specificity += 1;
 
   const novelty = hook.novelty_score ?? scoreNovelty(hook.hook);
-  const buyerTension = hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook);
+  const buyerTension = hook.tension_richness_score ?? hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook);
+  const interestingness = hook.interestingness_score ?? novelty;
+  const specificityScore = hook.specificity_score ?? (/\d/.test(`${hook.hook} ${hook.evidence_snippet}`) ? 7 : 5);
   const genericPenalty = hook.genericness_penalty ?? computeGenericnessPenalty(hook.hook);
   const promisePenalty = computePromisePenalty(hook);
 
-  const raw = evidence + relevance + recency + Math.min(specificity, 15) + novelty + buyerTension - genericPenalty - promisePenalty;
+  const raw = evidence + relevance + recency + Math.min(specificity, 15) + novelty + buyerTension + interestingness + specificityScore - genericPenalty - promisePenalty;
   const score = Math.max(1, Math.min(100, Math.round(raw)));
   // Hard cap: weak-bridge hooks never score above 79
   if (hook.bridge_quality === "weak" && score > 79) return 79;
@@ -3910,12 +4565,369 @@ export function scoreHook(hook: Hook): number {
   // Confidence bonus
   if (hook.confidence === "high") score += 0.5;
 
-  score += (hook.novelty_score ?? scoreNovelty(hook.hook)) / 4;
-  score += (hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook)) / 4;
+  const credibility =
+    (hook.evidence_tier === "A" ? 4 : 2) +
+    (hook.specificity_score ?? (/\d/.test(`${hook.hook} ${hook.evidence_snippet}`) ? 7 : 5)) / 3 +
+    (hook.confidence === "high" ? 1.5 : 0.5);
+  const interestingness = (hook.interestingness_score ?? hook.novelty_score ?? scoreNovelty(hook.hook)) / 2;
+  const tensionRichness = (hook.tension_richness_score ?? hook.buyer_tension_score ?? scoreBuyerTension(hook.hook, hook)) / 2;
+
+  score += credibility;
+  score += interestingness;
+  score += tensionRichness;
   score -= (hook.genericness_penalty ?? computeGenericnessPenalty(hook.hook)) / 5;
   score -= computePromisePenalty(hook) / 5;
 
+  hook.credibility_score = Number(credibility.toFixed(2));
+  hook.ranking_score = Number(score.toFixed(2));
   return score;
+}
+
+function tokenizeHookText(text: string): string[] {
+  return (text.toLowerCase().match(/[a-z0-9]{3,}/g) || [])
+    .filter((token) => !["that", "this", "with", "your", "from", "have", "what", "when", "where", "which"].includes(token));
+}
+
+function computeJaccardSimilarity(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const aSet = new Set(a);
+  const bSet = new Set(b);
+  let overlap = 0;
+  for (const token of aSet) {
+    if (bSet.has(token)) overlap++;
+  }
+  const union = new Set([...aSet, ...bSet]).size;
+  return union === 0 ? 0 : overlap / union;
+}
+
+function getDuplicateClusterKey(hook: Hook): string {
+  if (hook.buyer_tension_id) return `tension:${hook.buyer_tension_id}`;
+  const sourceKey = hook.source_url || hook.source_title || "unknown";
+  const variantKey = hook.structural_variant || hook.angle;
+  const normalized = tokenizeHookText(hook.hook).slice(0, 8).join("-");
+  return `source:${sourceKey}|variant:${variantKey}|tokens:${normalized}`;
+}
+
+function getDiversityBucket(hook: Hook): string {
+  return [
+    hook.structural_variant || "unknown-variant",
+    hook.angle,
+    hook.trigger_type || "unknown-trigger",
+  ].join("|");
+}
+
+function areHooksNearDuplicate(a: Hook, b: Hook): boolean {
+  if (a.buyer_tension_id && b.buyer_tension_id && a.buyer_tension_id === b.buyer_tension_id) return true;
+  if (a.source_url && b.source_url && a.source_url === b.source_url && a.structural_variant === b.structural_variant) {
+    const metricA = (a.affected_metric || "").toLowerCase();
+    const metricB = (b.affected_metric || "").toLowerCase();
+    if (metricA === metricB) return true;
+  }
+  const similarity = computeJaccardSimilarity(tokenizeHookText(a.hook), tokenizeHookText(b.hook));
+  const sameFrame =
+    (a.source_url || "") === (b.source_url || "") &&
+    (a.angle || "") === (b.angle || "") &&
+    (a.trigger_type || "") === (b.trigger_type || "");
+  return sameFrame && similarity >= 0.88;
+}
+
+function deduplicateHooks(hooks: Hook[]): Hook[] {
+  const kept: Hook[] = [];
+  for (const hook of hooks) {
+    const clusterKey = getDuplicateClusterKey(hook);
+    hook.duplicate_cluster_key = clusterKey;
+    if (kept.some((existing) => areHooksNearDuplicate(existing, hook))) continue;
+    kept.push(hook);
+  }
+  return kept;
+}
+
+function computeRoleFitScore(hook: Hook, targetRole?: TargetRole | null): number {
+  if (!targetRole || targetRole === "General") return hook.role_token_hit ? 7 : 5;
+  if (hook.role_token_hit) return 9;
+  const tokens = ROLE_REQUIRED_TOKENS[targetRole] || [];
+  const lower = hook.hook.toLowerCase();
+  const matches = tokens.filter((token) => lower.includes(token)).length;
+  return Math.max(1, Math.min(10, 4 + matches * 2));
+}
+
+function computeNonOverlapScore(hook: Hook, selected: Hook[]): number {
+  if (selected.length === 0) return 10;
+  let score = 10;
+  for (const existing of selected) {
+    if (hook.buyer_tension_id && existing.buyer_tension_id && hook.buyer_tension_id === existing.buyer_tension_id) {
+      score -= 5;
+    }
+    if (hook.diversity_bucket && existing.diversity_bucket && hook.diversity_bucket === existing.diversity_bucket) {
+      score -= 2;
+    }
+    const similarity = computeJaccardSimilarity(tokenizeHookText(hook.hook), tokenizeHookText(existing.hook));
+    if (similarity >= 0.72) score -= 5;
+    else if (similarity >= 0.55) score -= 3;
+  }
+  return Math.max(1, Math.min(10, score));
+}
+
+function computeSelectorPriorAdjustment(hook: Hook, priors?: HookSelectorPriors): number {
+  if (!priors) return 0;
+
+  let adjustment = 0;
+  if (hook.buyer_tension_id) adjustment += priors.buyerTensionBoosts[hook.buyer_tension_id] ?? 0;
+  if (hook.structural_variant) adjustment += priors.structuralVariantBoosts[hook.structural_variant] ?? 0;
+  adjustment += priors.angleBoosts[hook.angle] ?? 0;
+  if (hook.trigger_type) adjustment += priors.triggerTypeBoosts[hook.trigger_type] ?? 0;
+
+  if (hook.buyer_tension_id && priors.recentCompanyMemory.buyerTensionIds.includes(hook.buyer_tension_id)) {
+    adjustment -= 2.25;
+  }
+  if (hook.structural_variant && priors.recentCompanyMemory.structuralVariants.includes(hook.structural_variant)) {
+    adjustment -= 0.75;
+  }
+  if (priors.recentCompanyMemory.hookTexts.some((text) => computeJaccardSimilarity(tokenizeHookText(text), tokenizeHookText(hook.hook)) >= 0.8)) {
+    adjustment -= 1.5;
+  }
+
+  return Number(Math.max(-3, Math.min(3, adjustment)).toFixed(2));
+}
+
+function computeExplorationBonus(hook: Hook, priors?: HookSelectorPriors): number {
+  if (!priors || priors.explorationWeight <= 0) return 0;
+
+  const totalTrials = Math.max(1, priors.totalTrials);
+  const counts = [
+    hook.buyer_tension_id ? (priors.buyerTensionTrials[hook.buyer_tension_id] ?? 0) : 0,
+    hook.structural_variant ? (priors.structuralVariantTrials[hook.structural_variant] ?? 0) : 0,
+    priors.angleTrials[hook.angle] ?? 0,
+    hook.trigger_type ? (priors.triggerTypeTrials[hook.trigger_type] ?? 0) : 0,
+  ].filter((count) => count >= 0);
+
+  const observed = counts.length > 0 ? Math.max(0, ...counts) : 0;
+  const uncertainty = Math.sqrt((2 * Math.log(totalTrials + 1)) / (observed + 1));
+
+  let noveltyLift = 0;
+  if (hook.structural_variant && (priors.structuralVariantTrials[hook.structural_variant] ?? 0) <= 1) noveltyLift += 0.35;
+  if (hook.trigger_type && (priors.triggerTypeTrials[hook.trigger_type] ?? 0) <= 1) noveltyLift += 0.25;
+  if (hook.buyer_tension_id && (priors.buyerTensionTrials[hook.buyer_tension_id] ?? 0) === 0) noveltyLift += 0.5;
+
+  const bonus = priors.explorationWeight * uncertainty + noveltyLift;
+  return Number(Math.max(0, Math.min(2.5, bonus)).toFixed(2));
+}
+
+function getHookLengthBucket(hook: Hook): "short" | "medium" | "long" {
+  const length = hook.hook.length;
+  if (length <= 160) return "short";
+  if (length <= 260) return "medium";
+  return "long";
+}
+
+function detectHookStyleSignals(hook: Hook): {
+  direct: boolean;
+  conversational: boolean;
+  formal: boolean;
+  operator: boolean;
+} {
+  const text = hook.hook;
+  return {
+    direct: text.length <= 220 && !/\bmaybe|perhaps|wondering|might\b/i.test(text),
+    conversational: /\b(hey|so|honest question|you're|that's|doesn't|isn't|aren't)\b/i.test(text),
+    formal: !/\b(you're|that's|doesn't|isn't|aren't|hey|so)\b/i.test(text) && /\b(following|consideration|therefore|whether)\b/i.test(text),
+    operator: /\b(forecast|pipeline|inspection|handoff|attribution|ramp|commit risk|conversion|coverage)\b/i.test(text),
+  };
+}
+
+function computePersonalizationBonus(hook: Hook, priors?: HookSelectorPriors): number {
+  if (!priors) return 0;
+  const workspaceStyle = priors.workspaceStyle;
+  const userStyle = priors.userStyle;
+  const style = {
+    preferredLength: userStyle?.preferredLength ?? workspaceStyle?.preferredLength ?? null,
+    directnessPreference: Math.max(userStyle?.directnessPreference ?? 0, workspaceStyle?.directnessPreference ?? 0),
+    conversationalPreference: Math.max(userStyle?.conversationalPreference ?? 0, workspaceStyle?.conversationalPreference ?? 0),
+    formalPreference: Math.max(userStyle?.formalPreference ?? 0, workspaceStyle?.formalPreference ?? 0),
+    operatorPreference: Math.max(userStyle?.operatorPreference ?? 0, workspaceStyle?.operatorPreference ?? 0),
+    explicitVoiceTone: workspaceStyle?.explicitVoiceTone ?? null,
+    preferredTone: userStyle?.preferredTone ?? null,
+  };
+  if (!workspaceStyle && !userStyle) return 0;
+  let bonus = 0;
+
+  const lengthBucket = getHookLengthBucket(hook);
+  if (style.preferredLength && style.preferredLength === lengthBucket) {
+    bonus += 0.8;
+  }
+
+  const signals = detectHookStyleSignals(hook);
+  if (signals.direct) bonus += style.directnessPreference * 0.6;
+  if (signals.conversational) bonus += style.conversationalPreference * 0.6;
+  if (signals.formal) bonus += style.formalPreference * 0.6;
+  if (signals.operator) bonus += style.operatorPreference * 0.7;
+
+  if (style.explicitVoiceTone === "Direct & Professional" && signals.direct) bonus += 0.4;
+  if (style.explicitVoiceTone === "Friendly & Casual" && signals.conversational) bonus += 0.4;
+  if (style.explicitVoiceTone === "Formal & Corporate" && signals.formal) bonus += 0.4;
+  if (style.explicitVoiceTone === "Conversational" && signals.conversational) bonus += 0.4;
+
+  if (style.preferredTone === "direct" && signals.direct) bonus += 0.45;
+  if (style.preferredTone === "warm" && signals.conversational) bonus += 0.35;
+  if (style.preferredTone === "concise" && lengthBucket === "short") bonus += 0.4;
+
+  return Number(Math.max(-1.5, Math.min(2, bonus)).toFixed(2));
+}
+
+function isUndatedSource(sourceDate?: string): boolean {
+  return !sourceDate || !sourceDate.trim();
+}
+
+function isTimingSensitiveSource(sourceDate?: string): boolean {
+  if (!sourceDate || !sourceDate.trim()) return false;
+  const parsed = Date.parse(sourceDate);
+  if (Number.isNaN(parsed)) return false;
+  const daysOld = (Date.now() - parsed) / (1000 * 60 * 60 * 24);
+  return daysOld > 120;
+}
+
+function computeCounterfactualPenalty(
+  hook: Hook,
+  targetRole?: TargetRole | null,
+  priors?: HookSelectorPriors,
+): number {
+  const counterfactuals = priors?.counterfactuals;
+  if (!counterfactuals) return 0;
+
+  let penalty = 0;
+  if (hook.buyer_tension_id) {
+    penalty += counterfactuals.buyerTensionPenalties[hook.buyer_tension_id] ?? 0;
+  }
+  if (hook.structural_variant) {
+    penalty += counterfactuals.structuralVariantPenalties[hook.structural_variant] ?? 0;
+  }
+  penalty += counterfactuals.evidenceTierPenalties[hook.evidence_tier] ?? 0;
+
+  if (targetRole) {
+    const rolePenalty = counterfactuals.targetRolePenalties[targetRole] ?? 0;
+    const roleFit = computeRoleFitScore(hook, targetRole);
+    penalty += roleFit < 7 ? rolePenalty : rolePenalty * 0.35;
+  }
+
+  if (isUndatedSource(hook.source_date)) {
+    penalty += counterfactuals.undatedSourcePenalty;
+  } else if (isTimingSensitiveSource(hook.source_date)) {
+    penalty += counterfactuals.staleSourcePenalty;
+  }
+
+  return Number(Math.max(0, Math.min(3, penalty)).toFixed(2));
+}
+
+function computeRetrievalBonus(hook: Hook, priors?: HookSelectorPriors): number {
+  const library = priors?.retrievalLibrary;
+  const companyDomain = priors?.currentCompanyDomain ?? null;
+  const sourceType = hook.source_url
+    ? (companyDomain && isFirstPartySource(hook.source_url, companyDomain)
+        ? "first_party"
+        : isReputablePublisher(hook.source_url)
+          ? "trusted_news"
+          : hook.evidence_tier === "A" || hook.evidence_tier === "B"
+            ? "semantic_web"
+            : "fallback_web")
+    : null;
+  const sourceTypeBoost = sourceType ? (priors?.sourceTypeBoosts?.[sourceType] ?? 0) : 0;
+  const triggerSourceTypeBoost =
+    sourceType && hook.trigger_type
+      ? (priors?.triggerSourceTypeBoosts?.[hook.trigger_type]?.[sourceType] ?? 0)
+      : 0;
+  if ((!library || library.length === 0) && sourceTypeBoost === 0 && triggerSourceTypeBoost === 0) return 0;
+
+  let best = 0;
+  for (const pattern of library ?? []) {
+    let score = 0;
+    if (pattern.angle === hook.angle) score += 0.35;
+    if (pattern.triggerType && hook.trigger_type && pattern.triggerType === hook.trigger_type) score += 0.5;
+    if (pattern.structuralVariant && hook.structural_variant && pattern.structuralVariant === hook.structural_variant) score += 0.8;
+    if (pattern.buyerTensionId && hook.buyer_tension_id && pattern.buyerTensionId === hook.buyer_tension_id) score += 0.95;
+    if (pattern.evidenceTier === hook.evidence_tier) score += 0.2;
+    if (pattern.sourceType && sourceType && pattern.sourceType === sourceType) score += 0.35;
+
+    if (score <= 0) continue;
+    const normalizedOutcome = Math.min(1.5, pattern.outcomeScore / 5);
+    best = Math.max(best, score * normalizedOutcome);
+  }
+
+  return Number(Math.max(0, Math.min(2.25, best + sourceTypeBoost + triggerSourceTypeBoost)).toFixed(2));
+}
+
+function getSourceFreshnessBucket(sourceDate?: string): "fresh" | "recent" | "stale" | "undated" {
+  if (!sourceDate || !sourceDate.trim()) return "undated";
+  const parsed = Date.parse(sourceDate);
+  if (Number.isNaN(parsed)) return "undated";
+  const daysOld = (Date.now() - parsed) / (1000 * 60 * 60 * 24);
+  if (daysOld <= 14) return "fresh";
+  if (daysOld <= 60) return "recent";
+  return "stale";
+}
+
+function getCurrentSendWindow(now = new Date()): "weekday_morning" | "weekday_afternoon" | "weekday_evening" | "weekend" {
+  const day = now.getDay();
+  if (day === 0 || day === 6) return "weekend";
+  const hour = now.getHours();
+  if (hour < 12) return "weekday_morning";
+  if (hour < 17) return "weekday_afternoon";
+  return "weekday_evening";
+}
+
+function computeTimingBonus(hook: Hook, priors?: HookSelectorPriors): number {
+  const timing = priors?.timingPreference;
+  if (!timing) return 0;
+
+  let bonus = 0;
+  const freshness = getSourceFreshnessBucket(hook.source_date);
+  if (freshness === "fresh") bonus += timing.freshPreference * 0.55;
+  if (freshness === "recent") bonus += timing.recentPreference * 0.45;
+  if (freshness === "stale") bonus += timing.staleTolerance * 0.35;
+  if (freshness === "undated") bonus += timing.undatedTolerance * 0.25;
+
+  if (timing.preferredFreshness === freshness) bonus += 0.45;
+
+  const currentWindow = getCurrentSendWindow();
+  if (timing.preferredSendWindow && timing.preferredSendWindow === currentWindow) {
+    if (freshness === "fresh" || freshness === "recent") bonus += 0.25;
+    else bonus += 0.1;
+  }
+
+  return Number(Math.max(-0.5, Math.min(1.5, bonus)).toFixed(2));
+}
+
+export function computeHookSelectionCriteria(
+  hook: Hook,
+  selected: Hook[] = [],
+  targetRole?: TargetRole | null,
+  priors?: HookSelectorPriors,
+): HookSelectionCriteria {
+  const credibility = Math.max(1, Math.min(10, Math.round((hook.credibility_score ?? (hook.evidence_tier === "A" ? 8 : 5)))));
+  const interestingness = Math.max(1, Math.min(10, Math.round(hook.interestingness_score ?? hook.novelty_score ?? scoreNovelty(hook.hook))));
+  const roleFit = computeRoleFitScore(hook, targetRole);
+  const novelty = Math.max(1, Math.min(10, Math.round(hook.novelty_score ?? scoreNovelty(hook.hook))));
+  const nonOverlap = computeNonOverlapScore(hook, selected);
+  const priorAdjustment = computeSelectorPriorAdjustment(hook, priors);
+  const explorationBonus = computeExplorationBonus(hook, priors);
+  const personalizationBonus = computePersonalizationBonus(hook, priors);
+  const retrievalBonus = computeRetrievalBonus(hook, priors);
+  const timingBonus = computeTimingBonus(hook, priors);
+  const counterfactualPenalty = computeCounterfactualPenalty(hook, targetRole, priors);
+  const total = Number((credibility * 0.32 + interestingness * 0.24 + roleFit * 0.16 + novelty * 0.12 + nonOverlap * 0.16 + priorAdjustment + explorationBonus + personalizationBonus + retrievalBonus + timingBonus - counterfactualPenalty).toFixed(2));
+  return {
+    credibility,
+    interestingness,
+    roleFit,
+    novelty,
+    nonOverlap,
+    priorAdjustment,
+    explorationBonus,
+    personalizationBonus,
+    retrievalBonus,
+    timingBonus,
+    counterfactualPenalty,
+    total,
+  };
 }
 
 /**
@@ -3925,26 +4937,69 @@ export function scoreHook(hook: Hook): number {
 export function rankAndCap(
   hooks: Hook[],
   maxHooks: number = 3,
+  options?: { targetRole?: TargetRole | null; selectorPriors?: HookSelectorPriors },
 ): { top: Hook[]; overflow: Hook[] } {
-  const scored = hooks.map((h) => ({ hook: h, score: scoreHook(h) }));
-  scored.sort((a, b) => b.score - a.score);
-  const sorted = scored.map((s) => s.hook);
+  const deduped = deduplicateHooks(hooks.map((hook) => ({
+    ...hook,
+    diversity_bucket: getDiversityBucket(hook),
+  })));
 
-  // Weak-bridge hooks must never appear in positions 1-2
-  const strongAll = sorted.filter((h) => h.bridge_quality !== "weak");
-  const weakAll = sorted.filter((h) => h.bridge_quality === "weak");
+  const scored = deduped
+    .map((hook) => ({ hook, score: scoreHook(hook) }))
+    .sort((a, b) => b.score - a.score)
+    .map((entry) => entry.hook);
 
-  const reservedTop = strongAll.slice(0, Math.min(2, maxHooks));
-  const remainingStrong = strongAll.slice(reservedTop.length);
+  const strongAll = scored.filter((hook) => hook.bridge_quality !== "weak");
+  const weakAll = scored.filter((hook) => hook.bridge_quality === "weak");
+
+  const orderedStrong: Hook[] = [];
+  for (const hook of strongAll) {
+    const criteria = computeHookSelectionCriteria(hook, orderedStrong, options?.targetRole, options?.selectorPriors);
+    hook.selector_score = criteria.total;
+    hook.role_fit_score = criteria.roleFit;
+    hook.non_overlap_score = criteria.nonOverlap;
+    orderedStrong.push(hook);
+  }
+
+  orderedStrong.sort((a, b) => (b.selector_score ?? 0) - (a.selector_score ?? 0));
+
+  const selectedTop: Hook[] = [];
+  const remainingStrong = [...orderedStrong];
+
+  while (selectedTop.length < Math.min(maxHooks, remainingStrong.length)) {
+    let bestIndex = -1;
+    let bestScore = -Infinity;
+    for (const [index, hook] of remainingStrong.entries()) {
+      const criteria = computeHookSelectionCriteria(hook, selectedTop, options?.targetRole, options?.selectorPriors);
+      hook.selector_score = criteria.total;
+      hook.role_fit_score = criteria.roleFit;
+      hook.non_overlap_score = criteria.nonOverlap;
+      if (criteria.total > bestScore) {
+        bestScore = criteria.total;
+        bestIndex = index;
+      }
+    }
+    if (bestIndex === -1) break;
+    selectedTop.push(remainingStrong.splice(bestIndex, 1)[0]);
+  }
+
+  const orderedWeak = weakAll.map((hook) => {
+    const criteria = computeHookSelectionCriteria(hook, selectedTop, options?.targetRole, options?.selectorPriors);
+    hook.selector_score = criteria.total;
+    hook.role_fit_score = criteria.roleFit;
+    hook.non_overlap_score = criteria.nonOverlap;
+    return hook;
+  }).sort((a, b) => (b.selector_score ?? 0) - (a.selector_score ?? 0));
 
   // If we cannot fill the first two positions with strong hooks, keep weak hooks out of top results.
   if (strongAll.length < Math.min(2, maxHooks)) {
     const out = {
-      top: strongAll.slice(0, maxHooks),
-      overflow: weakAll,
+      top: selectedTop.slice(0, maxHooks),
+      overflow: orderedWeak,
     };
     console.log("[rankAndCap] decision trace", {
       inputHookCount: hooks.length,
+      dedupedCount: deduped.length,
       maxHooks,
       strongCount: strongAll.length,
       weakCount: weakAll.length,
@@ -3955,16 +5010,17 @@ export function rankAndCap(
     return out;
   }
 
-  const ordered = [...reservedTop, ...remainingStrong, ...weakAll];
+  const ordered = [...selectedTop, ...remainingStrong, ...orderedWeak];
   const out = {
     top: ordered.slice(0, maxHooks),
     overflow: ordered.slice(maxHooks),
   };
-  console.log("[rankAndCap] decision trace", {
-    inputHookCount: hooks.length,
-    maxHooks,
-    strongCount: strongAll.length,
-    weakCount: weakAll.length,
+    console.log("[rankAndCap] decision trace", {
+      inputHookCount: hooks.length,
+      dedupedCount: deduped.length,
+      maxHooks,
+      strongCount: strongAll.length,
+      weakCount: weakAll.length,
     topCount: out.top.length,
     overflowCount: out.overflow.length,
     weakSuppressedFromTop: false,
@@ -4043,9 +5099,15 @@ export async function generateHooksForUrl(opts: {
     const sourceLookup = new Map<number, ClassifiedSource>();
     usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-    const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
-    const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
-    const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
+    const { rawHooks } = await generateHookPayloadsFromSources({
+      url: opts.url,
+      sources,
+      apiKey: claudeApiKey,
+      context: opts.pitchContext,
+      senderContext: _senderContext,
+      targetRole: _targetRole,
+      messagingStyle: _messagingStyle,
+    });
 
     // Publish Gate — enforce all rules
     const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
@@ -4061,9 +5123,15 @@ export async function generateHooksForUrl(opts: {
   const sourceLookup = new Map<number, ClassifiedSource>();
   usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
 
-  const systemPrompt = buildSystemPrompt(_senderContext, _targetRole, undefined, _messagingStyle);
-  const userPrompt = buildUserPrompt(opts.url, sources, opts.pitchContext);
-  const rawHooks = await callClaudeWithRetry(systemPrompt, userPrompt, claudeApiKey);
+  const { rawHooks } = await generateHookPayloadsFromSources({
+    url: opts.url,
+    sources,
+    apiKey: claudeApiKey,
+    context: opts.pitchContext,
+    senderContext: _senderContext,
+    targetRole: _targetRole,
+    messagingStyle: _messagingStyle,
+  });
 
   // Publish Gate — enforce all rules (validate → rewrite → drop, Tier B cap, anchor filter)
   const gated = publishGate(rawHooks, sourceLookup, { includeMarketContext });
@@ -4125,7 +5193,7 @@ export async function generateHooksForUrl(opts: {
 
   // Rank and cap
   const limit = opts.count ?? 3;
-  const { top } = rankAndCap(finalHooks, limit);
+  const { top } = rankAndCap(finalHooks, limit, { targetRole: _targetRole });
 
   const withMeta = attachRoleMeta(top, _targetRole, !!_senderContext);
   return { hooks: withMeta, lowSignal: false };

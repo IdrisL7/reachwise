@@ -23,6 +23,7 @@ const mockLimit = vi.fn();
 const mockUpdate = vi.fn();
 const mockSet = vi.fn();
 const mockUpdateWhere = vi.fn();
+let mockLimitResult: unknown[] = [];
 
 vi.mock("@/lib/db", () => ({
   db: {
@@ -37,7 +38,7 @@ vi.mock("@/lib/db", () => ({
               return {
                 limit: (...lArgs: unknown[]) => {
                   mockLimit(...lArgs);
-                  return mockLimit._result ?? [];
+                  return mockLimitResult;
                 },
               };
             },
@@ -145,13 +146,11 @@ describe("getOrCreateStripeCustomer", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Reset the limit result between tests
-    (mockLimit as ReturnType<typeof vi.fn> & { _result?: unknown[] })._result =
-      undefined;
+    mockLimitResult = [];
   });
 
   it("returns existing customer ID when the customer exists in Stripe", async () => {
-    (mockLimit as any)._result = [{ stripeCustomerId: "cus_existing" }];
+    mockLimitResult = [{ stripeCustomerId: "cus_existing" }];
     customers().retrieve.mockResolvedValue({ id: "cus_existing", deleted: false });
 
     const result = await getOrCreateStripeCustomer("user_1", "user@test.com");
@@ -163,7 +162,7 @@ describe("getOrCreateStripeCustomer", () => {
   });
 
   it("creates a new customer when the stored customer is deleted in Stripe", async () => {
-    (mockLimit as any)._result = [{ stripeCustomerId: "cus_stale" }];
+    mockLimitResult = [{ stripeCustomerId: "cus_stale" }];
     customers().retrieve.mockResolvedValue({ id: "cus_stale", deleted: true });
     customers().create.mockResolvedValue({ id: "cus_new_after_deleted" });
 
@@ -178,7 +177,7 @@ describe("getOrCreateStripeCustomer", () => {
   });
 
   it("creates a new customer when retrieve throws (stale/missing customer)", async () => {
-    (mockLimit as any)._result = [{ stripeCustomerId: "cus_gone" }];
+    mockLimitResult = [{ stripeCustomerId: "cus_gone" }];
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     customers().retrieve.mockRejectedValue(new Error("No such customer"));
     customers().create.mockResolvedValue({ id: "cus_fresh" });
@@ -197,7 +196,7 @@ describe("getOrCreateStripeCustomer", () => {
   });
 
   it("creates a new customer when no stripeCustomerId exists in DB", async () => {
-    (mockLimit as any)._result = [{ stripeCustomerId: null }];
+    mockLimitResult = [{ stripeCustomerId: null }];
     customers().create.mockResolvedValue({ id: "cus_brand_new" });
 
     const result = await getOrCreateStripeCustomer("user_4", "new@test.com");
@@ -212,7 +211,7 @@ describe("getOrCreateStripeCustomer", () => {
   });
 
   it("creates a new customer when user row is not found in DB", async () => {
-    (mockLimit as any)._result = [];
+    mockLimitResult = [];
     customers().create.mockResolvedValue({ id: "cus_no_row" });
 
     const result = await getOrCreateStripeCustomer("user_5", "norow@test.com");

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Edit3, Trash2, X, Plus, Pause, Play } from 'lucide-react';
+import { Edit3, Trash2, X, Plus, Pause, Play, Inbox, Users, Zap } from 'lucide-react';
+import { AppPageShell, EmptyStatePanel, SurfaceCard } from "../page-shell";
 
 interface SequenceStep {
   order: number;
@@ -274,56 +275,64 @@ export default function SequencesPage() {
   }
 
   return (
-    <div className="p-8 bg-[#030014] min-h-screen">
-      <div className="flex justify-between items-center mb-8">
-        <h2 className="text-3xl font-bold">Sequences</h2>
-        <button
-          onClick={() => { setShowModal(true); setSubmitError(null); }}
-          className="bg-teal-500 hover:bg-teal-400 px-6 py-2 rounded-lg font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98]"
-        >
-          + New Sequence
-        </button>
-      </div>
-
+    <AppPageShell
+      eyebrow="Follow-up orchestration"
+      title="Sequences"
+      description="Build the follow-up paths that turn saved leads into queued drafts. If there are no active sequences yet, the fastest next step is usually to save a lead or generate more hooks upstream."
+      actions={[
+        { label: "New Sequence", icon: Plus, variant: "primary", onClick: () => { setShowModal(true); setSubmitError(null); } },
+        { href: "/app/leads", label: "Open Leads", icon: Users },
+        { href: "/app/inbox", label: "Review Inbox", icon: Inbox },
+      ]}
+      stats={[
+        { label: "Saved sequences", value: loading ? "..." : String(sequences.length), tone: "violet" },
+        { label: "Active assignments", value: assignmentsLoading ? "..." : String(assignments.filter((assignment) => assignment.status === "active").length), tone: "teal" },
+        { label: "Paused assignments", value: assignmentsLoading ? "..." : String(assignments.filter((assignment) => assignment.status === "paused").length), tone: "amber" },
+      ]}
+    >
       {error && (
         <div className="bg-red-900/40 border border-red-700 text-red-300 px-6 py-4 rounded-xl mb-6 text-sm">
           {error}
         </div>
       )}
 
-      {loading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {[0, 1].map(i => (
-            <div key={i} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 animate-pulse">
-              <div className="flex justify-between mb-4">
-                <div className="h-5 w-24 bg-white/10 rounded" />
+      <SurfaceCard
+        title="Sequence library"
+        description="Create reusable follow-up tracks, then assign them from Leads so Inbox has drafts ready for review."
+      >
+        {loading ? (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {[0, 1].map(i => (
+              <div key={i} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 animate-pulse">
+                <div className="flex justify-between mb-4">
+                  <div className="h-5 w-24 bg-white/10 rounded" />
+                </div>
+                <div className="h-6 w-48 bg-white/10 rounded mb-6" />
+                <div className="flex gap-8 mb-6">
+                  <div className="h-10 w-20 bg-white/10 rounded" />
+                  <div className="h-10 w-20 bg-white/10 rounded" />
+                </div>
+                <div className="h-1.5 w-full bg-white/5 rounded-full" />
               </div>
-              <div className="h-6 w-48 bg-white/10 rounded mb-6" />
-              <div className="flex gap-8 mb-6">
-                <div className="h-10 w-20 bg-white/10 rounded" />
-                <div className="h-10 w-20 bg-white/10 rounded" />
-              </div>
-              <div className="h-1.5 w-full bg-white/5 rounded-full" />
-            </div>
-          ))}
-        </div>
-      ) : sequences.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-slate-400 text-lg mb-2">No sequences yet.</p>
-          <p className="text-slate-500 text-sm mb-6">Create your first outreach sequence.</p>
-          <button
-            onClick={() => { setShowModal(true); setSubmitError(null); }}
-            className="bg-teal-500 hover:bg-teal-400 px-6 py-2 rounded-lg font-bold text-black transition-all hover:scale-[1.02] active:scale-[0.98]"
-          >
-            New Sequence
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {sequences.map((seq) => {
-            const tag = getTagInfo(seq);
-            return (
-              <div key={seq.id} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 hover:border-purple-500/30 transition-all group">
+            ))}
+          </div>
+        ) : sequences.length === 0 ? (
+          <EmptyStatePanel
+            icon={Plus}
+            title="No sequences yet"
+            description="Create your first outreach sequence, then assign it from Leads so approved drafts start flowing into Inbox."
+            actions={[
+              { label: "New Sequence", icon: Plus, variant: "primary", onClick: () => { setShowModal(true); setSubmitError(null); } },
+              { href: "/app/leads", label: "Open Leads", icon: Users },
+              { href: "/app/hooks", label: "Generate Hooks", icon: Zap },
+            ]}
+          />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {sequences.map((seq) => {
+              const tag = getTagInfo(seq);
+              return (
+                <div key={seq.id} className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-6 hover:border-purple-500/30 transition-all group">
                 <div className="flex justify-between mb-4">
                   <span className={`text-[10px] ${tag.color} px-2 py-1 rounded font-black uppercase tracking-widest`}>{tag.label}</span>
                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -360,15 +369,17 @@ export default function SequencesPage() {
                     </div>
                   ))}
                 </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </SurfaceCard>
 
-      {/* ── Active Sequences Section ── */}
-      <div className="mt-12">
-        <h3 className="text-2xl font-bold mb-6">Active Sequences</h3>
+      <SurfaceCard
+        title="Active sequences"
+        description="Pause, resume, and monitor current follow-up progress without leaving the authenticated workflow."
+      >
 
         {assignmentsError && (
           <div className="bg-red-900/40 border border-red-700 text-red-300 px-6 py-4 rounded-xl mb-6 text-sm">
@@ -390,11 +401,16 @@ export default function SequencesPage() {
             </div>
           </div>
         ) : assignments.length === 0 ? (
-          <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl p-10 text-center">
-            <p className="text-slate-400 text-sm">
-              No active sequences. Start one by generating hooks and clicking &quot;Send Sequence&quot;.
-            </p>
-          </div>
+          <EmptyStatePanel
+            icon={Inbox}
+            title="No active sequences"
+            description="Start one from Leads after you save prospects, or generate fresh hooks first if you still need accounts worth following up with."
+            actions={[
+              { href: "/app/leads", label: "Open Leads", icon: Users, variant: "primary" },
+              { href: "/app/hooks", label: "Generate Hooks", icon: Zap },
+              { href: "/app/inbox", label: "Review Inbox", icon: Inbox },
+            ]}
+          />
         ) : (
           <div className="bg-[#0B0F1A] border border-white/5 rounded-2xl overflow-hidden">
             {/* Table header */}
@@ -479,7 +495,7 @@ export default function SequencesPage() {
             ))}
           </div>
         )}
-      </div>
+      </SurfaceCard>
 
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -629,6 +645,6 @@ export default function SequencesPage() {
           </div>
         </div>
       )}
-    </div>
+    </AppPageShell>
   );
 }

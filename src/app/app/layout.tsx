@@ -13,9 +13,18 @@ const navGroups = [
   {
     label: "Outreach",
     items: [
+      { href: "/app/accounts", label: "Accounts" },
       { href: "/app/hooks", label: "Hooks" },
       { href: "/app/sequences", label: "Sequences" },
       { href: "/app/inbox", label: "Inbox" },
+    ],
+  },
+  {
+    label: "Signals",
+    items: [
+      { href: "/app/leads", label: "Leads" },
+      { href: "/app/watchlist", label: "Watchlist" },
+      { href: "/app/analytics", label: "Analytics" },
     ],
   },
   {
@@ -34,10 +43,10 @@ const navGroups = [
 
 const allNavItems = navGroups.flatMap((g) => g.items);
 const primaryNav = [
+  { href: "/app/accounts", label: "Accounts" },
   { href: "/app/hooks", label: "Hooks" },
-  { href: "/app/sequences", label: "Sequences" },
+  { href: "/app/leads", label: "Leads" },
   { href: "/app/inbox", label: "Inbox" },
-  { href: "/app/templates", label: "Templates" },
 ];
 const secondaryNav = allNavItems.filter((item) => !primaryNav.find((p) => p.href === item.href));
 
@@ -95,7 +104,7 @@ export default async function AppLayout({
             <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded capitalize">
               {tierId}
             </span>
-            {tierId !== "pro" && (
+            {tierId === "free" && (
               <Link
                 href="/#pricing"
                 className="text-[10px] text-violet-400 hover:text-violet-300 transition-colors"

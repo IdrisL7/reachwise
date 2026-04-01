@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Eye, Trash2, Plus, X } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { Eye, Trash2, Plus, X, Inbox, Users, Zap } from "lucide-react";
+import { AppPageShell, EmptyStatePanel, SurfaceCard } from "../page-shell";
 
 interface WatchlistEntry {
   id: string;
@@ -46,6 +49,7 @@ function SignalLabel({ type, at }: { type: string | null; at: string | null }) {
 }
 
 export default function WatchlistPage() {
+  const searchParams = useSearchParams();
   const [entries, setEntries] = useState<WatchlistEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -53,6 +57,57 @@ export default function WatchlistPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [tierLocked, setTierLocked] = useState(false);
+
+  const watchlistStatus = searchParams.get("status");
+  const watchlistSource = searchParams.get("source");
+  const watchlistCompany = searchParams.get("company");
+  const watchlistMessage = searchParams.get("message");
+
+  const watchlistNotice = (() => {
+    if (watchlistSource !== "hooks") return null;
+
+    if (watchlistStatus === "saved") {
+      return {
+        tone: "teal" as const,
+        title: watchlistCompany ? `${watchlistCompany} is now on your watchlist.` : "Company added to watchlist.",
+        body: "New hooks you generate do not disappear anymore in this flow. The account is now saved for future watchlist monitoring.",
+      };
+    }
+
+    if (watchlistStatus === "exists") {
+      return {
+        tone: "amber" as const,
+        title: watchlistCompany ? `${watchlistCompany} is already on your watchlist.` : "This company is already on your watchlist.",
+        body: "Nothing was lost. You can keep monitoring the account from here.",
+      };
+    }
+
+    if (watchlistStatus === "locked") {
+      return {
+        tone: "amber" as const,
+        title: "Watchlist is locked on your current plan.",
+        body: "The company could not be saved because watchlist access is only available on Pro.",
+      };
+    }
+
+    if (watchlistStatus === "missing") {
+      return {
+        tone: "amber" as const,
+        title: "We could not tell which company to save.",
+        body: "Generate hooks for a company first, then try adding it to the watchlist again.",
+      };
+    }
+
+    if (watchlistStatus === "error") {
+      return {
+        tone: "rose" as const,
+        title: "We could not add that company to your watchlist.",
+        body: watchlistMessage || "Try again in a moment.",
+      };
+    }
+
+    return null;
+  })();
 
   useEffect(() => {
     fetch("/api/watchlist")
@@ -104,25 +159,43 @@ export default function WatchlistPage() {
   }
 
   return (
-    <div className="p-8 bg-[#030014] min-h-screen">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
-        <div className="flex items-center gap-3">
-          <Eye size={22} className="text-slate-500" />
-          <h2 className="text-2xl font-bold">
-            Watchlist
-          </h2>
-          {!loading && (
-            <span className="text-[10px] font-black uppercase tracking-widest bg-white/5 border border-white/10 text-slate-500 px-2 py-0.5 rounded-full">
-              {entries.length}
-            </span>
-          )}
+    <AppPageShell
+      eyebrow="Signal monitoring"
+      title="Watchlist"
+      description="Track target accounts so fresh company signals keep feeding hooks and drafts back into the workflow. When an account moves, this page should push you toward Inbox, Leads, or the next outbound action."
+      actions={[
+        { label: "Add Company", icon: Plus, variant: "primary", onClick: () => { setShowModal(true); setSubmitError(null); setInput(""); } },
+        { href: "/app/leads", label: "Open Leads", icon: Users },
+        { href: "/app/inbox", label: "Review Inbox", icon: Inbox },
+      ]}
+      stats={[
+        { label: "Tracked accounts", value: loading ? "..." : String(entries.length), tone: "violet" },
+        { label: "With signals", value: String(entries.filter((entry) => entry.lastSignalAt).length), tone: "teal" },
+        { label: "Awaiting first signal", value: String(entries.filter((entry) => !entry.lastSignalAt).length), tone: "amber" },
+      ]}
+    >
+      {watchlistNotice && (
+        <div
+          className={[
+            "rounded-2xl border px-5 py-4 text-sm",
+            watchlistNotice.tone === "teal"
+              ? "border-teal-500/25 bg-teal-500/10 text-teal-100"
+              : watchlistNotice.tone === "rose"
+                ? "border-rose-500/25 bg-rose-500/10 text-rose-100"
+                : "border-amber-500/25 bg-amber-500/10 text-amber-100",
+          ].join(" ")}
+        >
+          <p className="font-semibold">{watchlistNotice.title}</p>
+          <p className="mt-1 text-sm opacity-90">{watchlistNotice.body}</p>
         </div>
-      </div>
+      )}
 
-      {/* Tier gate overlay */}
       {tierLocked && (
-        <div className="relative">
+        <SurfaceCard
+          title="Watchlist preview"
+          description="Upgrade when you want automatic overnight monitoring to keep feeding fresh opportunities into the rest of the app."
+        >
+          <div className="relative">
           {/* Blurred preview rows */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 blur-sm pointer-events-none select-none opacity-40">
             {[0, 1, 2, 3].map((i) => (
@@ -136,20 +209,23 @@ export default function WatchlistPage() {
           <div className="absolute inset-0 bg-[#030014]/90 border border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-center">
             <Eye size={36} className="text-slate-600 mb-4" />
             <p className="text-slate-200 font-bold mb-2">Watchlist is available on the Pro plan.</p>
-            <p className="text-slate-500 text-sm mb-5">Monitor up to 100 companies for fresh signals and auto-generate hooks overnight.</p>
-            <a
+            <p className="text-slate-500 text-sm mb-5">Monitor up to 100 companies for fresh signals and keep your hook queue warm without manual checking.</p>
+            <Link
               href="/#pricing"
               className="bg-purple-600 hover:bg-purple-500 text-white text-sm px-5 py-2.5 rounded-xl font-bold transition-colors shadow-lg shadow-purple-500/20"
             >
               Upgrade to Pro
-            </a>
+            </Link>
           </div>
-        </div>
+          </div>
+        </SurfaceCard>
       )}
 
-      {/* Main content */}
       {!tierLocked && (
-        <>
+        <SurfaceCard
+          title="Tracked accounts"
+          description="Add companies you want to monitor, then use signals here to decide whether to generate hooks, save leads, or approve drafts."
+        >
           {loading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {[0, 1, 2].map((i) => (
@@ -161,19 +237,16 @@ export default function WatchlistPage() {
               ))}
             </div>
           ) : entries.length === 0 ? (
-            <div className="border border-dashed border-white/10 rounded-3xl py-32 text-center bg-white/[0.01]">
-              <div className="bg-slate-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600">
-                <Eye size={32} />
-              </div>
-              <h3 className="text-lg font-bold text-slate-300">No companies watched yet</h3>
-              <p className="text-sm text-slate-500 mt-1 mb-6">Add companies to monitor for fresh signals. Hooks auto-generate overnight.</p>
-              <button
-                onClick={() => { setShowModal(true); setSubmitError(null); setInput(""); }}
-                className="bg-teal-500 hover:bg-teal-400 px-6 py-2 rounded-lg font-bold text-black text-sm transition-colors"
-              >
-                + Add Company
-              </button>
-            </div>
+            <EmptyStatePanel
+              icon={Eye}
+              title="No companies watched yet"
+              description="Add target accounts here, then use the signals that come in to generate hooks, save leads, or review the next draft in Inbox."
+              actions={[
+                { label: "Add Company", icon: Plus, variant: "primary", onClick: () => { setShowModal(true); setSubmitError(null); setInput(""); } },
+                { href: "/app/leads", label: "Open Leads", icon: Users },
+                { href: "/app/hooks", label: "Generate Hooks", icon: Zap },
+              ]}
+            />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {entries.map((entry) => (
@@ -201,7 +274,7 @@ export default function WatchlistPage() {
               ))}
             </div>
           )}
-        </>
+        </SurfaceCard>
       )}
 
       {/* Add modal */}
@@ -253,6 +326,6 @@ export default function WatchlistPage() {
           </div>
         </div>
       )}
-    </div>
+    </AppPageShell>
   );
 }
