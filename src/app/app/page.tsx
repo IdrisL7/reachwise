@@ -54,6 +54,7 @@ export default async function DashboardPage() {
       .where(
         and(
           sql`${schema.outboundMessages.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+          eq(schema.outboundMessages.direction, "outbound"),
           eq(schema.outboundMessages.status, "sent"),
           gte(schema.outboundMessages.createdAt, thirtyDaysAgo),
         ),
@@ -85,6 +86,7 @@ export default async function DashboardPage() {
       .where(
         and(
           sql`${schema.outboundMessages.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+          eq(schema.outboundMessages.direction, "outbound"),
           eq(schema.outboundMessages.status, "queued"),
         ),
       )
@@ -95,6 +97,7 @@ export default async function DashboardPage() {
       .where(
         and(
           sql`${schema.outboundMessages.leadId} IN (SELECT id FROM leads WHERE user_id = ${userId})`,
+          eq(schema.outboundMessages.direction, "outbound"),
           eq(schema.outboundMessages.status, "draft"),
         ),
       )

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db, schema } from "@/lib/db";
-import { eq, and, gte } from "drizzle-orm";
+import { eq, and, gte, count } from "drizzle-orm";
 import { resolveSequence } from "@/lib/followup/sequences";
 import { extractPreviousHookMetadata, generateFollowUp } from "@/lib/followup/generate";
 import type { SequenceStep } from "@/lib/db/schema";
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     todayStart.setHours(0, 0, 0, 0);
 
     const sentToday = await db
-      .select()
+      .select({ value: count() })
       .from(schema.outboundMessages)
       .where(
         and(
@@ -110,7 +110,7 @@ export async function GET(req: NextRequest) {
         ),
       );
 
-    let dailySendCount = sentToday.length;
+    let dailySendCount = sentToday[0]?.value ?? 0;
 
     // ── 3. Process each due lead ─────────────────────────────────────────
 

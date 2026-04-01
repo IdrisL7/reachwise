@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { db, schema } from "@/lib/db";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { sendEmail } from "@/lib/email/sendgrid";
 import { recordHookOutcome } from "@/lib/hook-feedback";
 import { extractPreviousHookMetadata } from "@/lib/followup/generate";
@@ -28,7 +28,12 @@ export async function GET(req: NextRequest) {
   const queuedMessages = await db
     .select()
     .from(schema.outboundMessages)
-    .where(eq(schema.outboundMessages.status, "queued"))
+    .where(
+      and(
+        eq(schema.outboundMessages.direction, "outbound"),
+        eq(schema.outboundMessages.status, "queued"),
+      ),
+    )
     .limit(BATCH_LIMIT);
 
   console.log(`[send-approved] ${queuedMessages.length} queued messages to send`);
