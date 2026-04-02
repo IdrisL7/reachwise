@@ -438,6 +438,8 @@ export async function POST(request: Request) {
           if (hasSubpath) {
             const userSrc = await fetchUserProvidedSource(url, companyDomain, exaApiKey, {
               companyNameHint: companyName || undefined,
+              minFacts: companyName ? 1 : undefined,
+              bypassEntityCheck: Boolean(companyName),
             }).catch(() => null);
 
             if (userSrc) {

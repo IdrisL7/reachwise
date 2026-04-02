@@ -1761,6 +1761,8 @@ export async function fetchUserProvidedSource(
   options?: {
     companyNameHint?: string;
     targetDomainHint?: string;
+    minFacts?: number;
+    bypassEntityCheck?: boolean;
   },
 ): Promise<ClassifiedSource | null> {
   // 1. Try direct fetch first
@@ -1782,7 +1784,7 @@ export async function fetchUserProvidedSource(
         if (jinaText.length >= 50) {
           const jinaTitleMatch = markdown.match(/^#\s+(.+)/m);
           const jinaFacts = extractClaimSentences(jinaText);
-          if (jinaFacts.length >= 2) {
+          if (jinaFacts.length >= (options?.minFacts ?? 2)) {
             src = {
               title: jinaTitleMatch?.[1]?.trim() ?? `${domain} page`,
               publisher: domain,
@@ -1822,8 +1824,10 @@ export async function fetchUserProvidedSource(
   const companyName = options?.companyNameHint?.trim() || extractCompanyName(url);
   const entityMatchDomain = options?.targetDomainHint?.trim() || "__no-domain-match__";
   const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, entityMatchDomain);
+  const minFacts = options?.minFacts ?? 3;
+  const bypassEntityCheck = options?.bypassEntityCheck ?? false;
 
-  if (entityMatch.entity_hit_score === 0 && src.facts.length < 3) {
+  if (!bypassEntityCheck && entityMatch.entity_hit_score === 0 && src.facts.length < minFacts) {
     console.log("[fetchUserProvidedSource] sanity check failed — no entity match and < 3 facts", {
       url,
       companyName,
