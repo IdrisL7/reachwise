@@ -182,6 +182,7 @@ function diagnosePublishGateFinalDrops(
 
 export async function POST(request: Request) {
   try {
+    const requestStartedAt = Date.now();
     const body = (await request.json().catch(() => null)) as {
       url?: string;
       companyName?: string;
@@ -208,6 +209,17 @@ export async function POST(request: Request) {
         : "evidence";
 
     const traceId = crypto.randomUUID().slice(0, 8);
+    const timing = {
+      cacheLookupMs: 0,
+      resolutionMs: 0,
+      sourceFetchMs: 0,
+      claudeMs: 0,
+      publishGateMs: 0,
+      rankingMs: 0,
+      persistMs: 0,
+      backgroundIntentMs: 0,
+      backgroundIntelMs: 0,
+    };
     console.log("[generate-hooks] request start", {
       traceId,
       rawUrl,
@@ -313,7 +325,9 @@ export async function POST(request: Request) {
     let resolution: CompanyResolutionResult | null = null;
 
     if (!url && companyName) {
+      const resolutionStartedAt = Date.now();
       resolution = await resolveCompanyByName(companyName, exaApiKey);
+      timing.resolutionMs = Date.now() - resolutionStartedAt;
 
       if (resolution.status === "no_match") {
         return NextResponse.json({
@@ -368,7 +382,9 @@ export async function POST(request: Request) {
     });
 
     try {
+      const cacheLookupStartedAt = Date.now();
       const cachedResult = await getCachedHooks(url, profileUpdatedAt, targetRole, messagingStyle);
+      timing.cacheLookupMs = Date.now() - cacheLookupStartedAt;
       if (cachedResult) {
         // Check rules_version — if stale, treat as cache miss and regenerate fresh
         if (cachedResult.rulesVersion !== RULES_VERSION) {
@@ -502,7 +518,9 @@ export async function POST(request: Request) {
             })
             .catch(() => []);
 
+          const sourceFetchStartedAt = Date.now();
           result = await fetchSourcesWithGating(url, exaApiKey!, [], apifyToken, linkedinSlug);
+          timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
 
           rawSignals = await Promise.race([
             prefetchedSignalsPromise,
@@ -520,7 +538,9 @@ export async function POST(request: Request) {
             usedInlineIntent: rawSignals.length > 0,
           });
         } else {
+          const sourceFetchStartedAt = Date.now();
           result = await fetchSourcesWithGating(url, exaApiKey!);
+          timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
         }
         const sources = prioritizeRetrievalSources(result.sources, companyDomain || null);
         signalCount = result.signalCount;
@@ -585,6 +605,7 @@ export async function POST(request: Request) {
             promptSignals: promptSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
           });
 
+          const claudeStartedAt = Date.now();
           const { rawHooks } = await generateHookPayloadsFromSources({
             url,
             sources,
@@ -597,6 +618,7 @@ export async function POST(request: Request) {
             intentSignals: promptSignals.length > 0 ? promptSignals : undefined,
             retrievalLibrary: selectorPriors?.retrievalLibrary,
           });
+          timing.claudeMs = Date.now() - claudeStartedAt;
 
           console.log("[generate-hooks] raw hooks from claude", {
             traceId,
@@ -605,9 +627,11 @@ export async function POST(request: Request) {
           });
 
           // 5. First pass: publishGate with source lookup (anchored-source filtering)
+          const publishGateStartedAt = Date.now();
           candidateHooks = publishGate(rawHooks, sourceLookup, {
             includeMarketContext: false,
           }, messagingStyle);
+          timing.publishGateMs = Date.now() - publishGateStartedAt;
 
           console.log("[generate-hooks] candidate hooks after publishGate", {
             traceId,
@@ -689,6 +713,7 @@ export async function POST(request: Request) {
       })),
     });
 
+    const publishGateFinalStartedAt = Date.now();
     const publishDiagnostics = diagnosePublishGateFinalDrops(candidateHooks, companyDomain || undefined, targetRole ?? null, messagingStyle);
     console.log("[generate-hooks] publishGateFinal diagnostics", {
       traceId,
@@ -702,6 +727,7 @@ export async function POST(request: Request) {
     const gated = isFastPath ? candidateHooks : publishGateFinal(candidateHooks, companyDomain, {
       includeMarketContext: true,
     }, messagingStyle);
+    timing.publishGateMs += Date.now() - publishGateFinalStartedAt;
 
     console.log("[generate-hooks] after publishGateFinal", {
       traceId,
@@ -738,10 +764,12 @@ export async function POST(request: Request) {
     // =========================================================================
     // RANK + CAP — score and return top 3 (overflow available via showAll)
     // =========================================================================
+    const rankingStartedAt = Date.now();
     const { top, overflow } = rankAndCap(rankInput, 3, {
       targetRole: targetRole ?? null,
       selectorPriors,
     });
+    timing.rankingMs = Date.now() - rankingStartedAt;
 
     // Build suggestions — short headline, details handled by UI
     const noAnchorSuggestion = "We couldn't confirm these sources are specifically about this company. Paste a URL directly from their press page or newsroom — that gives us verified content to write from.";
@@ -863,13 +891,23 @@ export async function POST(request: Request) {
     after(async () => {
       try {
         if (hasFeature(tierId, "intentScoring")) {
+          const intentStartedAt = Date.now();
+          const intelStartedAt = Date.now();
           const [intentResult, intelResult] = await Promise.allSettled([
-            prefetchedSignals !== null
-              ? Promise.resolve(prefetchedSignals)
-              : prefetchedSignalsPromise
-                ? prefetchedSignalsPromise
-                : researchIntentSignals(url!, companyName || companyDomain || "", exaApiKey!, claudeApiKey!),
-            getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, true, companyName || undefined),
+            (
+              prefetchedSignals !== null
+                ? Promise.resolve(prefetchedSignals)
+                : prefetchedSignalsPromise
+                  ? prefetchedSignalsPromise
+                  : researchIntentSignals(url!, companyName || companyDomain || "", exaApiKey!, claudeApiKey!)
+            ).then((signals) => {
+              timing.backgroundIntentMs = Date.now() - intentStartedAt;
+              return signals;
+            }),
+            getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, true, companyName || undefined).then((intel) => {
+              timing.backgroundIntelMs = Date.now() - intelStartedAt;
+              return intel;
+            }),
           ]);
 
           if (intentResult.status === "fulfilled") {
@@ -880,10 +918,14 @@ export async function POST(request: Request) {
               intentScore: score,
               signalCount: signals.length,
               intelSuccess: intelResult.status === "fulfilled",
+              backgroundIntentMs: timing.backgroundIntentMs,
+              backgroundIntelMs: timing.backgroundIntelMs,
             });
           }
         } else {
+          const intelStartedAt = Date.now();
           await getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, false, companyName || undefined).catch(() => {});
+          timing.backgroundIntelMs = Date.now() - intelStartedAt;
         }
       } catch (err) {
         console.error("[generate-hooks] background enrichment failed", { traceId, error: err });
@@ -904,6 +946,7 @@ export async function POST(request: Request) {
       }
 
       try {
+        const persistStartedAt = Date.now();
         batchId = crypto.randomUUID();
         const allHooks = [...finalTop, ...finalOverflow];
         const inserted = await db.insert(schema.generatedHooks).values(
@@ -986,6 +1029,7 @@ export async function POST(request: Request) {
         } catch (dualWriteErr) {
           console.error("[generate-hooks] failed to dual-write v2 signals", dualWriteErr);
         }
+        timing.persistMs = Date.now() - persistStartedAt;
       } catch (persistErr) {
         console.error("Failed to persist generated hooks:", persistErr);
         batchId = undefined;
@@ -1002,6 +1046,16 @@ export async function POST(request: Request) {
       cached,
       tierId,
       targetRole: targetRole || "General",
+      totalMs: Date.now() - requestStartedAt,
+      timings: {
+        cacheLookupMs: timing.cacheLookupMs,
+        resolutionMs: timing.resolutionMs,
+        sourceFetchMs: timing.sourceFetchMs,
+        claudeMs: timing.claudeMs,
+        publishGateMs: timing.publishGateMs,
+        rankingMs: timing.rankingMs,
+        persistMs: timing.persistMs,
+      },
     });
 
     return NextResponse.json({
