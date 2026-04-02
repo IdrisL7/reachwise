@@ -3,6 +3,7 @@ import { NextResponse, after } from "next/server";
 import {
   fetchSourcesWithGating,
   fetchUserProvidedSource,
+  generateHookPayloadsFromTrustedSource,
   generateHookPayloadsFromSources,
   getProviderFacingErrorMessage,
   publishGate,
@@ -445,7 +446,8 @@ export async function POST(request: Request) {
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
               const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-              const { rawHooks } = await generateHookPayloadsFromSources({
+              const claudeStartedAt = Date.now();
+              const rawHooks = await generateHookPayloadsFromTrustedSource({
                 url,
                 sources: [userSrc],
                 apiKey: claudeApiKey,
@@ -454,8 +456,8 @@ export async function POST(request: Request) {
                 targetRole,
                 customPersona,
                 messagingStyle,
-                retrievalLibrary: selectorPriors?.retrievalLibrary,
               });
+              timing.claudeMs = Date.now() - claudeStartedAt;
 
               // Bypass publishGate (which calls validateHook with strict rules designed for
               // auto-discovered noise). User-provided sources are trusted — convert directly.

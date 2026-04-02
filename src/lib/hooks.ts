@@ -1580,6 +1580,7 @@ const MAX_CLAUDE_INTENT_SIGNALS = 3;
 const MAX_CLAUDE_CONTEXT_CHARS = 500;
 const INTERPRETER_MAX_TOKENS = 1600;
 const COMPOSER_MAX_TOKENS = 2200;
+const TRUSTED_SOURCE_MAX_TOKENS = 1600;
 
 /** Extract claim-rich sentences from plain text (sentences with numbers, pricing, named tools, etc.). */
 function extractClaimSentences(text: string, maxFacts = 15): string[] {
@@ -3485,6 +3486,44 @@ export async function generateHookPayloadsFromSources(opts: {
   );
 
   return { tensions: selectedTensions, rawHooks };
+}
+
+export async function generateHookPayloadsFromTrustedSource(opts: {
+  url: string;
+  sources: ClassifiedSource[];
+  apiKey: string;
+  context?: string;
+  senderContext?: SenderContext | null;
+  targetRole?: TargetRole | null;
+  customPersona?: { pain: string; promise: string };
+  messagingStyle?: MessagingStyle;
+  intentSignals?: IntentSignalInput[];
+  model?: string;
+}): Promise<ClaudeHookPayload[]> {
+  const usableSources = opts.sources.filter((source) => source.tier !== "C");
+  if (usableSources.length === 0) {
+    return [];
+  }
+
+  const promptSources = compactSourcesForClaude(usableSources);
+  const promptIntentSignals = compactIntentSignalsForClaude(opts.intentSignals);
+  const promptContext = compactContextForClaude(opts.context);
+
+  const systemPrompt = buildSystemPrompt(
+    opts.senderContext,
+    opts.targetRole,
+    opts.customPersona,
+    opts.messagingStyle ?? "evidence",
+  );
+  const userPrompt = buildUserPrompt(opts.url, promptSources, promptContext, promptIntentSignals);
+
+  return callClaudeWithRetry(
+    systemPrompt,
+    userPrompt,
+    opts.apiKey,
+    opts.model,
+    TRUSTED_SOURCE_MAX_TOKENS,
+  );
 }
 
 export function getProviderFacingErrorMessage(error: unknown): {
