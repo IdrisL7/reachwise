@@ -1758,6 +1758,10 @@ export async function fetchUserProvidedSource(
   url: string,
   domain: string,
   exaApiKey?: string,
+  options?: {
+    companyNameHint?: string;
+    targetDomainHint?: string;
+  },
 ): Promise<ClassifiedSource | null> {
   // 1. Try direct fetch first
   let src: Source | null = await fetchPageAsSource(url, domain).catch(() => null);
@@ -1815,11 +1819,16 @@ export async function fetchUserProvidedSource(
   if (!src) return null;
 
   // 3. Sanity check: page must have some content mentioning the company OR enough facts
-  const companyName = extractCompanyName(url);
-  const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, domain);
+  const companyName = options?.companyNameHint?.trim() || extractCompanyName(url);
+  const entityMatchDomain = options?.targetDomainHint?.trim() || "__no-domain-match__";
+  const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, entityMatchDomain);
 
   if (entityMatch.entity_hit_score === 0 && src.facts.length < 3) {
-    console.log("[fetchUserProvidedSource] sanity check failed — no entity match and < 3 facts", { url });
+    console.log("[fetchUserProvidedSource] sanity check failed — no entity match and < 3 facts", {
+      url,
+      companyName,
+      entityMatchDomain,
+    });
     return null;
   }
 
@@ -1834,7 +1843,7 @@ export async function fetchUserProvidedSource(
     tier: "A" as EvidenceTier,
     anchorScore: 5,
     entity_hit_score: Math.max(entityMatch.entity_hit_score, 1),
-    entity_matched_term: entityMatch.entity_matched_term ?? domain,
+    entity_matched_term: entityMatch.entity_matched_term ?? companyName,
     userProvided: true,
   };
 }
