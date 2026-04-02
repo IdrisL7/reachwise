@@ -1569,6 +1569,18 @@ const SIGNAL_SUBPAGE_PATTERNS = [
   /\/announcements?\b/i,
 ];
 
+const DIRECT_PAGE_FETCH_TIMEOUT_MS = 4500;
+const DIRECT_PAGE_JINA_TIMEOUT_MS = 6000;
+const DIRECT_PAGE_BODY_LIMIT = 300_000;
+const MAX_DISCOVERED_SIGNAL_PAGES = 3;
+const MAX_CLAUDE_SOURCES = 6;
+const MAX_CLAUDE_FACTS_PER_SOURCE = 4;
+const MAX_CLAUDE_FACT_CHARS = 220;
+const MAX_CLAUDE_INTENT_SIGNALS = 3;
+const MAX_CLAUDE_CONTEXT_CHARS = 500;
+const INTERPRETER_MAX_TOKENS = 1600;
+const COMPOSER_MAX_TOKENS = 2200;
+
 /** Extract claim-rich sentences from plain text (sentences with numbers, pricing, named tools, etc.). */
 function extractClaimSentences(text: string, maxFacts = 15): string[] {
   // Split into sentences (period, newline, or semicolon boundaries)
@@ -1648,7 +1660,7 @@ function discoverSignalPages(html: string, baseUrl: string): string[] {
     }
   }
 
-  return Array.from(found).slice(0, 5); // Max 5 subpages
+  return Array.from(found).slice(0, MAX_DISCOVERED_SIGNAL_PAGES);
 }
 
 /**
@@ -1658,7 +1670,7 @@ function discoverSignalPages(html: string, baseUrl: string): string[] {
 async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Source | null> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout
+    const timeout = setTimeout(() => controller.abort(), DIRECT_PAGE_FETCH_TIMEOUT_MS);
 
     const response = await fetch(pageUrl, {
       headers: {
@@ -1677,7 +1689,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 
     // Limit body size to 500KB
     const text = await response.text();
-    const html = text.slice(0, 500_000);
+    const html = text.slice(0, DIRECT_PAGE_BODY_LIMIT);
 
     const plainText = stripHtml(html);
     if (plainText.length < 50) return null;
@@ -1697,7 +1709,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
       if (isSignalUrl) {
         try {
           const jinaController = new AbortController();
-          const jinaTimeout = setTimeout(() => jinaController.abort(), 10_000);
+          const jinaTimeout = setTimeout(() => jinaController.abort(), DIRECT_PAGE_JINA_TIMEOUT_MS);
           const jinaRes = await fetch(`https://r.jina.ai/${pageUrl}`, {
             headers: { Accept: "text/plain" },
             signal: jinaController.signal,
@@ -1706,7 +1718,7 @@ async function fetchPageAsSource(pageUrl: string, domain: string): Promise<Sourc
 
           if (jinaRes.ok) {
             const markdown = await jinaRes.text();
-            const jinaText = markdown.slice(0, 300_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
+            const jinaText = markdown.slice(0, DIRECT_PAGE_BODY_LIMIT).replace(/\[.*?\]\(.*?\)/g, " ").trim();
             if (jinaText.length >= 50) {
               const jinaTitleMatch = markdown.match(/^#\s+(.+)/m);
               const jinaTitle = jinaTitleMatch ? jinaTitleMatch[1].trim() : title;
@@ -1841,7 +1853,7 @@ async function fetchDirectCompanyPages(
   let homepageHtml = "";
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const timeout = setTimeout(() => controller.abort(), DIRECT_PAGE_FETCH_TIMEOUT_MS);
     const response = await fetch(baseUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; ReachWise/1.0; +https://getsignalhooks.com)",
@@ -1854,7 +1866,7 @@ async function fetchDirectCompanyPages(
 
     if (response.ok) {
       const text = await response.text();
-      homepageHtml = text.slice(0, 500_000);
+      homepageHtml = text.slice(0, DIRECT_PAGE_BODY_LIMIT);
 
       const plainText = stripHtml(homepageHtml);
       if (plainText.length >= 50) {
@@ -1893,10 +1905,11 @@ async function fetchDirectCompanyPages(
     }
   }
 
-  // 3. Fetch discovered subpages in parallel (max 5)
+  // 3. Fetch discovered subpages in parallel with a small cap so slow company sites
+  // don't dominate request time when Exa already found enough evidence.
   if (signalPages.length > 0) {
     const subpageSources = await Promise.all(
-      signalPages.slice(0, 5).map((pageUrl) => fetchPageAsSource(pageUrl, domain)),
+      signalPages.slice(0, MAX_DISCOVERED_SIGNAL_PAGES).map((pageUrl) => fetchPageAsSource(pageUrl, domain)),
     );
 
     for (const src of subpageSources) {
@@ -1927,15 +1940,16 @@ async function runFirstPartyRecovery(
     `${companyName} changelog OR product update OR new feature OR integration`,
   ];
 
-  const allResults: ExaResult[] = [];
-  for (const query of queries) {
-    const results = await exaSearch(query, apiKey, {
-      include_domains: [domain],
-      num_results: 5,
-      days: 365,
-    }).catch(() => [] as ExaResult[]);
-    allResults.push(...results);
-  }
+  const resultSets = await Promise.all(
+    queries.map((query) =>
+      exaSearch(query, apiKey, {
+        include_domains: [domain],
+        num_results: 5,
+        days: 365,
+      }).catch(() => [] as ExaResult[]),
+    ),
+  );
+  const allResults = resultSets.flat();
 
   const seen = new Set<string>();
   const sources: ClassifiedSource[] = [];
@@ -1975,46 +1989,46 @@ async function runRecentNewsExpansion(
 
   const seen = new Set<string>();
   const sources: ClassifiedSource[] = [];
-  const diagnostics: NewsExpansionDiagnostic[] = [];
+  const diagnostics = await Promise.all(
+    queries.map(async (query) => {
+      const results = await exaSearch(query, apiKey, {
+        num_results: 8,
+        days: 120,
+        exclude_domains: [domain],
+      }).catch(() => [] as ExaResult[]);
 
-  for (const query of queries) {
-    const results = await exaSearch(query, apiKey, {
-      num_results: 8,
-      days: 120,
-      exclude_domains: [domain],
-    }).catch(() => [] as ExaResult[]);
+      let queryResultCount = 0;
+      let trustedCount = 0;
 
-    let queryResultCount = 0;
-    let trustedCount = 0;
+      for (const r of results) {
+        if (!r.url || alreadyAttemptedUrls.has(r.url) || seen.has(r.url)) continue;
 
-    for (const r of results) {
-      if (!r.url || alreadyAttemptedUrls.has(r.url) || seen.has(r.url)) continue;
+        const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
+        if (!text.includes(companyName.toLowerCase()) && !text.includes(domain.toLowerCase())) {
+          continue;
+        }
 
-      const text = `${r.title || ""} ${r.text || ""}`.toLowerCase();
-      if (!text.includes(companyName.toLowerCase()) && !text.includes(domain.toLowerCase())) {
-        continue;
+        seen.add(r.url);
+        const rawSource = exaResultToSource(r, domain);
+        if (!rawSource) continue;
+
+        const classified = applyRecencyDowngrade({
+          ...rawSource,
+          tier: classifySource(rawSource, false, domain),
+        });
+
+        queryResultCount += 1;
+        if (isReputablePublisher(classified.url)) trustedCount += 1;
+        sources.push(classified);
       }
 
-      seen.add(r.url);
-      const rawSource = exaResultToSource(r, domain);
-      if (!rawSource) continue;
-
-      const classified = applyRecencyDowngrade({
-        ...rawSource,
-        tier: classifySource(rawSource, false, domain),
-      });
-
-      queryResultCount += 1;
-      if (isReputablePublisher(classified.url)) trustedCount += 1;
-      sources.push(classified);
-    }
-
-    diagnostics.push({
-      query,
-      resultCount: queryResultCount,
-      trustedCount,
-    });
-  }
+      return {
+        query,
+        resultCount: queryResultCount,
+        trustedCount,
+      };
+    }),
+  );
 
   return { sources, diagnostics };
 }
@@ -3226,6 +3240,7 @@ async function callClaudeJson<T>(
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
+  maxTokens = 4096,
 ): Promise<T[]> {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -3237,7 +3252,7 @@ async function callClaudeJson<T>(
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       system: [{ type: "text", text: systemPrompt, cache_control: { type: "ephemeral" } }],
       messages: [{ role: "user", content: userPrompt }],
     }),
@@ -3310,8 +3325,9 @@ export async function callClaude(
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
+  maxTokens?: number,
 ): Promise<ClaudeHookPayload[]> {
-  return callClaudeJson<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model);
+  return callClaudeJson<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model, maxTokens);
 }
 
 // ---------------------------------------------------------------------------
@@ -3323,6 +3339,7 @@ export async function callClaudeJsonWithRetry<T>(
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
+  maxTokens = 4096,
 ): Promise<T[]> {
   const RETRYABLE = [429, 500, 502, 503];
   const MAX_ATTEMPTS = 3;
@@ -3330,7 +3347,7 @@ export async function callClaudeJsonWithRetry<T>(
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
-      return await callClaudeJson<T>(systemPrompt, userPrompt, apiKey, model);
+      return await callClaudeJson<T>(systemPrompt, userPrompt, apiKey, model, maxTokens);
     } catch (err) {
       lastError = err;
       // Extract HTTP status from error message (format: "Anthropic API error <status>: ...")
@@ -3356,8 +3373,38 @@ export async function callClaudeWithRetry(
   userPrompt: string,
   apiKey: string,
   model = "claude-sonnet-4-20250514",
+  maxTokens?: number,
 ): Promise<ClaudeHookPayload[]> {
-  return callClaudeJsonWithRetry<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model);
+  return callClaudeJsonWithRetry<ClaudeHookPayload>(systemPrompt, userPrompt, apiKey, model, maxTokens);
+}
+
+function compactFactForClaude(fact: string): string {
+  const compact = fact.replace(/\s+/g, " ").trim();
+  if (compact.length <= MAX_CLAUDE_FACT_CHARS) return compact;
+  return `${compact.slice(0, MAX_CLAUDE_FACT_CHARS - 1).trimEnd()}…`;
+}
+
+function compactSourcesForClaude(sources: ClassifiedSource[]): ClassifiedSource[] {
+  return sources.slice(0, MAX_CLAUDE_SOURCES).map((source) => ({
+    ...source,
+    title: source.title.trim().slice(0, 140),
+    facts: source.facts.slice(0, MAX_CLAUDE_FACTS_PER_SOURCE).map(compactFactForClaude),
+  }));
+}
+
+function compactIntentSignalsForClaude(intentSignals?: IntentSignalInput[]): IntentSignalInput[] | undefined {
+  if (!intentSignals || intentSignals.length === 0) return undefined;
+  return intentSignals.slice(0, MAX_CLAUDE_INTENT_SIGNALS).map((signal) => ({
+    ...signal,
+    summary: compactFactForClaude(signal.summary),
+    sourceUrl: signal.sourceUrl.slice(0, 160),
+  }));
+}
+
+function compactContextForClaude(context?: string): string | undefined {
+  const compact = context?.replace(/\s+/g, " ").trim();
+  if (!compact) return undefined;
+  return compact.slice(0, MAX_CLAUDE_CONTEXT_CHARS);
 }
 
 export async function generateHookPayloadsFromSources(opts: {
@@ -3378,16 +3425,21 @@ export async function generateHookPayloadsFromSources(opts: {
     return { tensions: [], rawHooks: [] };
   }
 
+  const promptSources = compactSourcesForClaude(usableSources);
+  const promptIntentSignals = compactIntentSignalsForClaude(opts.intentSignals);
+  const promptContext = compactContextForClaude(opts.context);
+
   const sourceLookup = new Map<number, ClassifiedSource>();
-  usableSources.forEach((source, index) => sourceLookup.set(index + 1, source));
+  promptSources.forEach((source, index) => sourceLookup.set(index + 1, source));
 
   const interpreterSystemPrompt = buildInterpreterSystemPrompt(opts.senderContext, opts.targetRole);
-  const interpreterUserPrompt = buildInterpreterUserPrompt(opts.url, opts.sources, opts.context, opts.intentSignals);
+  const interpreterUserPrompt = buildInterpreterUserPrompt(opts.url, promptSources, promptContext, promptIntentSignals);
   const rawTensions = await callClaudeJsonWithRetry<ClaudeBuyerTensionPayload>(
     interpreterSystemPrompt,
     interpreterUserPrompt,
     opts.apiKey,
     opts.model,
+    INTERPRETER_MAX_TOKENS,
   );
 
   const normalizedTensions = rawTensions
@@ -3408,14 +3460,15 @@ export async function generateHookPayloadsFromSources(opts: {
   const composerUserPrompt = buildComposerUserPrompt(
     opts.url,
     selectedTensions,
-    opts.context,
-    opts.retrievalLibrary ?? [],
+    promptContext,
+    (opts.retrievalLibrary ?? []).slice(0, 2),
   );
   const rawHooks = await callClaudeJsonWithRetry<ClaudeHookPayload>(
     composerSystemPrompt,
     composerUserPrompt,
     opts.apiKey,
     opts.model,
+    COMPOSER_MAX_TOKENS,
   );
 
   return { tensions: selectedTensions, rawHooks };

@@ -106,6 +106,22 @@ function signalToTriggerType(type: string): string {
   }
 }
 
+const INTENT_INLINE_WAIT_MS = 300;
+
+function toIntentSignalInputs(
+  signals: Awaited<ReturnType<typeof researchIntentSignals>>,
+): IntentSignalInput[] {
+  return signals
+    .filter((signal) => signal.confidence >= 0.6 && signalToTriggerType(signal.type) !== "")
+    .map((signal) => ({
+      triggerType: signalToTriggerType(signal.type),
+      summary: signal.summary,
+      confidence: signal.confidence,
+      sourceUrl: signal.sourceUrl,
+      tier: signal.confidence >= 0.8 ? ("A" as const) : ("B" as const),
+    }));
+}
+
 function diagnosePublishGateFinalDrops(
   hooks: Hook[],
   companyDomain: string | undefined,
@@ -334,6 +350,7 @@ export async function POST(request: Request) {
     // Check cache first (keyed by URL + targetRole)
     let candidateHooks: Hook[] | null = null;
     let prefetchedSignals: Awaited<ReturnType<typeof researchIntentSignals>> | null = null;
+    let prefetchedSignalsPromise: Promise<Awaited<ReturnType<typeof researchIntentSignals>>> | null = null;
     let citations: Citation[] = [];
     let isLowSignal = false;
     let signalCount = 0;
@@ -471,33 +488,37 @@ export async function POST(request: Request) {
         let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
         if (hasFeature(tierId, "intentScoring")) {
-          try {
-            rawSignals = await researchIntentSignals(url, companyName || companyDomain || "", exaApiKey!, claudeApiKey);
-            prefetchedSignals = rawSignals;
-          } catch {
-            rawSignals = [];
-          }
-
-          const gatingIntentSignals: IntentSignalInput[] = rawSignals
-            .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
-            .map((s) => ({
-              triggerType: signalToTriggerType(s.type),
-              summary: s.summary,
-              confidence: s.confidence,
-              sourceUrl: s.sourceUrl,
-              tier: s.confidence >= 0.8 ? ("A" as const) : ("B" as const),
-            }));
-
-          console.log("[generate-hooks] intent signal mapping for source gating", {
-            traceId,
-            rawSignalsCount: rawSignals.length,
-            gatingIntentSignalsCount: gatingIntentSignals.length,
-            gatingIntentSignals: gatingIntentSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
-          });
-
           const apifyToken = process.env.APIFY_API_TOKEN;
           const linkedinSlug = companyDomain ? companyDomain.split(".")[0] : undefined;
-          result = await fetchSourcesWithGating(url, exaApiKey!, gatingIntentSignals, apifyToken, linkedinSlug);
+          prefetchedSignalsPromise = researchIntentSignals(
+            url,
+            companyName || companyDomain || "",
+            exaApiKey!,
+            claudeApiKey,
+          )
+            .then((signals) => {
+              prefetchedSignals = signals;
+              return signals;
+            })
+            .catch(() => []);
+
+          result = await fetchSourcesWithGating(url, exaApiKey!, [], apifyToken, linkedinSlug);
+
+          rawSignals = await Promise.race([
+            prefetchedSignalsPromise,
+            new Promise<Awaited<ReturnType<typeof researchIntentSignals>>>((resolve) => {
+              setTimeout(() => resolve([]), INTENT_INLINE_WAIT_MS);
+            }),
+          ]);
+
+          const promptSignals = toIntentSignalInputs(rawSignals);
+
+          console.log("[generate-hooks] intent signal overlap", {
+            traceId,
+            rawSignalsCount: rawSignals.length,
+            promptSignalsCount: promptSignals.length,
+            usedInlineIntent: rawSignals.length > 0,
+          });
         } else {
           result = await fetchSourcesWithGating(url, exaApiKey!);
         }
@@ -556,15 +577,7 @@ export async function POST(request: Request) {
 
           // 4. Build prompts and call Claude
           const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-          const promptSignals: IntentSignalInput[] = rawSignals
-            .filter((s) => s.confidence >= 0.6 && signalToTriggerType(s.type) !== "")
-            .map((s) => ({
-              triggerType: signalToTriggerType(s.type),
-              summary: s.summary,
-              confidence: s.confidence,
-              sourceUrl: s.sourceUrl,
-              tier: s.confidence >= 0.8 ? ("A" as const) : ("B" as const),
-            }));
+          const promptSignals = toIntentSignalInputs(rawSignals);
 
           console.log("[generate-hooks] intent signal mapping for prompt", {
             traceId,
@@ -853,7 +866,9 @@ export async function POST(request: Request) {
           const [intentResult, intelResult] = await Promise.allSettled([
             prefetchedSignals !== null
               ? Promise.resolve(prefetchedSignals)
-              : researchIntentSignals(url!, companyName || companyDomain || "", exaApiKey!, claudeApiKey!),
+              : prefetchedSignalsPromise
+                ? prefetchedSignalsPromise
+                : researchIntentSignals(url!, companyName || companyDomain || "", exaApiKey!, claudeApiKey!),
             getCompanyIntelligence(url!, exaApiKey!, claudeApiKey!, true, companyName || undefined),
           ]);
 
