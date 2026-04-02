@@ -1,3 +1,6 @@
+"use client";
+
+import { motion } from "framer-motion";
 import { Reveal } from "./ui/reveal";
 
 const featured = {
@@ -28,17 +31,26 @@ export function FollowUpEngineSection() {
   return (
     <section
       aria-labelledby="features-heading"
-      className="border-t border-white/[0.06] bg-[#0a0a0b]"
+      className="relative overflow-hidden border-t border-white/[0.04] bg-[#0a0a0b]"
     >
-      <div className="mx-auto max-w-[90rem] px-6 py-20 lg:px-10 lg:py-28">
+      <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.12),transparent_58%)]" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/25 to-transparent" />
+
+      <div className="relative mx-auto max-w-[90rem] px-6 py-20 lg:px-10 lg:py-28">
         <Reveal>
-          <div className="mx-auto max-w-2xl text-center">
+          <div className="mx-auto max-w-3xl text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-violet-200/70">
+              After the first touch
+            </p>
             <h2
               id="features-heading"
-              className="font-[family-name:var(--font-display)] text-[clamp(2rem,3vw,3rem)] font-bold leading-[1.08] tracking-[-0.02em] text-white"
+              className="mt-4 font-[family-name:var(--font-display)] text-[clamp(2rem,3vw,3.1rem)] font-bold leading-[1.08] tracking-[-0.03em] text-white"
             >
               What you get after the hook is written.
             </h2>
+            <p className="mt-4 text-[1rem] leading-7 text-zinc-400">
+              The value compounds when the signal does not disappear after copy generation. Keep the context attached through leads, sequences, approvals, and follow-up.
+            </p>
           </div>
         </Reveal>
 
@@ -46,28 +58,45 @@ export function FollowUpEngineSection() {
         <div className="mx-auto mt-16 max-w-5xl grid gap-5 lg:grid-cols-[1.2fr_1fr] lg:mt-20">
           {/* Featured large card */}
           <Reveal delay={0.08}>
-            <div className="h-full rounded-xl border border-zinc-700/20 bg-[#111118] p-8 flex flex-col justify-center">
-              <h3 className="text-[1.25rem] font-bold text-zinc-100 mb-2">
-                {featured.title}
-              </h3>
-              <p className="text-[0.9375rem] leading-[1.65] text-zinc-400">
-                {featured.description}
-              </p>
-            </div>
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="group relative flex h-full flex-col justify-center overflow-hidden rounded-[1.75rem] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,30,0.98),rgba(12,12,18,0.98))] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.24)]"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.16),transparent_38%)] opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative">
+                <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-200/65">
+                  Workflow layer
+                </p>
+                <h3 className="mb-2 text-[1.25rem] font-bold text-zinc-100">
+                  {featured.title}
+                </h3>
+                <p className="text-[0.9375rem] leading-[1.75] text-zinc-400">
+                  {featured.description}
+                </p>
+              </div>
+            </motion.div>
           </Reveal>
 
           {/* 3 stacked smaller cards */}
           <div className="space-y-4">
             {others.map((item, i) => (
               <Reveal key={item.title} delay={0.16 + i * 0.08}>
-                <div className="rounded-xl border border-zinc-700/20 bg-[#111118] p-5">
-                  <h3 className="text-[1rem] font-semibold text-zinc-100 mb-1.5">
-                    {item.title}
-                  </h3>
-                  <p className="text-[0.875rem] leading-[1.55] text-zinc-400">
-                    {item.description}
-                  </p>
-                </div>
+                <motion.div
+                  whileHover={{ y: -4 }}
+                  transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                  className="group relative overflow-hidden rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,30,0.98),rgba(12,12,18,0.98))] p-5 shadow-[0_18px_48px_rgba(0,0,0,0.2)]"
+                >
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.12),transparent_34%)] opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
+                  <div className="relative">
+                    <h3 className="mb-1.5 text-[1rem] font-semibold text-zinc-100">
+                      {item.title}
+                    </h3>
+                    <p className="text-[0.875rem] leading-[1.65] text-zinc-400">
+                      {item.description}
+                    </p>
+                  </div>
+                </motion.div>
               </Reveal>
             ))}
           </div>

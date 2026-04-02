@@ -718,46 +718,65 @@ export function DemoSection() {
   }
 
   return (
-    <section id="demo" className="border-t border-white/[0.06]">
-      <div className="mx-auto max-w-3xl px-6 py-16 lg:py-24">
-        <div className="mx-auto mb-14 max-w-xl text-center">
-          <p className="mb-4 text-[0.9375rem] font-semibold text-amber-500">
+    <section
+      id="demo"
+      className="relative overflow-hidden border-t border-white/[0.04] bg-[#09090c]"
+    >
+      <div className="absolute inset-x-0 top-0 h-36 bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.16),transparent_58%)]" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/30 to-transparent" />
+
+      <div className="relative mx-auto max-w-5xl px-6 py-16 lg:py-24">
+        <div className="mx-auto mb-14 max-w-3xl text-center">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-violet-200/75">
             Live demo
           </p>
-          <h2 className="text-[clamp(2.25rem,3.5vw,3.75rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
-            Try it now (3 generations/day)
+          <h2 className="font-[family-name:var(--font-display)] text-[clamp(2.4rem,4vw,4.4rem)] font-bold leading-[1.02] tracking-[-0.03em] text-white">
+            Try it on a real company.
           </h2>
-          <p className="mt-5 text-[1.0625rem] leading-[1.6] text-zinc-400">
-            Paste a company URL or a news article about them, pick a role, and get hooks with receipts you can copy into outbound.
+          <p className="mx-auto mt-5 max-w-2xl text-[1.05rem] leading-8 text-zinc-400">
+            Paste a company URL or news story, choose the buyer, and get evidence-backed hooks you can review, copy, and turn into outbound in a few clicks.
+          </p>
+          <p className="mt-4 text-sm text-zinc-500">
+            3 free generations per day. No fake sample account required.
           </p>
         </div>
 
-        <div className="mb-8 grid gap-3 md:grid-cols-3">
+        <div className="mb-10 grid gap-3 md:grid-cols-3">
           {DEMO_TRUST_POINTS.map((point, index) => (
             <div
               key={point}
-              className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-4 py-4 text-sm leading-6 text-zinc-300"
+              className="rounded-[1.4rem] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(20,20,28,0.86),rgba(12,12,18,0.92))] px-4 py-4 text-sm leading-6 text-zinc-300 shadow-[0_16px_44px_rgba(0,0,0,0.18)]"
             >
               <span className="mb-2 block text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-violet-300/80">
-                Proof {index + 1}
+                Why it holds up {index + 1}
               </span>
               {point}
             </div>
           ))}
         </div>
 
-        {/* Main demo card with gradient background */}
-        <div className="overflow-hidden rounded-xl bg-gradient-to-br from-[#0d0d1a] via-[#0f0f16] to-[#0c0c12] p-px shadow-[0_4px_40px_rgba(0,0,0,0.4),0_0_80px_rgba(139,92,246,0.05)]">
-          <div className="rounded-[11px] bg-gradient-to-br from-[#0f0f1a] via-[#111118] to-[#0e0e14] p-6 sm:p-8">
+        <div className="overflow-hidden rounded-[1.75rem] border border-white/8 bg-[linear-gradient(135deg,rgba(20,18,34,0.98),rgba(12,12,18,0.98))] shadow-[0_28px_90px_rgba(0,0,0,0.42),0_0_90px_rgba(124,58,237,0.07)]">
+          <div className="border-b border-white/6 bg-[linear-gradient(90deg,rgba(255,255,255,0.02),rgba(124,58,237,0.08),rgba(255,255,255,0.02))] px-6 py-4 sm:px-8">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="rounded-full border border-violet-400/25 bg-violet-500/10 px-3 py-1 text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-violet-200">
+                Interactive sandbox
+              </span>
+              <span className="text-sm text-zinc-400">
+                Test the product with real inputs before you commit to a workflow change.
+              </span>
+            </div>
+          </div>
+
+          <div className="p-6 sm:p-8">
             {/* Mode toggle */}
-            <div className="mb-6 flex gap-1.5 rounded-lg bg-[#0a0a12] p-1 text-[0.8125rem]">
+            <div className="mb-6 flex gap-1.5 rounded-full border border-white/8 bg-[#0a0a12]/90 p-1 text-[0.8125rem]">
               <button
                 type="button"
                 onClick={() => {
                   setMode("single");
                   setError(null);
                 }}
-                className={`flex-1 rounded-md px-3 py-2 font-medium transition-all duration-200 ${mode === "single" ? "bg-violet-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
+                className={`flex-1 rounded-full px-3 py-2 font-medium transition-all duration-200 ${mode === "single" ? "bg-violet-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
               >
                 Single company
               </button>
@@ -767,16 +786,16 @@ export function DemoSection() {
                   setMode("batch");
                   setBatchError(null);
                 }}
-                className={`flex-1 rounded-md px-3 py-2 font-medium transition-all duration-200 ${mode === "batch" ? "bg-violet-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
+                className={`flex-1 rounded-full px-3 py-2 font-medium transition-all duration-200 ${mode === "batch" ? "bg-violet-600 text-white shadow-[0_0_12px_rgba(139,92,246,0.3)]" : "bg-transparent text-zinc-400 hover:text-zinc-200"}`}
               >
                 Batch mode
               </button>
             </div>
 
             {mode === "single" && (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+              <form onSubmit={handleSubmit} className="flex flex-col gap-6">
                 {/* Company search */}
-                <div>
+                <div className="rounded-[1.35rem] border border-white/[0.07] bg-white/[0.02] p-4">
                   <label htmlFor="company-search" className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
                     Who are you targeting?
                   </label>
@@ -793,7 +812,7 @@ export function DemoSection() {
                   />
                 </div>
 
-                <div>
+                <div className="rounded-[1.35rem] border border-white/[0.07] bg-white/[0.02] p-4">
                   <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
                     Who are you emailing?
                   </label>
@@ -818,9 +837,9 @@ export function DemoSection() {
                             setStructuredHooks(roleHooks.structured);
                           }
                         }}
-                        className={`rounded-md px-3 py-1.5 sm:py-1 text-[0.75rem] font-medium border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f0f1a] ${
+                        className={`rounded-full px-3 py-1.5 sm:py-1 text-[0.75rem] font-medium border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f0f1a] ${
                           targetRole === role
-                            ? "bg-violet-600/20 border-violet-500/50 text-violet-300"
+                            ? "bg-violet-600/20 border-violet-500/50 text-violet-300 shadow-[0_0_18px_rgba(139,92,246,0.12)]"
                             : "bg-[#111119] border-white/[0.06] text-zinc-400 hover:border-violet-500/30 hover:text-zinc-200"
                         }`}
                       >
@@ -830,7 +849,7 @@ export function DemoSection() {
                   </div>
                 </div>
 
-                <div>
+                <div className="rounded-[1.35rem] border border-white/[0.07] bg-white/[0.02] p-4">
                   <label className="mb-2 block text-[0.8125rem] font-medium text-zinc-400">
                     Messaging style
                   </label>
@@ -853,9 +872,9 @@ export function DemoSection() {
                             setStructuredHooks(roleHooks.structured);
                           }
                         }}
-                        className={`rounded-md px-3 py-1.5 sm:py-1 text-[0.75rem] font-medium border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f0f1a] ${
+                        className={`rounded-full px-3 py-1.5 sm:py-1 text-[0.75rem] font-medium border transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-1 focus-visible:ring-offset-[#0f0f1a] ${
                           messagingStyle === value
-                            ? "bg-violet-600/20 border-violet-500/50 text-violet-300"
+                            ? "bg-violet-600/20 border-violet-500/50 text-violet-300 shadow-[0_0_18px_rgba(139,92,246,0.12)]"
                             : "bg-[#111119] border-white/[0.06] text-zinc-400 hover:border-violet-500/30 hover:text-zinc-200"
                         }`}
                       >
@@ -868,7 +887,7 @@ export function DemoSection() {
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="group inline-flex h-12 items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 text-[0.9375rem] font-semibold tracking-[-0.01em] text-white shadow-[0_0_20px_rgba(139,92,246,0.2)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f1a] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                  className="group inline-flex h-12 items-center justify-center gap-2 rounded-full border border-violet-400/35 bg-violet-600 px-6 text-[0.9375rem] font-semibold tracking-[-0.01em] text-white shadow-[0_12px_36px_rgba(139,92,246,0.26)] transition-all duration-200 hover:bg-violet-500 hover:shadow-[0_0_32px_rgba(139,92,246,0.35)] hover:scale-[1.02] active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0f0f1a] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {isLoading ? (
                     <>
@@ -954,14 +973,15 @@ export function DemoSection() {
             {mode === "single" && (
               <div aria-live="polite" aria-atomic="false" className="mt-8 border-t border-white/[0.06] pt-6">
                 {isLoading && (
-                  <div className="flex items-center justify-center gap-3 py-4 text-[0.9375rem] text-zinc-400">
+                  <div className="flex items-center justify-center gap-3 rounded-[1.25rem] border border-white/6 bg-white/[0.02] py-4 text-[0.9375rem] text-zinc-400">
                     <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-500" />
                     Gathering context and drafting hooks...
                   </div>
                 )}
 
                 {showingSample && hooks.length > 0 && (
-                  <div className="mb-4 flex items-center gap-2 text-[0.8125rem]">
+                  <div className="mb-5 rounded-[1.25rem] border border-violet-500/15 bg-violet-500/[0.06] px-4 py-3 text-[0.8125rem]">
+                    <div className="flex items-start gap-2">
                     <span className="rounded-full bg-violet-600/20 border border-violet-500/30 px-2.5 py-0.5 text-[0.6875rem] font-semibold text-violet-300">
                       Sample
                     </span>
@@ -973,6 +993,7 @@ export function DemoSection() {
                       </a>
                       . Enter your own company URL above to generate fresh hooks.
                     </span>
+                    </div>
                   </div>
                 )}
 
@@ -986,7 +1007,7 @@ export function DemoSection() {
                 )}
 
                 {!isLoading && hooks.length > 0 && (
-                  <ul key={targetRole} className="flex flex-col gap-3">
+                  <ul key={targetRole} className="flex flex-col gap-4">
                     {hooks.map((hook, index) => {
                       const structured = structuredHooks?.[index] ?? null;
                       const emailState = emailByIndex[index];
@@ -994,16 +1015,16 @@ export function DemoSection() {
                       return (
                         <li
                           key={index}
-                          className="animate-fade-in-up group rounded-xl border border-white/[0.06] bg-gradient-to-br from-[#131320]/80 to-[#111118]/60 p-5 transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_4px_20px_rgba(139,92,246,0.06)] hover:-translate-y-0.5"
+                          className="animate-fade-in-up group rounded-[1.5rem] border border-white/[0.06] bg-gradient-to-br from-[#151524]/88 to-[#101018]/82 p-5 shadow-[0_16px_40px_rgba(0,0,0,0.18)] transition-all duration-300 hover:border-violet-500/20 hover:shadow-[0_18px_50px_rgba(139,92,246,0.08)] hover:-translate-y-0.5"
                           style={{ animationDelay: `${index * 80}ms` }}
 
                         >
-                          <div className="mb-2.5 flex items-center justify-between gap-3">
-                            <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-400/60 transition-colors duration-200 group-hover:text-violet-400">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-violet-300/75 transition-colors duration-200 group-hover:text-violet-200">
                               Hook {index + 1}
                             </div>
                             {structured && (
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex flex-wrap items-center justify-end gap-1.5">
                                 <AnglePill angle={structured.angle} />
                                 <ConfidencePill confidence={structured.confidence} />
                                 {structured.evidence_tier && (
@@ -1017,14 +1038,14 @@ export function DemoSection() {
                           </p>
 
                           {structured?.promise && (
-                            <p className="mt-2 mb-1 text-[0.75rem] text-zinc-500">
-                              <span className="font-medium text-zinc-300">Promise:</span> {structured.promise}
+                            <p className="mb-1 mt-3 rounded-xl border border-white/6 bg-black/15 px-3 py-2 text-[0.75rem] text-zinc-400">
+                              <span className="font-medium text-zinc-200">Promise:</span> {structured.promise}
                             </p>
                           )}
 
                           {/* Evidence panel */}
                           {structured && structured.evidence_snippet && (
-                            <div className="mt-4 rounded-lg border border-violet-500/10 bg-[#0e0d1a] px-4 py-3 text-[0.75rem] text-zinc-400">
+                            <div className="mt-4 rounded-[1.1rem] border border-violet-500/12 bg-[#0e0d1a]/88 px-4 py-3 text-[0.75rem] text-zinc-400">
                               <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex items-center gap-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-400/60">
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -1036,7 +1057,7 @@ export function DemoSection() {
                                   <button
                                     type="button"
                                     onClick={() => copyToClipboard(hook)}
-                                    className="rounded-md border border-white/10 bg-[#0a0a12] px-2.5 py-1 text-[0.6875rem] font-medium text-zinc-300 transition-all duration-200 hover:border-violet-500/40 hover:text-white hover:scale-[1.02]"
+                                    className="rounded-full border border-white/10 bg-[#0a0a12] px-3 py-1 text-[0.6875rem] font-medium text-zinc-300 transition-all duration-200 hover:border-violet-500/40 hover:text-white hover:scale-[1.02]"
                                   >
                                     Copy for email
                                   </button>
@@ -1047,7 +1068,7 @@ export function DemoSection() {
                                         `Hook:\n${hook}\n\nEvidence:\n"${structured.evidence_snippet}"\n— ${structured.source_title}`,
                                       )
                                     }
-                                    className="rounded-md border border-violet-500/30 bg-violet-600/[0.08] px-2.5 py-1 text-[0.6875rem] font-medium text-violet-300 transition-all duration-200 hover:border-violet-400/50 hover:text-white hover:scale-[1.02]"
+                                    className="rounded-full border border-violet-500/30 bg-violet-600/[0.08] px-3 py-1 text-[0.6875rem] font-medium text-violet-300 transition-all duration-200 hover:border-violet-400/50 hover:text-white hover:scale-[1.02]"
                                   >
                                     Copy with receipts
                                   </button>
@@ -1089,7 +1110,7 @@ export function DemoSection() {
                               type="button"
                               onClick={() => handleGenerateEmail(index)}
                               disabled={!structured || emailState?.loading}
-                              className="inline-flex items-center justify-center gap-2 rounded-lg border border-violet-600/40 bg-violet-600/[0.08] px-4 py-2 text-[0.75rem] font-semibold text-violet-300 transition-all duration-200 hover:border-violet-500/60 hover:bg-violet-600/[0.15] hover:text-white hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
+                              className="inline-flex items-center justify-center gap-2 rounded-full border border-violet-600/40 bg-violet-600/[0.08] px-4 py-2 text-[0.75rem] font-semibold text-violet-300 transition-all duration-200 hover:border-violet-500/60 hover:bg-violet-600/[0.15] hover:text-white hover:scale-[1.02] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
                             >
                               {emailState?.loading ? (
                                 <>
@@ -1109,7 +1130,7 @@ export function DemoSection() {
 
                           {/* Email result */}
                           {emailState?.email && (
-                            <div className="animate-fade-in-up mt-4 rounded-lg border border-violet-500/20 bg-gradient-to-br from-[#12101e] to-[#0f0d18] px-4 py-3 text-[0.8125rem] text-zinc-100">
+                            <div className="animate-fade-in-up mt-4 rounded-[1.1rem] border border-violet-500/20 bg-gradient-to-br from-[#12101e] to-[#0f0d18] px-4 py-3 text-[0.8125rem] text-zinc-100">
                               <div className="mb-2 flex items-center justify-between gap-3">
                                 <p className="font-semibold text-violet-200">
                                   {emailState.email.subject}
@@ -1121,7 +1142,7 @@ export function DemoSection() {
                                       `${emailState.email!.subject}\n\n${emailState.email!.body}`,
                                     )
                                   }
-                                  className="shrink-0 rounded-md border border-violet-600/40 bg-[#0a0a12] px-2.5 py-1 text-[0.6875rem] font-medium text-violet-200 transition-all duration-200 hover:border-violet-400 hover:text-white hover:scale-[1.02]"
+                                  className="shrink-0 rounded-full border border-violet-600/40 bg-[#0a0a12] px-3 py-1 text-[0.6875rem] font-medium text-violet-200 transition-all duration-200 hover:border-violet-400 hover:text-white hover:scale-[1.02]"
                                 >
                                   Copy email
                                 </button>

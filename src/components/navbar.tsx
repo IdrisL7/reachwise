@@ -9,6 +9,7 @@ import { useSession, signOut } from "next-auth/react";
 export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const firstMobileMenuItemRef = useRef<HTMLAnchorElement>(null);
@@ -50,6 +51,16 @@ export function Navbar() {
     }
   }, [mobileOpen]);
 
+  useEffect(() => {
+    function handleScroll() {
+      setScrolled(window.scrollY > 24);
+    }
+
+    handleScroll();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
     <>
       <a
@@ -60,7 +71,11 @@ export function Navbar() {
       </a>
     <motion.nav
       aria-label="Main navigation"
-      className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#0a0a0b]/95 backdrop-blur-sm"
+      className={`sticky top-0 z-50 transition-all duration-300 ${
+        scrolled
+          ? "border-b border-white/[0.08] bg-[#0a0a0b]/88 shadow-[0_8px_32px_rgba(0,0,0,0.28)] backdrop-blur-xl"
+          : "border-b border-transparent bg-[#0a0a0b]/28 backdrop-blur-md"
+      }`}
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
@@ -68,10 +83,10 @@ export function Navbar() {
       <div className="mx-auto flex h-[4.25rem] max-w-[90rem] items-center justify-between px-6 lg:px-10">
         <Link
           href="/"
-          className="flex items-center gap-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808] rounded-sm"
+          className="flex items-center gap-2.5 rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
         >
           <SignalHooksLogo />
-          <span className="text-[1rem] font-bold tracking-[-0.01em] text-white">
+          <span className="text-[1rem] font-bold tracking-[-0.01em] text-white drop-shadow-[0_1px_10px_rgba(0,0,0,0.28)]">
             GetSignalHooks
           </span>
         </Link>
@@ -186,7 +201,7 @@ export function Navbar() {
               </Link>
               <Link
                 href="/register"
-                className="group inline-flex h-10 items-center gap-1.5 rounded-lg bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white transition-colors duration-150 hover:bg-violet-600/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
+                className="group inline-flex h-10 items-center gap-1.5 rounded-full border border-violet-400/35 bg-violet-600 px-5 text-[0.875rem] font-semibold tracking-[-0.01em] text-white shadow-[0_10px_32px_rgba(124,58,237,0.25)] transition-all duration-200 hover:bg-violet-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 focus-visible:ring-offset-[#080808]"
               >
                 Try it free
                 <svg

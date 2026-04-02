@@ -1,5 +1,6 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { Reveal } from "./ui/reveal";
 
 const steps = [
@@ -59,14 +60,30 @@ const steps = [
 
 export function HowItWorksSection() {
   return (
-    <section id="how-it-works" aria-labelledby="how-it-works-heading" className="border-t border-white/[0.06] bg-[#0a0a0b]">
-      <div className="mx-auto max-w-[90rem] px-6 py-16 lg:px-10 lg:py-24">
+    <section
+      id="how-it-works"
+      aria-labelledby="how-it-works-heading"
+      className="relative overflow-hidden border-t border-white/[0.04] bg-[#0a0a0b]"
+    >
+      <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.18),transparent_55%)]" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-400/35 to-transparent" />
+
+      <div className="relative mx-auto max-w-[90rem] px-6 py-18 lg:px-10 lg:py-24">
 
         <Reveal>
-          <div className="mb-12 lg:mb-16">
-            <h2 id="how-it-works-heading" className="font-[family-name:var(--font-display)] text-[clamp(2rem,3.5vw,3.25rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white">
+          <div className="mb-12 max-w-3xl lg:mb-16">
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-violet-200/75">
+              From signal to sequence
+            </p>
+            <h2
+              id="how-it-works-heading"
+              className="mt-4 font-[family-name:var(--font-display)] text-[clamp(2rem,3.5vw,3.25rem)] font-bold leading-[1.04] tracking-[-0.02em] text-white"
+            >
               Find the signal. Create the message. Run the workflow.
             </h2>
+            <p className="mt-4 max-w-2xl text-[0.98rem] leading-7 text-zinc-400">
+              See how a live company signal becomes a usable outbound workflow, with the source context still attached at every step.
+            </p>
           </div>
         </Reveal>
 
@@ -75,71 +92,91 @@ export function HowItWorksSection() {
 
           {/* Large tile — step 01, spans 2 rows */}
           <Reveal delay={0} className="lg:row-span-2">
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.25)]">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
-                {steps[0].num}
-              </p>
-              <h3 className="text-[1.25rem] font-bold text-white leading-[1.2]">
-                {steps[0].title}
-              </h3>
-              <p className="mt-3 text-[0.9375rem] leading-[1.65] text-zinc-400">
-                {steps[0].desc}
-              </p>
-              <div className="mt-auto pt-6" aria-hidden="true">
-                {steps[0].visual}
-                {/* Source result preview */}
-                <div className="mt-2 rounded-xl border border-white/[0.06] bg-[#14161a]/80 p-3 space-y-2">
-                  {[
-                    { badge: "Funding", color: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", domain: "techcrunch.com", title: "Gong raises $250M Series E…" },
-                    { badge: "Press",   color: "bg-violet-600/10  border-violet-500/20  text-violet-400",   domain: "gong.io",        title: "Gong launches AI deal forecasting" },
-                  ].map((r) => (
-                    <div key={r.domain} className="flex items-center gap-2.5">
-                      <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[0.5625rem] font-semibold whitespace-nowrap ${r.color}`}>{r.badge}</span>
-                      <span className="flex flex-col min-w-0">
-                        <span className="text-xs text-zinc-400 truncate">{r.domain}</span>
-                        <span className="text-[10px] text-zinc-600 truncate">{r.title}</span>
-                      </span>
-                    </div>
-                  ))}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="group relative h-full overflow-hidden rounded-[1.75rem] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,30,0.98),rgba(12,12,18,0.98))] p-7 shadow-[0_20px_60px_rgba(0,0,0,0.24)]"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.16),transparent_36%)] opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative flex h-full flex-col">
+                <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-200/65">
+                  {steps[0].num}
+                </p>
+                <h3 className="text-[1.25rem] font-bold text-white leading-[1.2]">
+                  {steps[0].title}
+                </h3>
+                <p className="mt-3 text-[0.9375rem] leading-[1.65] text-zinc-400">
+                  {steps[0].desc}
+                </p>
+                <div className="mt-auto pt-6" aria-hidden="true">
+                  {steps[0].visual}
+                  <div className="mt-2 rounded-xl border border-white/[0.06] bg-[#14161a]/80 p-3 space-y-2">
+                    {[
+                      { badge: "Funding", color: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", domain: "techcrunch.com", title: "Gong raises $250M Series E…" },
+                      { badge: "Press", color: "bg-violet-600/10 border-violet-500/20 text-violet-400", domain: "gong.io", title: "Gong launches AI deal forecasting" },
+                    ].map((r) => (
+                      <div key={r.domain} className="flex items-center gap-2.5">
+                        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[0.5625rem] font-semibold whitespace-nowrap ${r.color}`}>{r.badge}</span>
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate text-xs text-zinc-400">{r.domain}</span>
+                          <span className="truncate text-[10px] text-zinc-600">{r.title}</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            </motion.div>
           </Reveal>
 
           {/* Step 02 — top right */}
           <Reveal delay={0.12}>
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
-                {steps[1].num}
-              </p>
-              <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
-                {steps[1].title}
-              </h3>
-              <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
-                {steps[1].desc}
-              </p>
-              <div className="mt-auto pt-4" aria-hidden="true">
-                {steps[1].visual}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="group relative h-full overflow-hidden rounded-[1.75rem] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,30,0.98),rgba(12,12,18,0.98))] p-7 shadow-[0_18px_48px_rgba(0,0,0,0.2)]"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(124,58,237,0.14),transparent_34%)] opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative flex h-full flex-col">
+                <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-200/65">
+                  {steps[1].num}
+                </p>
+                <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
+                  {steps[1].title}
+                </h3>
+                <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
+                  {steps[1].desc}
+                </p>
+                <div className="mt-auto pt-4" aria-hidden="true">
+                  {steps[1].visual}
+                </div>
               </div>
-            </div>
+            </motion.div>
           </Reveal>
 
           {/* Step 03 — bottom right */}
           <Reveal delay={0.24}>
-            <div className="h-full rounded-2xl border border-zinc-700/30 bg-[#0f0f18] p-7 flex flex-col shadow-[0_2px_16px_rgba(0,0,0,0.2)]">
-              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.08em] text-zinc-600 mb-4">
-                {steps[2].num}
-              </p>
-              <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
-                {steps[2].title}
-              </h3>
-              <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
-                {steps[2].desc}
-              </p>
-              <div className="mt-auto pt-4" aria-hidden="true">
-                {steps[2].visual}
+            <motion.div
+              whileHover={{ y: -4 }}
+              transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              className="group relative h-full overflow-hidden rounded-[1.75rem] border border-white/8 bg-[linear-gradient(180deg,rgba(18,18,30,0.98),rgba(12,12,18,0.98))] p-7 shadow-[0_18px_48px_rgba(0,0,0,0.2)]"
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.12),transparent_34%)] opacity-70 transition-opacity duration-300 group-hover:opacity-100" />
+              <div className="relative flex h-full flex-col">
+                <p className="mb-4 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-violet-200/65">
+                  {steps[2].num}
+                </p>
+                <h3 className="text-[1.125rem] font-bold text-white leading-[1.2]">
+                  {steps[2].title}
+                </h3>
+                <p className="mt-2 text-[0.875rem] leading-[1.6] text-zinc-400">
+                  {steps[2].desc}
+                </p>
+                <div className="mt-auto pt-4" aria-hidden="true">
+                  {steps[2].visual}
+                </div>
               </div>
-            </div>
+            </motion.div>
           </Reveal>
 
         </div>

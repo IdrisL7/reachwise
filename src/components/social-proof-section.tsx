@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { Reveal } from "./ui/reveal";
 
 const proofPoints = [
@@ -14,28 +15,48 @@ export function SocialProofSection() {
   return (
     <section
       aria-labelledby="social-proof-heading"
-      className="border-t border-zinc-200/80 bg-[#f5f4f0]"
+      className="relative overflow-hidden border-t border-zinc-200/70 bg-[#f5f4f0]"
     >
-      <div className="mx-auto max-w-[90rem] px-6 py-12 lg:px-10 lg:py-16">
+      <div className="absolute inset-x-0 top-0 h-24 bg-[radial-gradient(circle_at_top,rgba(124,58,237,0.08),transparent_58%)]" />
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/20 to-transparent" />
+
+      <div className="relative mx-auto max-w-[90rem] px-6 py-14 lg:px-10 lg:py-18">
         <Reveal>
-          <p className="mb-5 text-[0.75rem] font-semibold uppercase tracking-[0.08em] text-zinc-600">
-            How it&apos;s different
-          </p>
-          <h2
-            id="social-proof-heading"
-            className="font-[family-name:var(--font-display)] text-[clamp(1.75rem,3vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.02em] text-zinc-900 max-w-2xl"
-          >
-            Built for teams that need outbound to hold up under scrutiny.
-          </h2>
+          <div className="max-w-3xl">
+            <p className="mb-5 text-xs font-semibold uppercase tracking-[0.22em] text-zinc-600">
+              Why it holds up
+            </p>
+            <h2
+              id="social-proof-heading"
+              className="max-w-2xl font-[family-name:var(--font-display)] text-[clamp(2rem,3.4vw,3rem)] font-bold leading-[1.05] tracking-[-0.03em] text-zinc-900"
+            >
+              Built for teams that need outbound to hold up under scrutiny.
+            </h2>
+            <p className="mt-4 max-w-2xl text-[1rem] leading-7 text-zinc-600">
+              The value here is not just nicer copy. It is the ability to trace each message back to a real signal, see how strong the evidence is, and keep that context attached as work moves forward.
+            </p>
+          </div>
         </Reveal>
 
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {proofPoints.map((p, i) => (
             <Reveal key={p.label} delay={i * 0.08}>
-              <div className="border-t border-zinc-300/70 pt-5">
-                <p className="text-[0.9375rem] font-semibold text-zinc-800 leading-[1.4]">{p.label}</p>
-                <p className="mt-2 text-[0.875rem] leading-[1.55] text-zinc-600">{p.detail}</p>
-              </div>
+              <motion.div
+                whileHover={{ y: -4 }}
+                transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                className="group h-full rounded-[1.5rem] border border-zinc-200/80 bg-white/70 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.05)] backdrop-blur-sm"
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="h-2.5 w-2.5 rounded-full bg-violet-500/80" />
+                  <span className="text-[0.7rem] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                    Signal-safe
+                  </span>
+                </div>
+                <p className="text-[0.95rem] font-semibold leading-[1.45] text-zinc-800">
+                  {p.label}
+                </p>
+                <p className="mt-3 text-[0.875rem] leading-[1.65] text-zinc-600">{p.detail}</p>
+              </motion.div>
             </Reveal>
           ))}
         </div>
@@ -44,7 +65,7 @@ export function SocialProofSection() {
           <div className="mt-10">
             <Link
               href="#pricing"
-              className="text-[0.875rem] font-medium text-zinc-700 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f4f0] rounded-sm"
+              className="inline-flex items-center rounded-full border border-zinc-300/80 bg-white/80 px-4 py-2 text-[0.875rem] font-medium text-zinc-700 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#f5f4f0]"
             >
               See pricing →
             </Link>
