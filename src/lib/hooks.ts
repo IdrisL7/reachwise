@@ -1853,6 +1853,102 @@ export async function fetchUserProvidedSource(
   };
 }
 
+export async function fetchUserProvidedSourceTurbo(
+  url: string,
+  domain: string,
+  options?: {
+    companyNameHint?: string;
+    minFacts?: number;
+  },
+): Promise<ClassifiedSource | null> {
+  const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+  const minFacts = options?.minFacts ?? 1;
+
+  const directAttempt = (async (): Promise<Source | null> => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+      const response = await fetch(normalizedUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; ReachWise/1.0; +https://getsignalhooks.com)",
+          Accept: "text/html",
+        },
+        signal: controller.signal,
+        redirect: "follow",
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) return null;
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("text/html")) return null;
+
+      const html = (await response.text()).slice(0, 180_000);
+      const plainText = stripHtml(html);
+      if (plainText.length < 50) return null;
+
+      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+      const facts = extractClaimSentences(plainText, 8);
+      if (facts.length < minFacts) return null;
+
+      return {
+        title: titleMatch?.[1]?.trim() ?? `${domain} page`,
+        publisher: domain,
+        date: "",
+        url: normalizedUrl,
+        facts,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  const jinaAttempt = (async (): Promise<Source | null> => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const response = await fetch(`https://r.jina.ai/${normalizedUrl}`, {
+        headers: { Accept: "text/plain" },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) return null;
+      const markdown = await response.text();
+      const text = markdown.slice(0, 180_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
+      if (text.length < 50) return null;
+
+      const facts = extractClaimSentences(text, 8);
+      if (facts.length < minFacts) return null;
+
+      return {
+        title: markdown.match(/^#\s+(.+)/m)?.[1]?.trim() ?? `${domain} page`,
+        publisher: domain,
+        date: "",
+        url: normalizedUrl,
+        facts,
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  const [directSource, jinaSource] = await Promise.all([directAttempt, jinaAttempt]);
+  const src = directSource ?? jinaSource;
+  if (!src) return null;
+
+  const companyName = options?.companyNameHint?.trim() || extractCompanyName(normalizedUrl);
+  const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, "__no-domain-match__");
+
+  return {
+    ...src,
+    tier: "A" as EvidenceTier,
+    anchorScore: 5,
+    entity_hit_score: Math.max(entityMatch.entity_hit_score, 1),
+    entity_matched_term: entityMatch.entity_matched_term ?? companyName,
+    userProvided: true,
+  };
+}
+
 /**
  * Prong D: Directly fetch the company's homepage and signal-rich subpages.
  * This captures actual claims, numbers, and product details that Exa Search misses.

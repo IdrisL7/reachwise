@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/nextjs";
 import { NextResponse, after } from "next/server";
 import {
   fetchSourcesWithGating,
-  fetchUserProvidedSource,
+  fetchUserProvidedSourceTurbo,
   generateHookPayloadsFromTrustedSource,
   generateHookPayloadsFromSources,
   getProviderFacingErrorMessage,
@@ -436,12 +436,13 @@ export async function POST(request: Request) {
           const parsedInput = new URL(url.startsWith("http") ? url : `https://${url}`);
           const hasSubpath = parsedInput.pathname.length > 1 && parsedInput.pathname !== "/";
 
-          if (hasSubpath) {
-            const userSrc = await fetchUserProvidedSource(url, companyDomain, exaApiKey, {
+          if (rawUrl && hasSubpath) {
+            const sourceFetchStartedAt = Date.now();
+            const userSrc = await fetchUserProvidedSourceTurbo(url, companyDomain, {
               companyNameHint: companyName || undefined,
-              minFacts: companyName ? 1 : undefined,
-              bypassEntityCheck: Boolean(companyName),
+              minFacts: companyName ? 1 : 2,
             }).catch(() => null);
+            timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
 
             if (userSrc) {
               console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
@@ -500,6 +501,20 @@ export async function POST(request: Request) {
                 rawHookCount: rawHooks.length,
                 candidateHookCount: candidateHooks.length,
                 factCount: userSrc.facts.length,
+              });
+            } else {
+              console.log("[generate-hooks] userProvidedFastPath extraction_failed", { traceId, url });
+              return NextResponse.json({
+                hooks: [],
+                structured_hooks: [],
+                overflow_hooks: [],
+                status: "ok" as CompanyResolutionStatus,
+                lowSignal: true,
+                suggestion: "We couldn't extract enough proof from that page. Try a different article URL or use the company homepage for deeper research.",
+                timings: {
+                  totalMs: Date.now() - requestStartedAt,
+                  sourceFetchMs: timing.sourceFetchMs,
+                },
               });
             }
           }
