@@ -1863,90 +1863,99 @@ export async function fetchUserProvidedSourceTurbo(
 ): Promise<ClassifiedSource | null> {
   const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
   const minFacts = options?.minFacts ?? 1;
+  const directController = new AbortController();
+  const jinaController = new AbortController();
 
-  const directAttempt = (async (): Promise<Source | null> => {
+  const buildClassifiedSource = (src: Source): ClassifiedSource => {
+    const companyName = options?.companyNameHint?.trim() || extractCompanyName(normalizedUrl);
+    const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, "__no-domain-match__");
+
+    return {
+      ...src,
+      tier: "A" as EvidenceTier,
+      anchorScore: 5,
+      entity_hit_score: Math.max(entityMatch.entity_hit_score, 1),
+      entity_matched_term: entityMatch.entity_matched_term ?? companyName,
+      userProvided: true,
+    };
+  };
+
+  const directAttempt = (async (): Promise<ClassifiedSource> => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3500);
+      const timeout = setTimeout(() => directController.abort(), 2500);
       const response = await fetch(normalizedUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; ReachWise/1.0; +https://getsignalhooks.com)",
           Accept: "text/html",
         },
-        signal: controller.signal,
+        signal: directController.signal,
         redirect: "follow",
       });
       clearTimeout(timeout);
 
-      if (!response.ok) return null;
+      if (!response.ok) throw new Error("direct fetch failed");
       const contentType = response.headers.get("content-type") || "";
-      if (!contentType.includes("text/html")) return null;
+      if (!contentType.includes("text/html")) throw new Error("direct content type not html");
 
       const html = (await response.text()).slice(0, 180_000);
       const plainText = stripHtml(html);
-      if (plainText.length < 50) return null;
+      if (plainText.length < 50) throw new Error("direct text too short");
 
       const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
       const facts = extractClaimSentences(plainText, 8);
-      if (facts.length < minFacts) return null;
+      if (facts.length < minFacts) throw new Error("direct facts too thin");
 
-      return {
+      return buildClassifiedSource({
         title: titleMatch?.[1]?.trim() ?? `${domain} page`,
         publisher: domain,
         date: "",
         url: normalizedUrl,
         facts,
-      };
+      });
     } catch {
-      return null;
+      throw new Error("direct extraction failed");
     }
   })();
 
-  const jinaAttempt = (async (): Promise<Source | null> => {
+  const jinaAttempt = (async (): Promise<ClassifiedSource> => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => jinaController.abort(), 3500);
       const response = await fetch(`https://r.jina.ai/${normalizedUrl}`, {
         headers: { Accept: "text/plain" },
-        signal: controller.signal,
+        signal: jinaController.signal,
       });
       clearTimeout(timeout);
 
-      if (!response.ok) return null;
+      if (!response.ok) throw new Error("jina fetch failed");
       const markdown = await response.text();
       const text = markdown.slice(0, 180_000).replace(/\[.*?\]\(.*?\)/g, " ").trim();
-      if (text.length < 50) return null;
+      if (text.length < 50) throw new Error("jina text too short");
 
       const facts = extractClaimSentences(text, 8);
-      if (facts.length < minFacts) return null;
+      if (facts.length < minFacts) throw new Error("jina facts too thin");
 
-      return {
+      return buildClassifiedSource({
         title: markdown.match(/^#\s+(.+)/m)?.[1]?.trim() ?? `${domain} page`,
         publisher: domain,
         date: "",
         url: normalizedUrl,
         facts,
-      };
+      });
     } catch {
-      return null;
+      throw new Error("jina extraction failed");
     }
   })();
 
-  const [directSource, jinaSource] = await Promise.all([directAttempt, jinaAttempt]);
-  const src = directSource ?? jinaSource;
-  if (!src) return null;
-
-  const companyName = options?.companyNameHint?.trim() || extractCompanyName(normalizedUrl);
-  const entityMatch = computeEntityHitScore(src as ClassifiedSource, companyName, "__no-domain-match__");
-
-  return {
-    ...src,
-    tier: "A" as EvidenceTier,
-    anchorScore: 5,
-    entity_hit_score: Math.max(entityMatch.entity_hit_score, 1),
-    entity_matched_term: entityMatch.entity_matched_term ?? companyName,
-    userProvided: true,
-  };
+  try {
+    const winner = await Promise.any([directAttempt, jinaAttempt]);
+    directController.abort();
+    jinaController.abort();
+    return winner;
+  } catch {
+    directController.abort();
+    jinaController.abort();
+    return null;
+  }
 }
 
 /**
