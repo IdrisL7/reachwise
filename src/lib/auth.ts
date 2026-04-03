@@ -5,6 +5,12 @@ import { db, getDb, schema } from "@/lib/db";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import type { TierId } from "@/lib/tiers";
+import {
+  clearFailedAuthAttempts,
+  getClientIp,
+  getFailedAuthLockout,
+  recordFailedAuthAttempt,
+} from "@/lib/rate-limit";
 
 declare module "next-auth" {
   interface Session {
@@ -41,11 +47,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) return null;
 
         const email = (credentials.email as string).toLowerCase().trim();
         const password = credentials.password as string;
+        const clientIp = getClientIp(request);
+        const emailLockoutKey = `email:${email}`;
+
+        const [ipRetryAfter, emailRetryAfter] = await Promise.all([
+          getFailedAuthLockout(clientIp),
+          getFailedAuthLockout(emailLockoutKey),
+        ]);
+
+        if (ipRetryAfter || emailRetryAfter) {
+          return null;
+        }
 
         const [user] = await db
           .select()
@@ -53,10 +70,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           .where(eq(schema.users.email, email))
           .limit(1);
 
-        if (!user?.passwordHash) return null;
+        if (!user?.passwordHash) {
+          await Promise.all([
+            recordFailedAuthAttempt(clientIp),
+            recordFailedAuthAttempt(emailLockoutKey),
+          ]);
+          return null;
+        }
 
         const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+        if (!valid) {
+          await Promise.all([
+            recordFailedAuthAttempt(clientIp),
+            recordFailedAuthAttempt(emailLockoutKey),
+          ]);
+          return null;
+        }
+
+        await Promise.all([
+          clearFailedAuthAttempts(clientIp),
+          clearFailedAuthAttempts(emailLockoutKey),
+        ]);
 
         return {
           id: user.id,

@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@libsql/client";
+import { auth } from "@/lib/auth";
+import { unauthorized, validateBearerToken } from "@/lib/followup/auth";
+
+const ALLOWED_CSV_MIME_TYPES = new Set([
+  "text/csv",
+  "application/csv",
+  "application/vnd.ms-excel",
+  "text/plain",
+]);
+const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 
 function parseCsvLine(line: string): string[] {
   const out: string[] = [];
@@ -64,11 +74,26 @@ function getClient() {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  const hasBearerToken = validateBearerToken(req);
+  if (!session?.user?.id && !hasBearerToken) {
+    return unauthorized();
+  }
+
   try {
     const form = await req.formData();
     const file = form.get("file") as File | null;
     if (!file) {
       return NextResponse.json({ error: "Missing CSV file in `file` form field." }, { status: 400 });
+    }
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      return NextResponse.json({ error: "Only CSV uploads are supported." }, { status: 400 });
+    }
+    if (!ALLOWED_CSV_MIME_TYPES.has(file.type)) {
+      return NextResponse.json({ error: "Invalid file type. Upload a CSV file." }, { status: 400 });
+    }
+    if (file.size > MAX_IMPORT_FILE_BYTES) {
+      return NextResponse.json({ error: "CSV file is too large." }, { status: 400 });
     }
 
     const csv = await file.text();
@@ -133,6 +158,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, total: rows.length, inserted, skipped });
   } catch (error) {
     console.error("outreach import failed", error);
-    return NextResponse.json({ error: (error as Error).message || "Import failed" }, { status: 500 });
+    return NextResponse.json({ error: "Import failed" }, { status: 500 });
   }
 }

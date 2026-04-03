@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { db, schema } from "@/lib/db";
 import { sql } from "drizzle-orm";
 import { getClaudeApiKey } from "@/lib/env";
+import { auth } from "@/lib/auth";
+import { unauthorized, validateBearerToken } from "@/lib/followup/auth";
 import {
   assessLearningLoopHealth,
   getLearningLoopForecast,
@@ -13,7 +15,13 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const session = await auth();
+  const hasBearerToken = validateBearerToken(request);
+  if (!session?.user?.id && !hasBearerToken) {
+    return unauthorized();
+  }
+
   const checks: Record<string, "ok" | "error"> = {};
   let learningLoop:
     | {

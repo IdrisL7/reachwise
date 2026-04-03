@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error provisioning n8n instance:", error);
     return NextResponse.json(
-      { status: "error", code: "PROVISION_FAILED", message: (error as Error).message },
+      { status: "error", code: "PROVISION_FAILED", message: "Failed to provision n8n instance." },
       { status: 500 },
     );
   }
@@ -109,7 +109,7 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error(`Error ${action} n8n instance:`, error);
     return NextResponse.json(
-      { status: "error", code: "ACTION_FAILED", message: (error as Error).message },
+      { status: "error", code: "ACTION_FAILED", message: "Failed to update n8n instance." },
       { status: 500 },
     );
   }

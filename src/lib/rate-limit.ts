@@ -7,6 +7,11 @@ interface RateLimitConfig {
   windowSeconds: number;
 }
 
+interface CounterOptions {
+  limit: number;
+  windowSeconds: number;
+}
+
 const RATE_LIMITS: Record<string, RateLimitConfig> = {
   "public:hooks": { limit: 10, windowSeconds: 60 },
   "public:hooks-batch": { limit: 3, windowSeconds: 60 },
@@ -101,4 +106,88 @@ export function getClientIp(request: Request): string {
     request.headers.get("x-real-ip") ||
     "unknown"
   );
+}
+
+async function readCounter(key: string) {
+  const [existing] = await db
+    .select()
+    .from(schema.rateLimits)
+    .where(eq(schema.rateLimits.key, key))
+    .limit(1);
+
+  return existing ?? null;
+}
+
+async function writeCounter(key: string, count: number, resetAt: string) {
+  await db
+    .insert(schema.rateLimits)
+    .values({ key, count, resetAt })
+    .onConflictDoUpdate({
+      target: schema.rateLimits.key,
+      set: { count, resetAt },
+    });
+}
+
+export async function getFailedAuthLockout(
+  identifier: string,
+  scope = "auth:login-lockout",
+): Promise<number | null> {
+  if (!identifier) return null;
+
+  const key = `${scope}:${identifier}`;
+  const now = new Date();
+
+  try {
+    const existing = await readCounter(key);
+    if (!existing) return null;
+    if (new Date(existing.resetAt) < now) return null;
+    if (existing.count < 5) return null;
+
+    return Math.ceil(
+      (new Date(existing.resetAt).getTime() - now.getTime()) / 1000,
+    );
+  } catch (err) {
+    console.error("Failed auth lockout check failed:", err);
+    return null;
+  }
+}
+
+export async function recordFailedAuthAttempt(
+  identifier: string,
+  options: CounterOptions = { limit: 5, windowSeconds: 900 },
+  scope = "auth:login-lockout",
+) {
+  if (!identifier) return;
+
+  const key = `${scope}:${identifier}`;
+  const now = new Date();
+  const nextResetAt = new Date(
+    now.getTime() + options.windowSeconds * 1000,
+  ).toISOString();
+
+  try {
+    const existing = await readCounter(key);
+
+    if (!existing || new Date(existing.resetAt) < now) {
+      await writeCounter(key, 1, nextResetAt);
+      return;
+    }
+
+    await writeCounter(key, existing.count + 1, existing.resetAt);
+  } catch (err) {
+    console.error("Failed auth attempt recording failed:", err);
+  }
+}
+
+export async function clearFailedAuthAttempts(
+  identifier: string,
+  scope = "auth:login-lockout",
+) {
+  if (!identifier) return;
+
+  try {
+    await db.delete(schema.rateLimits).where(eq(schema.rateLimits.key, `${scope}:${identifier}`));
+  } catch (err) {
+    console.error("Failed auth attempt clear failed:", err);
+  }
 }

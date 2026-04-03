@@ -5,7 +5,10 @@ import crypto from "crypto";
 
 // Generate a simple HMAC-based unsubscribe token (no DB storage needed)
 export function generateUnsubscribeToken(email: string): string {
-  const secret = process.env.AUTH_SECRET || "fallback-secret";
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) {
+    throw new Error("AUTH_SECRET is not configured");
+  }
   const hmac = crypto.createHmac("sha256", secret).update(email).digest("hex");
   return hmac.slice(0, 32);
 }
