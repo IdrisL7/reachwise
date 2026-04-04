@@ -4839,6 +4839,16 @@ function getDiversityBucket(hook: Hook): string {
 
 function areHooksNearDuplicate(a: Hook, b: Hook): boolean {
   if (a.buyer_tension_id && b.buyer_tension_id && a.buyer_tension_id === b.buyer_tension_id) return true;
+  if (
+    a.source_url &&
+    b.source_url &&
+    a.source_url === b.source_url &&
+    a.structural_variant &&
+    b.structural_variant &&
+    a.structural_variant !== b.structural_variant
+  ) {
+    return false;
+  }
   if (a.source_url && b.source_url && a.source_url === b.source_url && a.structural_variant === b.structural_variant) {
     const metricA = (a.affected_metric || "").toLowerCase();
     const metricB = (b.affected_metric || "").toLowerCase();

@@ -473,6 +473,14 @@ export async function POST(request: Request) {
                   trigger_type: h.trigger_type as Hook["trigger_type"],
                   promise: h.promise,
                   bridge_quality: h.bridge_quality,
+                  structural_variant: h.structural_variant,
+                  buyer_tension: h.buyer_tension,
+                  why_now: h.why_now,
+                  affected_metric: h.affected_metric,
+                  buyer_tension_id: h.buyer_tension_id,
+                  tension_richness_score: h.tension_richness_score,
+                  specificity_score: h.specificity_score,
+                  interestingness_score: h.interestingness_score,
                 }));
 
               citations = [{
