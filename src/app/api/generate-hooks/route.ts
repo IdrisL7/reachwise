@@ -1,16 +1,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { NextResponse, after } from "next/server";
 import {
-  fetchSourcesWithGating,
-  fetchUserProvidedSourceTurbo,
-  generateHookPayloadsFromTrustedSource,
-  generateHookPayloadsFromSources,
   getProviderFacingErrorMessage,
-  publishGate,
-  publishGateFinal,
-  roleTokenGate,
-  rankAndCap,
-  validateHook,
   findRoleTokenHit,
   resolveCompanyByName,
   getDomain,
@@ -23,13 +14,12 @@ import {
   type ClassifiedSource,
   type Hook,
   type TargetRole,
-  type IntentSignalInput,
   type MessagingStyle,
   TARGET_ROLES,
 } from "@/lib/hooks";
 import type { CompanyResolutionStatus } from "@/lib/types";
 import { getCachedHooks, setCachedHooks, RULES_VERSION } from "@/lib/hook-cache";
-import { researchIntentSignals, computeIntentScore, getTemperature } from "@/lib/intent";
+import { researchIntentSignals, computeIntentScore } from "@/lib/intent";
 import { getCompanyIntelligence } from "@/lib/company-intel";
 import { auth } from "@/lib/auth";
 import { resolveWorkspaceId, getWorkspaceProfile, getProfileUpdatedAt } from "@/lib/workspace-helpers";
@@ -45,16 +35,24 @@ import {
   persistHookMessagesV2,
   persistSignalsV2,
 } from "@/lib/v2-dual-write";
+import { buildRetrievalDiagnostics } from "@/lib/retrieval-plan";
 import {
-  buildRetrievalDiagnostics,
-  buildRetrievalPlan,
-  prioritizeRetrievalSources,
-} from "@/lib/retrieval-plan";
+  runFastUrlMode,
+  type FastUrlModeCitation,
+} from "@/lib/generate-hooks/fast-url-mode";
+import {
+  runResearchMode,
+  type ResearchModeResult,
+} from "@/lib/generate-hooks/research-mode";
+import {
+  diagnosePublishGateFinalDrops,
+  finalizeGeneratedHooks,
+} from "@/lib/generate-hooks/post-process";
 
 // ---------------------------------------------------------------------------
 // Enforce current tier rules on citations (works on both cached and fresh)
 // ---------------------------------------------------------------------------
-type Citation = { source_title: string; publisher: string; date: string; url: string; tier: string; anchorScore?: number };
+type Citation = FastUrlModeCitation;
 
 function summarizeSelectorRetrievalPreferences(selectorPriors?: Awaited<ReturnType<typeof getHookSelectorPriors>>) {
   const topSourcePreferences = Object.entries(selectorPriors?.sourceTypeBoosts ?? {})
@@ -94,87 +92,6 @@ function enforceCitationTiers(citations: Citation[], companyDomain: string): Cit
     }
     return c;
   });
-}
-
-function signalToTriggerType(type: string): string {
-  switch (type) {
-    case "funding": return "funding";
-    case "tech_change": return "stat";
-    case "hiring": return "hiring";
-    case "growth": return "expansion";
-    case "ipo": return "ipo";
-    default: return "";
-  }
-}
-
-const INTENT_INLINE_WAIT_MS = 300;
-
-function toIntentSignalInputs(
-  signals: Awaited<ReturnType<typeof researchIntentSignals>>,
-): IntentSignalInput[] {
-  return signals
-    .filter((signal) => signal.confidence >= 0.6 && signalToTriggerType(signal.type) !== "")
-    .map((signal) => ({
-      triggerType: signalToTriggerType(signal.type),
-      summary: signal.summary,
-      confidence: signal.confidence,
-      sourceUrl: signal.sourceUrl,
-      tier: signal.confidence >= 0.8 ? ("A" as const) : ("B" as const),
-    }));
-}
-
-function diagnosePublishGateFinalDrops(
-  hooks: Hook[],
-  companyDomain: string | undefined,
-  targetRole: TargetRole | null,
-  messagingStyle?: MessagingStyle,
-): Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> {
-  const domainLower = (companyDomain || "").toLowerCase();
-  const out: Array<{ idx: number; reason: string; news_item: number; source_url: string; angle: string; evidence_tier: string; roleTokenHit: string | null }> = [];
-
-  hooks.forEach((hook, idx) => {
-    let reason = "pass";
-
-    if (domainLower && hook.source_url) {
-      const sourceHost = getDomain(hook.source_url).toLowerCase();
-      const isOnDomain = sourceHost === domainLower || sourceHost.endsWith("." + domainLower);
-      const titleOrSnippet = ((hook.source_title || "") + " " + (hook.evidence_snippet || "")).toLowerCase();
-      const mentionsDomain = titleOrSnippet.includes(domainLower);
-      const companyName = companyDomain ? new URL(`https://${domainLower}`).hostname.split(".")[0].toLowerCase() : "";
-      const mentionsName = companyName.length > 3 && titleOrSnippet.includes(companyName);
-      const anchored = isOnDomain || mentionsDomain || mentionsName;
-      if (!anchored) reason = "drop:unanchored_source";
-    }
-
-    if (reason === "pass") {
-      const validated = validateHook({
-        news_item: hook.news_item,
-        angle: hook.angle,
-        hook: hook.hook,
-        evidence_snippet: hook.evidence_snippet,
-        source_title: hook.source_title,
-        source_date: hook.source_date,
-        source_url: hook.source_url,
-        evidence_tier: hook.evidence_tier,
-        confidence: hook.confidence,
-        psych_mode: hook.psych_mode,
-        why_this_works: hook.why_this_works,
-      }, undefined, messagingStyle);
-      if (!validated) reason = "drop:validateHook_failed";
-    }
-
-    out.push({
-      idx,
-      reason,
-      news_item: hook.news_item,
-      source_url: hook.source_url || "",
-      angle: hook.angle,
-      evidence_tier: hook.evidence_tier,
-      roleTokenHit: targetRole ? findRoleTokenHit(hook.hook, targetRole) : null,
-    });
-  });
-
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,265 +327,90 @@ export async function POST(request: Request) {
     let selectorPriors: Awaited<ReturnType<typeof getHookSelectorPriors>> | undefined;
     let retrievalPreferenceSummary: ReturnType<typeof summarizeSelectorRetrievalPreferences> | undefined;
 
-    let sourceDiagnostics: Awaited<ReturnType<typeof fetchSourcesWithGating>>["_diagnostics"] | null = null;
+    let sourceDiagnostics: ResearchModeResult["sourceDiagnostics"] = null;
 
     if (!candidateHooks) {
       try {
-        const retrievalPlan = buildRetrievalPlan({
-          targetDomain: companyDomain || null,
-          hasIntentSignals: hasFeature(tierId, "intentScoring"),
-          userProvidedUrl: Boolean(rawUrl),
-        });
-        // -----------------------------------------------------------------------
-        // USER-PROVIDED SUBPAGE FAST PATH
-        // When the user explicitly provides a subpage URL (e.g. hubspot.com/startups/partners),
-        // bypass all tier/signal gating. Fetch the page directly, treat it as Tier A,
-        // and call Claude. The auto-discovery pipeline only runs if no subpage or fetch fails.
-        // -----------------------------------------------------------------------
         let usedFastPath = false;
-        try {
-          const parsedInput = new URL(url.startsWith("http") ? url : `https://${url}`);
-          const hasSubpath = parsedInput.pathname.length > 1 && parsedInput.pathname !== "/";
+        const fastModeResult = await runFastUrlMode({
+          rawUrl,
+          url,
+          companyDomain,
+          companyName: companyName || undefined,
+          context,
+          targetRole,
+          customPain,
+          customPromise,
+          messagingStyle,
+          claudeApiKey,
+          senderContext: _senderContext,
+          traceId,
+        });
 
-          if (rawUrl && hasSubpath) {
-            const sourceFetchStartedAt = Date.now();
-            const userSrc = await fetchUserProvidedSourceTurbo(url, companyDomain, {
-              companyNameHint: companyName || undefined,
-              minFacts: companyName ? 1 : 2,
-            }).catch(() => null);
-            timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
+        if (fastModeResult.handled) {
+          timing.sourceFetchMs = fastModeResult.sourceFetchMs;
+          usedFastPath = true;
 
-            if (userSrc) {
-              console.log("[generate-hooks] userProvidedFastPath activated", { traceId, url, factCount: userSrc.facts.length });
-              const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-              const claudeStartedAt = Date.now();
-              const rawHooks = await generateHookPayloadsFromTrustedSource({
-                url,
-                sources: [userSrc],
-                apiKey: claudeApiKey,
-                context,
-                senderContext: _senderContext,
-                targetRole,
-                customPersona,
-                messagingStyle,
-              });
-              timing.claudeMs = Date.now() - claudeStartedAt;
-
-              // Bypass publishGate (which calls validateHook with strict rules designed for
-              // auto-discovered noise). User-provided sources are trusted — convert directly.
-              candidateHooks = rawHooks
-                .filter((h) => h.hook && h.hook.trim().length > 0 && h.hook.length <= 600)
-                .map((h): Hook => ({
-                  news_item: h.news_item ?? 1,
-                  angle: (["trigger", "risk", "tradeoff"].includes(h.angle) ? h.angle : "trigger") as Hook["angle"],
-                  hook: h.hook.trim(),
-                  evidence_snippet: h.evidence_snippet || userSrc.facts[0] || "",
-                  source_title: h.source_title || userSrc.title,
-                  source_date: h.source_date || "",
-                  source_url: h.source_url || userSrc.url,
-                  evidence_tier: (["A", "B"].includes((h.evidence_tier || "").toUpperCase()) ? (h.evidence_tier || "").toUpperCase() : "A") as Hook["evidence_tier"],
-                  confidence: (["high", "med", "low"].includes(h.confidence) ? h.confidence : "med") as Hook["confidence"],
-                  psych_mode: h.psych_mode as Hook["psych_mode"],
-                  why_this_works: h.why_this_works,
-                  trigger_type: h.trigger_type as Hook["trigger_type"],
-                  promise: h.promise,
-                  bridge_quality: h.bridge_quality,
-                  structural_variant: h.structural_variant,
-                  buyer_tension: h.buyer_tension,
-                  why_now: h.why_now,
-                  affected_metric: h.affected_metric,
-                  buyer_tension_id: h.buyer_tension_id,
-                  tension_richness_score: h.tension_richness_score,
-                  specificity_score: h.specificity_score,
-                  interestingness_score: h.interestingness_score,
-                }));
-
-              citations = [{
-                source_title: userSrc.title,
-                publisher: userSrc.publisher,
-                date: userSrc.date,
-                url: userSrc.url,
-                tier: "A",
-                anchorScore: 5,
-              }];
-              isLowSignal = false;
-              hasAnchored = true;
-              tierACount = 1;
-              signalCount = 1;
-              isFastPath = true;
-              usedFastPath = true;
-
-              console.log("[generate-hooks] userProvidedFastPath result", {
-                traceId,
-                rawHookCount: rawHooks.length,
-                candidateHookCount: candidateHooks.length,
-                factCount: userSrc.facts.length,
-              });
-            } else {
-              console.log("[generate-hooks] userProvidedFastPath extraction_failed", { traceId, url });
-              return NextResponse.json({
-                hooks: [],
-                structured_hooks: [],
-                overflow_hooks: [],
-                status: "ok" as CompanyResolutionStatus,
-                lowSignal: true,
-                suggestion: "We couldn't extract enough proof from that page. Try a different article URL or use the company homepage for deeper research.",
-                timings: {
-                  totalMs: Date.now() - requestStartedAt,
-                  sourceFetchMs: timing.sourceFetchMs,
-                },
-              });
-            }
+          if (!fastModeResult.success) {
+            return NextResponse.json({
+              hooks: [],
+              structured_hooks: [],
+              overflow_hooks: [],
+              status: "ok" as CompanyResolutionStatus,
+              lowSignal: true,
+              suggestion: fastModeResult.suggestion,
+              timings: {
+                totalMs: Date.now() - requestStartedAt,
+                sourceFetchMs: timing.sourceFetchMs,
+              },
+            });
           }
-        } catch { /* URL parse error — skip fast path */ }
+
+          timing.claudeMs = fastModeResult.claudeMs;
+          candidateHooks = fastModeResult.candidateHooks;
+          citations = fastModeResult.citations;
+          isLowSignal = fastModeResult.isLowSignal;
+          hasAnchored = fastModeResult.hasAnchored;
+          tierACount = fastModeResult.tierACount;
+          signalCount = fastModeResult.signalCount;
+          isFastPath = true;
+        }
 
         if (!usedFastPath) {
-        selectorPriors = !isDemo && session?.user?.id
-          ? await getHookSelectorPriors({
-              userId: session.user.id,
-              companyUrl: url!,
-              targetRole: targetRole ?? null,
-            }).catch(() => undefined)
-          : undefined;
-        retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
-        // 1. Gather and classify sources with signal gating + anchor scoring
-        let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
-        let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
-        if (hasFeature(tierId, "intentScoring")) {
-          const apifyToken = process.env.APIFY_API_TOKEN;
-          const linkedinSlug = companyDomain ? companyDomain.split(".")[0] : undefined;
-          prefetchedSignalsPromise = researchIntentSignals(
+          const researchModeResult = await runResearchMode({
             url,
-            companyName || companyDomain || "",
-            exaApiKey!,
-            claudeApiKey,
-          )
-            .then((signals) => {
-              prefetchedSignals = signals;
-              return signals;
-            })
-            .catch(() => []);
-
-          const sourceFetchStartedAt = Date.now();
-          result = await fetchSourcesWithGating(url, exaApiKey!, [], apifyToken, linkedinSlug);
-          timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
-
-          rawSignals = await Promise.race([
-            prefetchedSignalsPromise,
-            new Promise<Awaited<ReturnType<typeof researchIntentSignals>>>((resolve) => {
-              setTimeout(() => resolve([]), INTENT_INLINE_WAIT_MS);
-            }),
-          ]);
-
-          const promptSignals = toIntentSignalInputs(rawSignals);
-
-          console.log("[generate-hooks] intent signal overlap", {
-            traceId,
-            rawSignalsCount: rawSignals.length,
-            promptSignalsCount: promptSignals.length,
-            usedInlineIntent: rawSignals.length > 0,
-          });
-        } else {
-          const sourceFetchStartedAt = Date.now();
-          result = await fetchSourcesWithGating(url, exaApiKey!);
-          timing.sourceFetchMs = Date.now() - sourceFetchStartedAt;
-        }
-        const sources = prioritizeRetrievalSources(result.sources, companyDomain || null);
-        signalCount = result.signalCount;
-        sourceDiagnostics = result._diagnostics;
-
-        highConfidenceIntentCount = rawSignals.filter((s) => s.confidence >= 0.8).length;
-        tierACount = sources.filter((s) => s.tier === "A").length;
-        intentSignalsLength = rawSignals.length;
-        // Inject high-confidence intent signals into signalCount BEFORE threshold check
-        signalCount += rawSignals.filter((s) => s.confidence >= 0.8).length;
-        console.log('[threshold-fix] tierACount:', tierACount, 'signalCount after intent injection:', signalCount);
-        isLowSignal = result.lowSignal; // RV18: respect hasUserProvidedSignal bypass from fetchSourcesWithGating
-        hasAnchored = result.hasAnchoredSources;
-
-        console.log("[generate-hooks] threshold check:", {
-          traceId,
-          retrievalPlan,
-          signalCount,
-          tierACount,
-          highConfidenceIntentCount,
-          intentSignalsLength,
-          hasAnchored,
-          lowSignalFromFetch: result.lowSignal,
-          isLowSignal,
-          exactMath: "isLowSignal = tierACount < 1",
-          tierBreakdown: sources.map((s) => ({ url: s.url, tier: s.tier, anchorScore: s.anchorScore })),
-        });
-
-        retrievalDiagnostics = buildRetrievalDiagnostics(sources, {
-          targetDomain: companyDomain || null,
-          lowSignal: result.lowSignal,
-          hasAnchoredSources: result.hasAnchoredSources,
-          recoveryAttempted: result._diagnostics.recoveryAttempted,
-          newsExpansionAttempted: result._diagnostics.newsExpansionAttempted,
-        });
-
-        citations = sources.map((s) => ({
-          source_title: s.title,
-          publisher: s.publisher,
-          date: s.date,
-          url: s.url,
-          tier: s.tier,
-          anchorScore: s.anchorScore,
-        }));
-
-        // 2. Check if all sources are Tier C (insufficient evidence)
-        const usableSources = sources.filter((s) => s.tier !== "C");
-        if (usableSources.length === 0) {
-          candidateHooks = [];
-        } else {
-          // 3. Build source lookup for validation
-          const sourceLookup = new Map<number, ClassifiedSource>();
-          usableSources.forEach((s, i) => sourceLookup.set(i + 1, s));
-
-          // 4. Build prompts and call Claude
-          const customPersona = customPain && customPromise ? { pain: customPain, promise: customPromise } : undefined;
-          const promptSignals = toIntentSignalInputs(rawSignals);
-
-          console.log("[generate-hooks] intent signal mapping for prompt", {
-            traceId,
-            promptSignalsCount: promptSignals.length,
-            promptSignals: promptSignals.map((s) => ({ triggerType: s.triggerType, confidence: s.confidence, tier: s.tier, sourceUrl: s.sourceUrl })),
-          });
-
-          const claudeStartedAt = Date.now();
-          const { rawHooks } = await generateHookPayloadsFromSources({
-            url,
-            sources,
-            apiKey: claudeApiKey,
+            companyDomain,
+            companyName: companyName || undefined,
             context,
-            senderContext: _senderContext,
             targetRole,
-            customPersona,
+            customPain,
+            customPromise,
             messagingStyle,
-            intentSignals: promptSignals.length > 0 ? promptSignals : undefined,
-            retrievalLibrary: selectorPriors?.retrievalLibrary,
-          });
-          timing.claudeMs = Date.now() - claudeStartedAt;
-
-          console.log("[generate-hooks] raw hooks from claude", {
             traceId,
-            rawHookCount: rawHooks.length,
-            rawHooksPreview: rawHooks.slice(0, 5).map((h) => ({ news_item: h.news_item, angle: h.angle, confidence: h.confidence, evidence_tier: h.evidence_tier })),
+            exaApiKey: exaApiKey!,
+            claudeApiKey,
+            tierId,
+            isDemo,
+            sessionUserId: session?.user?.id,
+            senderContext: _senderContext,
           });
-
-          // 5. First pass: publishGate with source lookup (anchored-source filtering)
-          const publishGateStartedAt = Date.now();
-          candidateHooks = publishGate(rawHooks, sourceLookup, {
-            includeMarketContext: false,
-          }, messagingStyle);
-          timing.publishGateMs = Date.now() - publishGateStartedAt;
-
-          console.log("[generate-hooks] candidate hooks after publishGate", {
-            traceId,
-            candidateHookCount: candidateHooks.length,
-          });
-        }
+          selectorPriors = researchModeResult.selectorPriors;
+          retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
+          candidateHooks = researchModeResult.candidateHooks;
+          citations = researchModeResult.citations;
+          signalCount = researchModeResult.signalCount;
+          isLowSignal = researchModeResult.isLowSignal;
+          hasAnchored = researchModeResult.hasAnchored;
+          tierACount = researchModeResult.tierACount;
+          highConfidenceIntentCount = researchModeResult.highConfidenceIntentCount;
+          intentSignalsLength = researchModeResult.intentSignalsLength;
+          sourceDiagnostics = researchModeResult.sourceDiagnostics;
+          retrievalDiagnostics = researchModeResult.retrievalDiagnostics;
+          prefetchedSignals = researchModeResult.prefetchedSignals;
+          prefetchedSignalsPromise = researchModeResult.prefetchedSignalsPromise;
+          timing.sourceFetchMs = researchModeResult.timing.sourceFetchMs;
+          timing.claudeMs = researchModeResult.timing.claudeMs;
+          timing.publishGateMs = researchModeResult.timing.publishGateMs;
         } // end if (!usedFastPath)
       } catch (error) {
         console.error("generate-hooks: Error during external calls", error);
@@ -744,7 +486,6 @@ export async function POST(request: Request) {
       })),
     });
 
-    const publishGateFinalStartedAt = Date.now();
     const publishDiagnostics = diagnosePublishGateFinalDrops(candidateHooks, companyDomain || undefined, targetRole ?? null, messagingStyle);
     console.log("[generate-hooks] publishGateFinal diagnostics", {
       traceId,
@@ -752,13 +493,25 @@ export async function POST(request: Request) {
       droppedAtDiagnosticStage: publishDiagnostics.filter((d) => d.reason !== "pass").length,
     });
 
-    // Fast path: user vouched for the source — skip validateHook inside publishGateFinal.
-    // Only keep the unanchored-source check (Rule B), which already passes since source
-    // URL is on the company domain.
-    const gated = isFastPath ? candidateHooks : publishGateFinal(candidateHooks, companyDomain, {
-      includeMarketContext: true,
-    }, messagingStyle);
-    timing.publishGateMs += Date.now() - publishGateFinalStartedAt;
+    const finalized = finalizeGeneratedHooks({
+      candidateHooks,
+      companyDomain: companyDomain || undefined,
+      targetRole: targetRole ?? null,
+      selectorPriors,
+      isFastPath,
+      isLowSignal,
+      hasAnchored,
+      messagingStyle,
+    });
+    const gated = finalized.gated;
+    const roleGated = finalized.roleGated;
+    const roleGateDroppedAll = finalized.roleGateDroppedAll;
+    let finalTop = finalized.finalTop;
+    let finalOverflow = finalized.finalOverflow;
+    const suggestion = finalized.suggestion;
+    const finalLowSignal = finalized.finalLowSignal;
+    timing.publishGateMs += finalized.publishGateMs;
+    timing.rankingMs = finalized.rankingMs;
 
     console.log("[generate-hooks] after publishGateFinal", {
       traceId,
@@ -766,13 +519,6 @@ export async function POST(request: Request) {
       droppedByPublishGateFinal: candidateHooks.length - gated.length,
       gatedHooksPreview: gated.slice(0, 10).map((h) => ({ news_item: h.news_item, angle: h.angle, evidence_tier: h.evidence_tier, source_url: h.source_url })),
     });
-
-    // =========================================================================
-    // ROLE TOKEN GATE — enforce persona framing (skip for General)
-    // =========================================================================
-    const roleGated = roleTokenGate(gated, targetRole ?? null);
-    const roleGateDroppedAll = roleGated.length === 0 && gated.length > 0;
-    const rankInput = roleGateDroppedAll ? gated : roleGated;
 
     console.log("[generate-hooks] role gate decision", {
       traceId,
@@ -792,26 +538,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // =========================================================================
-    // RANK + CAP — score and return top 3 (overflow available via showAll)
-    // =========================================================================
-    const rankingStartedAt = Date.now();
-    const { top, overflow } = rankAndCap(rankInput, 3, {
-      targetRole: targetRole ?? null,
-      selectorPriors,
-    });
-    timing.rankingMs = Date.now() - rankingStartedAt;
-
-    // Build suggestions — short headline, details handled by UI
-    const noAnchorSuggestion = "We couldn't confirm these sources are specifically about this company. Paste a URL directly from their press page or newsroom — that gives us verified content to write from.";
-    const lowSignalSuggestion = "We found this company but couldn't find enough recent news to write a strong, evidence-backed hook. Paste a URL from their press page, newsroom, or a recent announcement to continue.";
-
-    // Determine final hook list + metadata
-    let finalTop = top;
-    let finalOverflow = overflow;
-    let suggestion: string | undefined;
-    let finalLowSignal = isLowSignal;
-
     console.log("[generate-hooks] suggestion gate pre-check:", {
       traceId,
       tierACount,
@@ -823,43 +549,13 @@ export async function POST(request: Request) {
       gatedCount: gated.length,
       roleGatedCount: roleGated.length,
       roleGateDroppedAll,
-      topCount: top.length,
+      topCount: finalTop.length,
       conditions: {
         noAnchored: !hasAnchored,
         isLowSignal,
         noHooksAfterPublish: gated.length === 0,
       },
     });
-
-    if (!hasAnchored) {
-      console.log("[generate-hooks] low signal: no anchored sources — showing hooks with low signal badge");
-      // Do NOT cap hooks or show the blocking suggestion.
-      // lowSignal badge communicates quality instead.
-      finalLowSignal = true;
-    } else if (isLowSignal) {
-      // Show all hooks — just flag as low signal so the badge renders
-      finalLowSignal = true;
-    } else if (gated.length === 0) {
-      // No hooks survived publish gate — fall back to candidateHooks with lowered quality
-      // (avoids blank screen when all hooks were dropped by anchor check)
-      console.log("[generate-hooks] no hooks survived publish gate — falling back to candidateHooks");
-      finalTop = candidateHooks.slice(0, 3).map((hook) => {
-        const quality = scoreHookQuality(hook, companyDomain || undefined);
-        return { ...hook, evidence_tier: "B" as const, quality_score: quality, quality_label: getQualityLabel(quality) };
-      });
-      finalOverflow = [];
-      finalLowSignal = true;
-    }
-
-    finalTop = finalTop.map((hook) => {
-      const quality = scoreHookQuality(hook, companyDomain || undefined);
-      return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
-
-    finalOverflow = finalOverflow.map((hook) => {
-      const quality = scoreHookQuality(hook, companyDomain || undefined);
-      return { ...hook, quality_score: quality, quality_label: getQualityLabel(quality) };
-    }).sort((a, b) => (b.selector_score ?? b.ranking_score ?? b.quality_score ?? 0) - (a.selector_score ?? a.ranking_score ?? a.quality_score ?? 0));
 
     const resolvedCompany = resolution && resolution.candidates[0]
       ? {
