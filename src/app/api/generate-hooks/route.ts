@@ -870,8 +870,9 @@ export async function POST(request: Request) {
     let hookVariants: Array<{ hook_index: number; variants: Array<{ channel: string; text: string }> }> = [];
 
     if (roleGated.length > 0 && (!cached || cacheStale)) {
-      // Generate variants for Pro before caching
-      if (hasFeature(tierId, "multiChannel")) {
+      // Skip multi-channel variant generation on the submitted-URL fast path so the
+      // response is not blocked by an extra Claude round-trip.
+      if (hasFeature(tierId, "multiChannel") && !isFastPath) {
         try {
           const withVars = await generateChannelVariants(roleGated, claudeApiKey, targetRole);
           hookVariants = withVars.map((h, i) => ({ hook_index: i, variants: h.variants }));
