@@ -3620,7 +3620,18 @@ export async function generateHookPayloadsFromTrustedSource(opts: {
     opts.customPersona,
     opts.messagingStyle ?? "evidence",
   );
-  const userPrompt = buildUserPrompt(opts.url, promptSources, promptContext, promptIntentSignals);
+  const baseUserPrompt = buildUserPrompt(opts.url, promptSources, promptContext, promptIntentSignals);
+  const diversityInstructions = [
+    "",
+    "### Trusted Source Fast-Path Instructions",
+    "Return exactly 4 hooks, even if one fact is especially strong.",
+    "Each hook must feel materially different from the others.",
+    "Vary the opening move across the set: one trigger-led, one operational risk-led, one tradeoff-led, and one coaching or enablement-led angle when evidence supports it.",
+    "Do not reuse the same buyer tension phrasing, promise framing, or question structure across hooks.",
+    "If two hooks sound similar, rewrite the weaker one until the set clearly offers different options.",
+    "Keep every hook anchored to the submitted source and its facts.",
+  ].join("\n");
+  const userPrompt = `${baseUserPrompt}${diversityInstructions}`;
 
   return callClaudeWithRetry(
     systemPrompt,

@@ -407,14 +407,8 @@ export async function POST(request: Request) {
       // Cache miss or error — continue to generate
     }
 
-    const selectorPriors = !isDemo && session?.user?.id
-      ? await getHookSelectorPriors({
-          userId: session.user.id,
-          companyUrl: url!,
-          targetRole: targetRole ?? null,
-        }).catch(() => undefined)
-      : undefined;
-    const retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
+    let selectorPriors: Awaited<ReturnType<typeof getHookSelectorPriors>> | undefined;
+    let retrievalPreferenceSummary: ReturnType<typeof summarizeSelectorRetrievalPreferences> | undefined;
 
     let sourceDiagnostics: Awaited<ReturnType<typeof fetchSourcesWithGating>>["_diagnostics"] | null = null;
 
@@ -521,6 +515,14 @@ export async function POST(request: Request) {
         } catch { /* URL parse error — skip fast path */ }
 
         if (!usedFastPath) {
+        selectorPriors = !isDemo && session?.user?.id
+          ? await getHookSelectorPriors({
+              userId: session.user.id,
+              companyUrl: url!,
+              targetRole: targetRole ?? null,
+            }).catch(() => undefined)
+          : undefined;
+        retrievalPreferenceSummary = summarizeSelectorRetrievalPreferences(selectorPriors);
         // 1. Gather and classify sources with signal gating + anchor scoring
         let rawSignals: Awaited<ReturnType<typeof researchIntentSignals>> = [];
         let result: Awaited<ReturnType<typeof fetchSourcesWithGating>>;
