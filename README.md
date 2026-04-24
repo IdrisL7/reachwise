@@ -47,7 +47,6 @@ src/
 │   │   ├── inbox/                  # Draft approval + notifications
 │   │   ├── batch/                  # Batch hook generation UI
 │   │   └── settings/               # API keys, integrations, billing
-│   ├── internal/                   # Internal admin tools
 │   └── api/                        # 38 API route handlers
 ├── components/                     # 14 UI components
 └── lib/
@@ -198,7 +197,7 @@ src/
 pnpm install
 
 # Copy environment variables
-cp deploy/.env.example .env.local
+cp .env.example .env.local
 # Fill in your API keys (see Environment Variables below)
 
 # Run development server
@@ -236,15 +235,6 @@ Open http://localhost:3000
 | `SALESFORCE_CLIENT_ID` | Salesforce Connected App client ID |
 | `SALESFORCE_CLIENT_SECRET` | Salesforce Connected App client secret |
 
-**Optional (VPS/Docker deployment):**
-| Variable | Description |
-|----------|-------------|
-| `N8N_DOCKER_IMAGE` | n8n Docker image (default: `n8nio/n8n:latest`) |
-| `N8N_PORT_START` / `N8N_PORT_END` | Port range for n8n containers |
-| `N8N_DOCKER_NETWORK` | Docker network name |
-| `APP_DOMAIN` / `N8N_DOMAIN` | Domain names for Caddy |
-| `CADDY_ADMIN_URL` | Caddy admin API URL |
-
 ### Database Migrations
 
 Migrations are in `drizzle/`. Run them against your Turso database:
@@ -272,23 +262,6 @@ vercel --yes --prod
 ```
 
 Add all environment variables in Vercel project settings before deploying.
-
-### Docker / VPS
-
-For self-hosted deployment with n8n container management:
-
-```bash
-# One-command VPS setup
-scp deploy/setup-vps.sh user@your-server:~/
-ssh user@your-server 'chmod +x setup-vps.sh && ./setup-vps.sh'
-```
-
-Or manually:
-```bash
-docker compose up -d
-```
-
-This runs the Next.js app + Caddy reverse proxy with automatic SSL.
 
 ## Stripe Setup
 
