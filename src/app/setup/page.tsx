@@ -557,7 +557,7 @@ export default function SetupWizard() {
                 View API Docs
               </a>
               <a
-                href="/internal/followup-dashboard"
+                href="/app"
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors"
               >
                 Go to Dashboard
